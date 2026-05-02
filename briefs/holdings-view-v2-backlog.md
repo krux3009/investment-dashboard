@@ -13,9 +13,13 @@ v1 of the holdings view shipped at 35/40 on Nielsen's heuristics, with the Top-3
 
 After living with v1 + Phase 5 (anomaly drill-in), user feedback was: too sparse, all numbers / no shape, drill-in is dry, layout feels off. Original "Quiet Ledger" brief committed to "no charts-for-the-sake-of-charts" — that hypothesis didn't survive contact with the live product. v2 direction: still typographically restrained, but with charts as first-class. Staging:
 
-1. **Allocation donut in the hero** ✅ shipped (commit pending) — 180px Plotly donut, 5 graphite tints from `theme.SLICE_TINTS_HEX`, hairline paper-cream separators, no legend (hover for ticker + percent). Sits right of the +78.2% / $1.8K block. Slice values use raw market_value across currencies — naive without FX, approximately right for a USD-dominant book. New theme additions: `SLICE_TINTS` + parallel `SLICE_TINTS_HEX` (Plotly rejects oklch).
-2. **Phase 4 re-scoped** — DuckDB price-history cache + sparklines per row + drill-in candlestick chart + watchlist view. One unified data layer powers all four.
-3. **Dedicated charts/details page** — second route, research surface for tickers (largest scope).
+1. **Allocation donut in the hero** ✅ shipped `eaae6d0`.
+2. **Phase 4 — DuckDB cache + sparklines** ✅ shipped (this commit). `data/prices.py` exposes `get_history(code, days)` and `get_close_series(code, days)` backed by a DuckDB file at `data/prices.duckdb` (gitignored). Cache refetches via `OpenQuoteContext.request_history_kline` only when the latest cached row is more than two calendar days old (weekend slack). Sparkline column added at the rightmost of the holdings table (90×22px, single trace, color tracks 30-day delta — `GAIN_HEX` / `LOSS_HEX` / `QUIET_INK_HEX`). Two infrastructure choices worth keeping in mind:
+   - **Thread-safe DB access via `_DB_LOCK`.** Dash's Flask dispatch is multi-threaded; without a lock, concurrent SELECTs raise `INTERNAL Error: Attempted to access index 0 within vector of size 0`. DuckDB connections aren't thread-safe by themselves.
+   - **`_UNFETCHABLE` set caches "moomoo doesn't know this code" failures.** SG.K71U returns "Unknown stock" — the user's moomoo subscription doesn't include SGX. Without this cache, the code spammed the warning every 30s on each poll. Resets on dashboard restart so an operator can re-verify after fixing access.
+3. **Phase 4 — drill-in candlestick** (next session) — Plotly candlestick figure inside the expansion row. Same `prices.get_history` call, different visual.
+4. **Phase 4 — watchlist view** (next session) — `views/watchlist.py` for tickers under research (NVDA, TSLA, 700.HK). Reuses the table component + sparkline column.
+5. **Dedicated charts/details page** — second route, research surface for tickers (largest scope, separate session).
 
 When all three land, re-run `/impeccable document` to refresh DESIGN.md so the seed file reflects the actual implementation rather than the v1 hypothesis.
 

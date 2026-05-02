@@ -19,12 +19,13 @@ from __future__ import annotations
 import json
 from dataclasses import asdict
 from datetime import datetime
+from typing import Any
 
 import plotly.graph_objects as go
 from dash import ALL, Input, Output, State, callback, clientside_callback, ctx, dcc, html, no_update
 
 from dashboard import theme
-from dashboard.data import anomalies, moomoo_client
+from dashboard.data import anomalies, moomoo_client, prices
 from dashboard.data.positions import (
     PortfolioSummary,
     Position,
@@ -448,6 +449,7 @@ _COLS = [
     {"label": "Mkt Value", "align": "right", "width": "16ch", "key": "mkt_value"},
     {"label": "Today",     "align": "right", "width": "14ch", "key": "today"},
     {"label": "Total P&L", "align": "right", "width": "20ch", "key": "total"},
+    {"label": "30d",       "align": "right", "width": "100px", "key": "sparkline", "sortable": False},
 ]
 
 _SORT_KEYS = {
@@ -502,7 +504,26 @@ def _sort_status(state: dict | None) -> html.Div:
 
 
 def _sort_header(col: dict, state: dict) -> html.Th:
-    """Column header. Click to resort. Indicator arrow on the active column."""
+    """Column header. Click to resort. Indicator arrow on the active column.
+
+    Columns with `sortable: False` (e.g. the sparkline column) render as a
+    static label without the click affordance — clicking would have to fall
+    back to a default sort and the user-trip would be confusing.
+    """
+    sortable = col.get("sortable", True)
+    if not sortable:
+        return html.Th(
+            children=col["label"],
+            style={
+                **_label_style(),
+                "color": theme.QUIET_INK,
+                "textAlign": col["align"],
+                "width": col["width"],
+                "padding": f"0 {theme.SPACE['md']} {theme.SPACE['md']} 0",
+                "borderBottom": theme.HAIRLINE,
+            },
+        )
+
     is_active = state["column"] == col["key"]
     indicator = ""
     if is_active:
@@ -533,6 +554,49 @@ def _sort_header(col: dict, state: dict) -> html.Th:
                 else "none"
             ),
         },
+    )
+
+
+def _sparkline(code: str, width: int = 90, height: int = 22) -> Any:
+    """30-day close-price sparkline. Cached prices, single-line chart, no axes.
+
+    Color tracks overall trajectory: GAIN if last > first, LOSS if last <
+    first, QUIET_INK when flat or unavailable. Returns an em-dash placeholder
+    when prices.get_close_series returns nothing (offline / first-fetch fail).
+    """
+    closes = prices.get_close_series(code, days=30)
+    if not closes or len(closes) < 2:
+        return html.Span("–", style={"color": theme.QUIET_INK})
+
+    delta = closes[-1] - closes[0]
+    line_color = (
+        theme.GAIN_HEX if delta > 0
+        else theme.LOSS_HEX if delta < 0
+        else theme.QUIET_INK_HEX
+    )
+
+    fig = go.Figure(
+        go.Scatter(
+            y=closes,
+            mode="lines",
+            line=dict(color=line_color, width=1.5),
+            hoverinfo="skip",
+        )
+    )
+    fig.update_layout(
+        showlegend=False,
+        margin=dict(l=0, r=0, t=2, b=2),
+        height=height,
+        width=width,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(visible=False, fixedrange=True),
+        yaxis=dict(visible=False, fixedrange=True),
+    )
+    return dcc.Graph(
+        figure=fig,
+        config={"displayModeBar": False, "staticPlot": True},
+        style={"width": f"{width}px", "height": f"{height}px"},
     )
 
 
@@ -649,10 +713,18 @@ def _glance_row(p: Position, is_expanded: bool, summary: PortfolioSummary) -> ht
                     ),
                 ],
                 style={
-                    "padding": f"{theme.SPACE['md']} 0",
+                    "padding": f"{theme.SPACE['md']} {theme.SPACE['md']} {theme.SPACE['md']} 0",
                     "textAlign": "right",
                     "color": total_color,
                     "whiteSpace": "nowrap",
+                },
+            ),
+            html.Td(
+                _sparkline(p.code) if summary.fresh else html.Span("–", style={"color": theme.QUIET_INK}),
+                style={
+                    "padding": f"{theme.SPACE['md']} 0",
+                    "textAlign": "right",
+                    "verticalAlign": "middle",
                 },
             ),
         ],
