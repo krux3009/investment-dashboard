@@ -261,6 +261,44 @@ def demo_summary_empty() -> PortfolioSummary:
     return _summarize([], fresh=True)
 
 
+def demo_summary_bad_day() -> PortfolioSummary:
+    """A synthetic ~-12% market day for visual stress-testing the calm-under-
+    volatility principle. Does PRODUCT.md's commitment hold when the book is red?
+    Same positions and cost bases as demo_summary, plus a hard down-day.
+    """
+    pos = [
+        Position(
+            code="US.PLTR", ticker="PLTR", name="Palantir Technologies Inc",
+            market="US", currency="USD",
+            qty=250, cost_basis=19.95, current_price=18.40, market_value=4600.00,
+            today_change_pct=-0.118, today_change_abs=-615.0,
+            total_pnl_pct=-0.078, total_pnl_abs=-387.50,
+        ),
+        Position(
+            code="US.ANET", ticker="ANET", name="Arista Networks Inc",
+            market="US", currency="USD",
+            qty=14, cost_basis=388.50, current_price=358.20, market_value=5014.80,
+            today_change_pct=-0.094, today_change_abs=-520.5,
+            total_pnl_pct=-0.078, total_pnl_abs=-424.20,
+        ),
+        Position(
+            code="US.VRT", ticker="VRT", name="Vertiv Holdings Co",
+            market="US", currency="USD",
+            qty=45, cost_basis=110.85, current_price=92.10, market_value=4144.50,
+            today_change_pct=-0.135, today_change_abs=-647.0,
+            total_pnl_pct=-0.169, total_pnl_abs=-841.50,
+        ),
+        Position(
+            code="US.NVDA", ticker="NVDA", name="NVIDIA Corp",
+            market="US", currency="USD",
+            qty=8, cost_basis=485.20, current_price=448.20, market_value=3585.60,
+            today_change_pct=-0.082, today_change_abs=-321.0,
+            total_pnl_pct=-0.076, total_pnl_abs=-296.00,
+        ),
+    ]
+    return _summarize(pos, fresh=True)
+
+
 def demo_summary_stale() -> PortfolioSummary:
     summary = demo_summary()
     return PortfolioSummary(
@@ -279,8 +317,20 @@ _CLIENT: MoomooClient | None = None
 
 
 def get_summary() -> PortfolioSummary:
-    """The view's single entry point. Reads MOOMOO_USE_DEMO from the env."""
+    """The view's single entry point. Reads MOOMOO_USE_DEMO from the env.
+
+    When demo mode is on, MOOMOO_DEMO_SCENARIO selects which canned dataset:
+      - "default" (or unset): the everyday +day book
+      - "bad_day": a synthetic ~-12% market day, used for stress-testing
+        the design's calm-under-volatility commitment
+      - "empty": no positions; renders the empty state
+    """
     if os.environ.get("MOOMOO_USE_DEMO", "false").lower() == "true":
+        scenario = os.environ.get("MOOMOO_DEMO_SCENARIO", "default").lower()
+        if scenario == "bad_day":
+            return demo_summary_bad_day()
+        if scenario == "empty":
+            return demo_summary_empty()
         return demo_summary()
     return _live_client().fetch_positions()
 
