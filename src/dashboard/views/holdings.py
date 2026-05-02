@@ -47,6 +47,13 @@ def layout() -> html.Div:
             dcc.Interval(id="holdings-poll", interval=30_000, n_intervals=0),
             dcc.Store(id="holdings-summary"),
             dcc.Store(id="holdings-expanded", data=[]),
+            # Sort state persists across reloads via localStorage.
+            # Default = market value desc (= weight desc when single-currency).
+            dcc.Store(
+                id="holdings-sort",
+                data={"column": "mkt_value", "direction": "desc"},
+                storage_type="local",
+            ),
             # Marker store consumed only to install the keyboard listener once.
             dcc.Store(id="holdings-keyboard-installed", data=False),
             html.Section(id="holdings-root", **{"aria-label": "Portfolio holdings"}),
@@ -97,15 +104,39 @@ def _fetch_summary(_n: int) -> dict:
     Output("holdings-root", "children"),
     Input("holdings-summary", "data"),
     Input("holdings-expanded", "data"),
+    Input("holdings-sort", "data"),
 )
-def _render(data: dict | None, expanded: list[str] | None):
+def _render(data: dict | None, expanded: list[str] | None, sort_state: dict | None):
     if data is None:
         return _skeleton()
     summary = _summary_from_json(data)
     expanded_set = set(expanded or [])
     if summary.is_empty:
         return _empty_state(summary)
-    return [_hero(summary), _table(summary, expanded_set)]
+    return [_hero(summary), _table(summary, expanded_set, sort_state)]
+
+
+@callback(
+    Output("holdings-sort", "data"),
+    Input({"type": "holdings-sort-header", "column": ALL}, "n_clicks"),
+    State("holdings-sort", "data"),
+    prevent_initial_call=True,
+)
+def _toggle_sort(clicks: list[int | None], current: dict | None):
+    triggered = ctx.triggered_id
+    if not triggered or not isinstance(triggered, dict):
+        return no_update
+    if not any(clicks or []):
+        return no_update
+    column = triggered["column"]
+    current = current or {"column": "mkt_value", "direction": "desc"}
+    if current["column"] == column:
+        # Same column: flip direction.
+        new_direction = "asc" if current["direction"] == "desc" else "desc"
+    else:
+        # New column: text columns default ascending, numeric default descending.
+        new_direction = "asc" if column == "ticker" else "desc"
+    return {"column": column, "direction": new_direction}
 
 
 @callback(
@@ -303,17 +334,71 @@ def _multi_currency_subtotals(summary: PortfolioSummary) -> html.Div:
 
 # ── Table ───────────────────────────────────────────────────────────────────
 
-# Column widths and alignment. Numeric cols right-aligned, text left.
+# Each column carries: visible label, alignment, width, and the sort key
+# the column maps to. Numeric defaults to descending on first click; text
+# (ticker) defaults to ascending. Toggling a column flips direction.
 _COLS = [
-    ("Ticker",     "left",   "auto"),
-    ("Qty",        "right",  "10ch"),
-    ("Mkt Value",  "right",  "16ch"),
-    ("Today",      "right",  "14ch"),
-    ("Total P&L",  "right",  "20ch"),
+    {"label": "Ticker",    "align": "left",  "width": "auto", "key": "ticker"},
+    {"label": "Qty",       "align": "right", "width": "10ch", "key": "qty"},
+    {"label": "Mkt Value", "align": "right", "width": "16ch", "key": "mkt_value"},
+    {"label": "Today",     "align": "right", "width": "14ch", "key": "today"},
+    {"label": "Total P&L", "align": "right", "width": "20ch", "key": "total"},
 ]
 
+_SORT_KEYS = {
+    "ticker":    lambda p: p.ticker.lower(),
+    "qty":       lambda p: p.qty,
+    "mkt_value": lambda p: p.market_value,
+    "today":     lambda p: p.today_change_pct if p.today_change_pct is not None else 0,
+    "total":     lambda p: p.total_pnl_pct,
+}
 
-def _table(summary: PortfolioSummary, expanded: set[str]) -> html.Table:
+
+def _sort_header(col: dict, state: dict) -> html.Th:
+    """Column header. Click to resort. Indicator arrow on the active column."""
+    is_active = state["column"] == col["key"]
+    indicator = ""
+    if is_active:
+        indicator = " ↓" if state["direction"] == "desc" else " ↑"
+
+    label_color = theme.WARM_GRAPHITE if is_active else theme.QUIET_INK
+
+    return html.Th(
+        id={"type": "holdings-sort-header", "column": col["key"]},
+        n_clicks=0,
+        className="holdings-sort-header" + (" holdings-sort-header--active" if is_active else ""),
+        children=[col["label"], html.Span(indicator, style={"color": theme.ACCENT})],
+        style={
+            **_label_style(),
+            "color": label_color,
+            "textAlign": col["align"],
+            "width": col["width"],
+            "padding": f"0 {theme.SPACE['md']} {theme.SPACE['sm']} 0",
+            "borderBottom": theme.HAIRLINE,
+            "cursor": "pointer",
+            "userSelect": "none",
+        },
+        **{
+            "role": "button",
+            "aria-sort": (
+                "descending" if is_active and state["direction"] == "desc"
+                else "ascending" if is_active
+                else "none"
+            ),
+        },
+    )
+
+
+def _apply_sort(positions: tuple, sort_state: dict | None) -> list:
+    """Sort positions per the current sort state. None falls back to mkt_value desc."""
+    state = sort_state or {"column": "mkt_value", "direction": "desc"}
+    key_fn = _SORT_KEYS.get(state["column"], _SORT_KEYS["mkt_value"])
+    reverse = state["direction"] == "desc"
+    return sorted(positions, key=key_fn, reverse=reverse)
+
+
+def _table(summary: PortfolioSummary, expanded: set[str], sort_state: dict | None) -> html.Table:
+    state = sort_state or {"column": "mkt_value", "direction": "desc"}
     return html.Table(
         style={
             "width": "100%",
@@ -323,23 +408,12 @@ def _table(summary: PortfolioSummary, expanded: set[str]) -> html.Table:
         children=[
             html.Thead(
                 html.Tr(
-                    [
-                        html.Th(
-                            label,
-                            style={
-                                **_label_style(),
-                                "textAlign": align,
-                                "width": width,
-                                "padding": f"0 {theme.SPACE['md']} {theme.SPACE['sm']} 0",
-                                "borderBottom": theme.HAIRLINE,
-                            },
-                        )
-                        for label, align, width in _COLS
-                    ],
+                    [_sort_header(col, state) for col in _COLS],
                 )
             ),
             html.Tbody(
-                [tr for p in summary.positions for tr in _row_pair(p, expanded, summary)],
+                [tr for p in _apply_sort(summary.positions, state)
+                    for tr in _row_pair(p, expanded, summary)],
             ),
         ],
     )
