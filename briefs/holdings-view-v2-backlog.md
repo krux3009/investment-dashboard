@@ -43,6 +43,10 @@ v1 of the holdings view shipped at 35/40 on Nielsen's heuristics, with the Top-3
 
 **Fix sketch (v2):** Pre-fetch anomaly results on row expansion via subprocess to a CLI wrapper around the moomoo-technical/capital/derivatives-anomaly skills. Cache results for the session. Render as plain text below the field summary; absence stays the signal when no anomaly fires.
 
+**Update 2026-05-02 — shipped (Phase 5):** Bypassed the subprocess plan entirely. The three skills (`~/.claude/skills/moomoo-{technical,capital,derivatives}-anomaly/`) turned out to be ~100-line CLI wrappers around `OpenQuoteContext.get_{technical,financial,derivative}_unusual()` — a single moomoo SDK call each. Calling the SDK directly from `dashboard.data.anomalies` gives ~1s latency per category vs the ~5–15s `claude -p` overhead the original spec assumed, no `futu` vs `moomoo` namespace fight, and no extra runtime dependency.
+
+Implementation: `data/anomalies.py` exposes `fetch_all(code) -> tuple[Anomaly, ...]` returning technical/capital/derivatives in display order. Each fetch is cached by `(code, kind, time_range, language_id)` for the session. `views/holdings.py:_expansion_row` appends an uppercase quiet-ink `LABEL` + warm-graphite prose block per category that has content; categories with no anomaly are silently skipped per the brief's "absence is the signal" rule. `language_id=2` (English) by default so the prose matches the dashboard voice without translation. Verified live against ANET (technical CCI/MA + derivatives large-options trade), K71U (no anomaly content → bare field summary). Screenshots: `holdings-anet-anomaly-drillin-1280.png`, `holdings-k71u-anomaly-drillin-1280.png`.
+
 ### Mobile reflow
 
 **What:** Brief §4 explicitly deferred mobile to v2.

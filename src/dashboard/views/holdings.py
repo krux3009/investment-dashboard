@@ -23,7 +23,7 @@ from datetime import datetime
 from dash import ALL, Input, Output, State, callback, clientside_callback, ctx, dcc, html, no_update
 
 from dashboard import theme
-from dashboard.data import moomoo_client
+from dashboard.data import anomalies, moomoo_client
 from dashboard.data.positions import (
     PortfolioSummary,
     Position,
@@ -598,6 +598,32 @@ def _expansion_row(p: Position, summary: PortfolioSummary) -> html.Tr:
         fields.append(("Weight", f"{weight_pct * 100:.1f}%"))
     fields.append(("Current price", format_currency_full(p.current_price, p.currency)))
 
+    # Phase 5: pull anomaly notes from moomoo skills (technical / capital /
+    # derivatives). Cached per session, so reopening a row is free. Empty
+    # categories are silently skipped — absence stays the signal.
+    anomaly_blocks = []
+    for anom in anomalies.fetch_all(p.code):
+        if not anom.has_content:
+            continue
+        anomaly_blocks.append(
+            html.Div(
+                style={"marginTop": theme.SPACE["md"]},
+                children=[
+                    html.Div(anom.label.upper(), style=_label_style()),
+                    html.Div(
+                        anom.content,
+                        style={
+                            "color": theme.WARM_GRAPHITE,
+                            "fontSize": "0.85rem",
+                            "marginTop": theme.SPACE["xs"],
+                            "whiteSpace": "pre-line",  # honor newlines from the prose
+                            "maxWidth": theme.PROSE_MAX_CH,
+                        },
+                    ),
+                ],
+            )
+        )
+
     return html.Tr(
         className="holdings-expansion",
         children=[
@@ -614,9 +640,7 @@ def _expansion_row(p: Position, summary: PortfolioSummary) -> html.Tr:
                         " · ".join(f"{label} {value}" for label, value in fields),
                         style={"marginTop": theme.SPACE["xs"]},
                     ),
-                    # Anomaly slot stays empty in v1; absence is the signal until
-                    # moomoo-anomaly skills wire in. Habituating the eye to a
-                    # placeholder line would make real signals get skimmed past.
+                    *anomaly_blocks,
                 ],
             )
         ],
