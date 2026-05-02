@@ -50,6 +50,7 @@ def layout() -> html.Div:
             dcc.Interval(id="holdings-poll", interval=30_000, n_intervals=0),
             dcc.Store(id="holdings-summary"),
             dcc.Store(id="holdings-expanded", data=[]),
+            dcc.Store(id="watchlist-expanded", data=[]),
             # Sort state persists across reloads via localStorage.
             # Default = market value desc (= weight desc when single-currency).
             dcc.Store(
@@ -110,19 +111,26 @@ def _fetch_summary(_n: int) -> dict:
     Input("holdings-summary", "data"),
     Input("holdings-expanded", "data"),
     Input("holdings-sort", "data"),
+    Input("watchlist-expanded", "data"),
 )
-def _render(data: dict | None, expanded: list[str] | None, sort_state: dict | None):
+def _render(
+    data: dict | None,
+    expanded: list[str] | None,
+    sort_state: dict | None,
+    watchlist_expanded: list[str] | None,
+):
     if data is None:
         return _skeleton()
     summary = _summary_from_json(data)
     expanded_set = set(expanded or [])
+    watchlist_expanded_set = set(watchlist_expanded or [])
     if summary.is_empty:
-        return [_empty_state(summary), watchlist.section()]
+        return [_empty_state(summary), watchlist.section(watchlist_expanded_set)]
     return [
         _hero(summary),
         _sort_status(sort_state),
         _table(summary, expanded_set, sort_state),
-        watchlist.section(),
+        watchlist.section(watchlist_expanded_set),
     ]
 
 
