@@ -1,5 +1,8 @@
-"""Anomaly fetchers wrapping moomoo's three OpenQuoteContext.get_*_unusual
-methods.
+"""Anomaly fetchers wrapping moomoo's OpenQuoteContext.get_*_unusual methods.
+
+Two categories are surfaced: technical (K-line + indicator events) and
+capital flow (broker activity, fund flows, short interest). Derivatives
+was trimmed 2026-05-02 — long-horizon equity holding, no options use case.
 
 Each call returns a `data['content']` field — rendered English prose like
 "May 1 CCI has moved from neutral to overbought levels…" — that we surface
@@ -21,20 +24,18 @@ from typing import Any, Literal
 
 log = logging.getLogger(__name__)
 
-AnomalyKind = Literal["technical", "capital", "derivatives"]
+AnomalyKind = Literal["technical", "capital"]
 
-_KIND_ORDER: tuple[AnomalyKind, ...] = ("technical", "capital", "derivatives")
+_KIND_ORDER: tuple[AnomalyKind, ...] = ("technical", "capital")
 
 _METHOD_FOR_KIND: dict[AnomalyKind, str] = {
     "technical": "get_technical_unusual",
     "capital": "get_financial_unusual",
-    "derivatives": "get_derivative_unusual",
 }
 
 _LABEL_FOR_KIND: dict[AnomalyKind, str] = {
     "technical": "Technical",
     "capital": "Capital flow",
-    "derivatives": "Derivatives",
 }
 
 
@@ -95,11 +96,11 @@ def fetch_all(
     time_range: int = 7,
     language_id: int = 2,
 ) -> tuple[Anomaly, ...]:
-    """Fetch all three anomaly categories for a ticker. Cached per session.
+    """Fetch both anomaly categories for a ticker. Cached per session.
 
-    Returns a tuple in display order: technical, capital, derivatives.
-    Anomalies with empty content should be skipped by the renderer so
-    absence stays the signal.
+    Returns a tuple in display order: technical, capital. Anomalies with
+    empty content should be skipped by the renderer so absence stays the
+    signal.
     """
     out: list[Anomaly] = []
     for kind in _KIND_ORDER:

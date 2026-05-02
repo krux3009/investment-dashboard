@@ -47,6 +47,8 @@ v1 of the holdings view shipped at 35/40 on Nielsen's heuristics, with the Top-3
 
 Implementation: `data/anomalies.py` exposes `fetch_all(code) -> tuple[Anomaly, ...]` returning technical/capital/derivatives in display order. Each fetch is cached by `(code, kind, time_range, language_id)` for the session. `views/holdings.py:_expansion_row` appends an uppercase quiet-ink `LABEL` + warm-graphite prose block per category that has content; categories with no anomaly are silently skipped per the brief's "absence is the signal" rule. `language_id=2` (English) by default so the prose matches the dashboard voice without translation. Verified live against ANET (technical CCI/MA + derivatives large-options trade), K71U (no anomaly content → bare field summary). Screenshots: `holdings-anet-anomaly-drillin-1280.png`, `holdings-k71u-anomaly-drillin-1280.png`.
 
+**Update 2026-05-02 — derivatives trimmed (post-ship):** Reviewed live and dropped the `derivatives` category. User is a long-horizon equity holder, not an options trader; the options-block / IV / 牛熊证 prose was clutter, not signal. `data/anomalies.py` now ships two categories — `technical` and `capital`. The pre-trim `holdings-anet-anomaly-drillin-1280.png` screenshot stays as historical evidence of the three-category state. If options ever become relevant, re-add `"derivatives"` in four spots in `anomalies.py` (literal, order tuple, method dict, label dict) — view rendering already handles arbitrary category counts.
+
 ### Mobile reflow
 
 **What:** Brief §4 explicitly deferred mobile to v2.
