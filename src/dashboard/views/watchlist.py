@@ -18,7 +18,7 @@ import os
 from typing import Any
 
 import plotly.graph_objects as go
-from dash import ALL, Input, Output, State, callback, ctx, dcc, html, no_update
+from dash import ALL, MATCH, Input, Output, State, callback, ctx, dcc, html, no_update
 
 from dashboard import theme
 from dashboard.data import anomalies, prices
@@ -229,15 +229,61 @@ def _glance_row(code: str, is_expanded: bool) -> html.Tr:
     )
 
 
+def _anomaly_blocks(code: str) -> list:
+    """Build the rendered anomaly blocks for a single code. Called from the
+    hydration callback, NOT from the synchronous expansion render path.
+
+    Each anomaly category that returned content becomes an uppercase quiet-
+    ink label + warm-graphite prose. Categories with no anomaly are skipped.
+    Returns a "no signals" placeholder if nothing fired."""
+    blocks: list = []
+    for anom in anomalies.fetch_all(code):
+        if not anom.has_content:
+            continue
+        blocks.append(
+            html.Div(
+                style={"marginTop": theme.SPACE["md"]},
+                children=[
+                    html.Div(anom.label.upper(), style=_label_style()),
+                    html.Div(
+                        anom.content,
+                        style={
+                            "color": theme.WARM_GRAPHITE,
+                            "fontSize": "0.85rem",
+                            "marginTop": theme.SPACE["xs"],
+                            "whiteSpace": "pre-line",
+                            "maxWidth": theme.PROSE_MAX_CH,
+                        },
+                    ),
+                ],
+            )
+        )
+
+    if not blocks:
+        blocks.append(
+            html.Div(
+                "No signals fired in the last 7 days.",
+                style={
+                    "color": theme.QUIET_INK,
+                    "fontStyle": "italic",
+                    "fontSize": "0.85rem",
+                    "marginTop": theme.SPACE["md"],
+                },
+            )
+        )
+    return blocks
+
+
 def _expansion_row(code: str) -> html.Tr:
-    """Drill-in for a watchlist row: 90-day chart + anomaly prose.
+    """Drill-in for a watchlist row: 90-day chart + anomaly placeholder.
 
     Mirrors the holdings drill-in shape but without cost-basis / weight /
     today-$-delta — we don't hold these, so those fields aren't meaningful.
-    Instead the field summary names what we DO know: last close, 30d delta,
-    90d hi/lo from the cache. Reuses `_drillin_chart` and
-    `anomalies.fetch_all` from the holdings module so both surfaces speak
-    the same visual language.
+    The field summary + chart render synchronously (cached price data is
+    fast); the anomaly section starts as a "Checking signals…" placeholder
+    so the row appears instantly. The `_hydrate_watchlist_anomaly` callback
+    below fills in the anomaly content once moomoo's two SDK calls return
+    (~2-3s per fresh ticker, instant on cache hits).
     """
     from dashboard.views.holdings import _drillin_chart  # noqa: PLC0415 — avoid circular at import time
 
@@ -268,34 +314,31 @@ def _expansion_row(code: str) -> html.Tr:
     if chart is not None:
         drillin.append(chart)
 
-    for anom in anomalies.fetch_all(code):
-        if not anom.has_content:
-            continue
-        drillin.append(
-            html.Div(
-                style={"marginTop": theme.SPACE["md"]},
-                children=[
-                    html.Div(anom.label.upper(), style=_label_style()),
-                    html.Div(
-                        anom.content,
-                        style={
-                            "color": theme.WARM_GRAPHITE,
-                            "fontSize": "0.85rem",
-                            "marginTop": theme.SPACE["xs"],
-                            "whiteSpace": "pre-line",
-                            "maxWidth": theme.PROSE_MAX_CH,
-                        },
-                    ),
-                ],
-            )
+    # Lazy-loaded anomaly slot. Pattern-matching ID lets the hydrate callback
+    # below target it once moomoo returns. Initial placeholder reads quietly
+    # so the user knows clicking worked even though the prose hasn't landed.
+    drillin.append(
+        html.Div(
+            id={"type": "watchlist-anomaly", "code": code},
+            children=html.Div(
+                "Checking signals…",
+                style={
+                    "color": theme.QUIET_INK,
+                    "fontStyle": "italic",
+                    "fontSize": "0.85rem",
+                    "marginTop": theme.SPACE["md"],
+                },
+            ),
         )
+    )
 
-    if not drillin:
-        drillin.append(
+    if len(drillin) == 1:  # only the anomaly placeholder, no chart/summary
+        drillin.insert(
+            0,
             html.Div(
                 "No data available for this ticker.",
                 style={"color": theme.QUIET_INK, "fontStyle": "italic", "marginTop": theme.SPACE["xs"]},
-            )
+            ),
         )
 
     return html.Tr(
@@ -411,3 +454,21 @@ def _toggle_watchlist_row(clicks: list[int | None], expanded: list[str] | None):
     else:
         expanded.append(code)
     return expanded
+
+
+@callback(
+    Output({"type": "watchlist-anomaly", "code": MATCH}, "children"),
+    Input({"type": "watchlist-anomaly", "code": MATCH}, "id"),
+)
+def _hydrate_watchlist_anomaly(component_id: dict):
+    """Lazy-load the anomaly section of a single watchlist drill-in.
+
+    Fires once per `watchlist-anomaly` placeholder, when that placeholder
+    first appears in the DOM. Each row's hydration is independent — no
+    pattern-matching ALL race with the parent render. Cache hits return
+    instantly; cold tickers pay the ~2-3s moomoo cost here, off the main
+    render path so the row appears expanded immediately and the anomaly
+    prose fills in afterwards.
+    """
+    code = component_id["code"]
+    return _anomaly_blocks(code)
