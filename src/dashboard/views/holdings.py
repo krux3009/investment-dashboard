@@ -20,6 +20,7 @@ import json
 from dataclasses import asdict
 from datetime import datetime
 
+import plotly.graph_objects as go
 from dash import ALL, Input, Output, State, callback, clientside_callback, ctx, dcc, html, no_update
 
 from dashboard import theme
@@ -286,29 +287,24 @@ def _page_header(summary: PortfolioSummary) -> html.Div:
 
 
 def _hero(summary: PortfolioSummary) -> html.Div:
-    """Portfolio label + P&L% + total market value. The single accent point."""
+    """Portfolio label + P&L% + total market value, plus an allocation donut.
+
+    The hero P&L% is the single accent text per briefs/holdings-view.md §3.
+    Gain/loss tints belong on per-row cells, not the aggregate hero — the
+    hero's job is calm, not "you're up." Stale data renders in quiet ink.
+    The donut on the right gives the book a shape, not just a number.
+    """
     pnl_pct = summary.total_pnl_pct
     primary_ccy = summary.primary_currency
     total_mv = summary.total_market_value_by_ccy.get(primary_ccy, 0.0)
 
-    # The hero P&L% is the single accent point per briefs/holdings-view.md §3.
-    # Gain/loss color tints belong on per-row cells, not the aggregate hero —
-    # the hero's job is calm, not "you're up." Stale data renders in quiet ink.
-    if not summary.fresh:
-        pnl_pct_color = theme.QUIET_INK
-    elif pnl_pct == 0:
+    if not summary.fresh or pnl_pct == 0:
         pnl_pct_color = theme.QUIET_INK
     else:
         pnl_pct_color = theme.ACCENT
 
-    return html.Div(
-        style={
-            "borderBottom": theme.HAIRLINE,
-            "paddingBottom": theme.SPACE["lg"],
-            "marginBottom": theme.SPACE["xl"],
-        },
+    hero_text = html.Div(
         children=[
-            _page_header(summary),
             html.Div(
                 style={"display": "flex", "alignItems": "baseline", "gap": theme.SPACE["lg"]},
                 children=[
@@ -338,6 +334,90 @@ def _hero(summary: PortfolioSummary) -> html.Div:
                 ],
             ),
             _multi_currency_subtotals(summary) if summary.is_mixed_currency else None,
+        ],
+    )
+
+    return html.Div(
+        style={
+            "borderBottom": theme.HAIRLINE,
+            "paddingBottom": theme.SPACE["lg"],
+            "marginBottom": theme.SPACE["xl"],
+        },
+        children=[
+            _page_header(summary),
+            html.Div(
+                style={
+                    "display": "flex",
+                    "alignItems": "center",
+                    "justifyContent": "space-between",
+                    "gap": theme.SPACE["lg"],
+                    "marginTop": theme.SPACE["lg"],
+                },
+                children=[hero_text, _allocation_donut(summary)],
+            ),
+        ],
+    )
+
+
+def _allocation_donut(summary: PortfolioSummary) -> html.Div | None:
+    """Donut showing position weight inside the book.
+
+    Slice values use raw market_value across currencies — technically naive
+    when the book mixes USD/SGD/HKD because no FX is applied, but for a
+    single-currency-dominant book (>90%) the visual is approximately right.
+    Note this in DESIGN.md if FX-aware allocation becomes a real ask.
+
+    Empty book → return None; the empty-state path doesn't call this anyway,
+    but be defensive in case a future caller does.
+    """
+    positions = list(summary.positions)
+    if not positions:
+        return None
+
+    # Sort darkest-to-lightest with the largest position taking the most
+    # prominent tint. Plotly's `sort=False` preserves our explicit order.
+    positions = sorted(positions, key=lambda p: -p.market_value)
+    # Use the hex palette here — Plotly's color validator rejects oklch().
+    tints = theme.SLICE_TINTS_HEX[: len(positions)]
+    # If the book ever exceeds the tint palette, recycle the lightest tint
+    # rather than wrap to the dark end (would lose the size→shade reading).
+    while len(tints) < len(positions):
+        tints.append(theme.SLICE_TINTS_HEX[-1])
+
+    fig = go.Figure(
+        data=[
+            go.Pie(
+                values=[p.market_value for p in positions],
+                labels=[p.ticker for p in positions],
+                hole=0.62,
+                sort=False,
+                direction="clockwise",
+                marker=dict(
+                    colors=tints,
+                    line=dict(color=theme.PAPER_CREAM_HEX, width=2),
+                ),
+                textinfo="none",
+                hovertemplate="%{label} · %{percent}<extra></extra>",
+            )
+        ]
+    )
+    fig.update_layout(
+        showlegend=False,
+        margin=dict(l=0, r=0, t=0, b=0),
+        height=180,
+        width=180,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family=theme.FONT_FAMILY, size=12, color=theme.WARM_GRAPHITE_HEX),
+    )
+    return html.Div(
+        style={"flexShrink": 0},
+        children=[
+            dcc.Graph(
+                figure=fig,
+                config={"displayModeBar": False, "staticPlot": False},
+                style={"width": "180px", "height": "180px"},
+            )
         ],
     )
 

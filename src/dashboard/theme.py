@@ -33,6 +33,42 @@ COLORS = {
     "loss": LOSS,
 }
 
+# Sequential graphite tints for chart slices, sparklines, and any other
+# multi-element visual where each element wants a unique shade but the
+# whole composition must stay in one warm-neutral family. Largest /
+# most-prominent element gets the darkest tint by convention.
+SLICE_TINTS = [
+    "oklch(28% 0.008 60)",
+    "oklch(38% 0.008 60)",
+    "oklch(48% 0.008 60)",
+    "oklch(58% 0.008 60)",
+    "oklch(68% 0.008 60)",
+    "oklch(76% 0.007 65)",
+    "oklch(82% 0.007 70)",
+]
+
+# Hex approximations of the warm-neutral palette, for libraries that don't
+# accept oklch() (Plotly's color validator rejects it). Visually close at
+# chart-slice / sparkline sizes; the eye can't distinguish them from the
+# CSS oklch tokens once anti-aliased into a small SVG region.
+PAPER_CREAM_HEX = "#f3eee5"
+WARM_GRAPHITE_HEX = "#2c2823"
+QUIET_INK_HEX = "#6b6559"
+BORDER_HEX = "#dfd8c8"
+ACCENT_HEX = "#a35a39"
+GAIN_HEX = "#5d7649"
+LOSS_HEX = "#a04734"
+
+SLICE_TINTS_HEX = [
+    "#3a3631",
+    "#524d45",
+    "#6b6559",
+    "#85806e",
+    "#a09b8c",
+    "#b5b0a2",
+    "#c4bfb2",
+]
+
 # ── Typography tokens ───────────────────────────────────────────────────────
 # DESIGN.md direction: warm humanist sans, NOT Inter/Geist/SF Pro/Helvetica.
 # Default below = IBM Plex Sans (free, Google Fonts, has matching Plex Mono).

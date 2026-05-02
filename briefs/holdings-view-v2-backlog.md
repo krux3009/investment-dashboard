@@ -9,6 +9,16 @@ score_at_ship: 35/40 (Excellent — Nielsen heuristics, post-polish)
 
 v1 of the holdings view shipped at 35/40 on Nielsen's heuristics, with the Top-3 critique items (P0 CSS load, P1 keyboard, P1 sort) plus the user-elected polish round (sort reset, anomaly placeholder, time-since wording, spacing rhythm) addressed. The items below were either flagged in the post-polish critique or carried forward from the initial brief; they are explicitly deferred to v2 to avoid scope creep.
 
+## Direction shift (2026-05-02 evening)
+
+After living with v1 + Phase 5 (anomaly drill-in), user feedback was: too sparse, all numbers / no shape, drill-in is dry, layout feels off. Original "Quiet Ledger" brief committed to "no charts-for-the-sake-of-charts" — that hypothesis didn't survive contact with the live product. v2 direction: still typographically restrained, but with charts as first-class. Staging:
+
+1. **Allocation donut in the hero** ✅ shipped (commit pending) — 180px Plotly donut, 5 graphite tints from `theme.SLICE_TINTS_HEX`, hairline paper-cream separators, no legend (hover for ticker + percent). Sits right of the +78.2% / $1.8K block. Slice values use raw market_value across currencies — naive without FX, approximately right for a USD-dominant book. New theme additions: `SLICE_TINTS` + parallel `SLICE_TINTS_HEX` (Plotly rejects oklch).
+2. **Phase 4 re-scoped** — DuckDB price-history cache + sparklines per row + drill-in candlestick chart + watchlist view. One unified data layer powers all four.
+3. **Dedicated charts/details page** — second route, research surface for tickers (largest scope).
+
+When all three land, re-run `/impeccable document` to refresh DESIGN.md so the seed file reflects the actual implementation rather than the v1 hypothesis.
+
 ## Deferred from post-polish critique (2026-05-02)
 
 ### P3 — Mixed-currency hero silently picks one currency
