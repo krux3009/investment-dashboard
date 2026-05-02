@@ -13,6 +13,7 @@ twice if they're also held positions.
 
 from __future__ import annotations
 
+import logging
 import os
 from typing import Any
 
@@ -22,17 +23,56 @@ from dash import dcc, html
 from dashboard import theme
 from dashboard.data import prices
 
-# Default watchlist when MOOMOO_WATCHLIST isn't set in .env. These match
-# the user's research notes (PLTR / ANET / VRT are already held; NVDA /
-# TSLA / 700.HK are aspirational).
+log = logging.getLogger(__name__)
+
+# Cold-start fallback when both the env override and moomoo's group fetch
+# come up empty. Used essentially never in practice — the dashboard's
+# normal source is the user's moomoo "All" group.
 _DEFAULT_WATCHLIST = ["US.NVDA", "US.TSLA", "HK.00700"]
+
+# Session-level cache of the moomoo-fetched watchlist. Populated on first
+# call; a dashboard restart picks up any composition changes the user
+# made in moomoo's app since.
+_WATCHLIST_CACHE: list[str] | None = None
+
+
+def _fetch_user_watchlist() -> list[str] | None:
+    """Pull codes from a moomoo user-security group (default 'All').
+
+    Returns None on any failure so the caller can fall back to the env
+    override or hardcoded default. The user has no CUSTOM-typed groups
+    on this machine; SYSTEM groups like 'All' / 'Favorites' / per-market
+    are sufficient. 'Favorites' is empty by default in moomoo, which is
+    why we default to 'All'.
+    """
+    group = os.environ.get("MOOMOO_WATCHLIST_GROUP", "All")
+    try:
+        from dashboard.data import anomalies
+
+        ret, data = anomalies._quote_ctx().get_user_security(group)  # noqa: SLF001
+    except Exception as exc:
+        log.warning("get_user_security(%s) exception: %s", group, exc)
+        return None
+    if ret != 0 or not hasattr(data, "iterrows") or len(data) == 0:
+        return None
+    return [str(row["code"]) for _, row in data.iterrows()]
 
 
 def _watchlist_codes() -> list[str]:
+    """Resolve the watchlist via env > moomoo group > hardcoded fallback."""
     raw = os.environ.get("MOOMOO_WATCHLIST", "").strip()
-    if not raw:
-        return _DEFAULT_WATCHLIST
-    return [c.strip() for c in raw.split(",") if c.strip()]
+    if raw:
+        return [c.strip() for c in raw.split(",") if c.strip()]
+
+    global _WATCHLIST_CACHE
+    if _WATCHLIST_CACHE is None:
+        fetched = _fetch_user_watchlist()
+        if fetched:
+            _WATCHLIST_CACHE = fetched
+    if _WATCHLIST_CACHE:
+        return _WATCHLIST_CACHE
+
+    return _DEFAULT_WATCHLIST
 
 
 def _label_style() -> dict:
