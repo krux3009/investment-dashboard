@@ -26,6 +26,7 @@ from dash import ALL, Input, Output, State, callback, clientside_callback, ctx, 
 
 from dashboard import theme
 from dashboard.data import anomalies, moomoo_client, prices
+from dashboard.views import watchlist
 from dashboard.data.positions import (
     PortfolioSummary,
     Position,
@@ -116,8 +117,13 @@ def _render(data: dict | None, expanded: list[str] | None, sort_state: dict | No
     summary = _summary_from_json(data)
     expanded_set = set(expanded or [])
     if summary.is_empty:
-        return _empty_state(summary)
-    return [_hero(summary), _sort_status(sort_state), _table(summary, expanded_set, sort_state)]
+        return [_empty_state(summary), watchlist.section()]
+    return [
+        _hero(summary),
+        _sort_status(sort_state),
+        _table(summary, expanded_set, sort_state),
+        watchlist.section(),
+    ]
 
 
 _DEFAULT_SORT = {"column": "mkt_value", "direction": "desc"}
