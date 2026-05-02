@@ -1,6 +1,7 @@
 """Dash app shell. Wires the holdings view in as the primary surface."""
 
 import os
+from pathlib import Path
 
 import dash
 from dash import html
@@ -8,10 +9,17 @@ from dash import html
 from dashboard import theme
 from dashboard.views import holdings
 
+# Dash auto-discovers `assets/` relative to the file that instantiates Dash().
+# Our package lives at src/dashboard/app.py and the CSS lives at the project
+# root assets/. Resolve the absolute path so the lookup works regardless of
+# the working directory the dashboard is launched from.
+_ASSETS = Path(__file__).resolve().parents[2] / "assets"
+
 app = dash.Dash(
     __name__,
     title="The Quiet Ledger",
     external_stylesheets=[theme.GOOGLE_FONTS_URL],
+    assets_folder=str(_ASSETS),
 )
 
 PAGE_STYLE = {
