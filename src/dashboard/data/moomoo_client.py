@@ -97,6 +97,13 @@ class MoomooClient:
         from moomoo import TrdEnv
 
         trd_env = getattr(TrdEnv, self.trd_env, TrdEnv.SIMULATE)
+        # Real-data verification on 2026-05-02 found that position_list_query
+        # ignores filter_trdmarket on FUTUSG accounts and returns the entire
+        # portfolio regardless of which market's context made the call. With
+        # MOOMOO_MARKETS=US,HK the result was every position duplicated. We
+        # collect across configured contexts (some brokers may genuinely scope
+        # by market) and dedupe by code, keeping the first occurrence.
+        seen: set[str] = set()
         positions: list[Position] = []
         any_failure = False
 
@@ -111,7 +118,11 @@ class MoomooClient:
                 if data is None or len(data) == 0:
                     continue
                 for _, row in data.iterrows():
-                    positions.append(_position_from_row(row))
+                    pos = _position_from_row(row)
+                    if pos.code in seen:
+                        continue
+                    seen.add(pos.code)
+                    positions.append(pos)
             except Exception as exc:
                 log.warning("Failed to fetch %s positions: %s", market, exc)
                 any_failure = True
@@ -127,7 +138,21 @@ class MoomooClient:
                 fresh=False,
             )
 
-        summary = _summarize(positions, fresh=not any_failure)
+        # Fires when: query succeeded cleanly, came back empty, and we were
+        # asking SIMULATE — i.e. the user is on the demo trading account with
+        # nothing in it. Lets the empty-state copy nudge them toward REAL
+        # rather than rendering a misleading "no positions" line.
+        simulate_empty = (
+            not any_failure
+            and len(positions) == 0
+            and self.trd_env.upper() == "SIMULATE"
+        )
+
+        summary = _summarize(
+            positions,
+            fresh=not any_failure,
+            simulate_with_no_positions=simulate_empty,
+        )
         self._cache = summary
         return summary
 
@@ -184,7 +209,11 @@ def _position_from_row(row: Any) -> Position:
     )
 
 
-def _summarize(positions: list[Position], fresh: bool = True) -> PortfolioSummary:
+def _summarize(
+    positions: list[Position],
+    fresh: bool = True,
+    simulate_with_no_positions: bool = False,
+) -> PortfolioSummary:
     """Aggregate positions into the PortfolioSummary, sorted by weight desc."""
     by_ccy_mv: dict[Currency, float] = {}
     by_ccy_pnl: dict[Currency, float] = {}
@@ -211,6 +240,7 @@ def _summarize(positions: list[Position], fresh: bool = True) -> PortfolioSummar
         total_pnl_abs_by_ccy=by_ccy_pnl,
         last_updated=datetime.now(),
         fresh=fresh,
+        simulate_with_no_positions=simulate_with_no_positions,
     )
 
 

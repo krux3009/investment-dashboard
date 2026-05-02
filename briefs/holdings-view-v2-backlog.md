@@ -67,6 +67,18 @@ v1 of the holdings view shipped at 35/40 on Nielsen's heuristics, with the Top-3
 
 **Action when ready:** Set `MOOMOO_USE_DEMO=false` in `.env`, ensure trade is unlocked, restart server. Verify positions render correctly. Likely-problem areas: P&L sign logic on partial fills, currency assignment for HK positions with US-pricing, row count > 4 (UI density), positions with `today_change_pct=None` from market snapshots not yet wired.
 
+**Update 2026-05-02 — real-data verification ran (`MOOMOO_USE_DEMO=false`, both `TRD_ENV=SIMULATE` and `=REAL` exercised):**
+
+- ✅ **Position-duplication bug found and fixed.** `position_list_query` ignored `filter_trdmarket` on FUTUSG accounts and returned the full portfolio per call; with `MOOMOO_MARKETS=US,HK` everything was doubled. Fixed in `data/moomoo_client.py:fetch_positions` via dedupe-by-code. Demo data couldn't catch this — it never ran the multi-market loop.
+- ✅ **Mixed-currency hero rendered cleanly with USD primary + SGD subtotal** (positions: 4× US, 1× SG). The brief's "primary currency" rule held up against live data without changes.
+- ✅ **Trade unlock turned out not to be required for `position_list_query` even on `TRD_ENV=REAL`** — a useful narrowing of the OpenD setup doc's "deliberate human-in-the-loop." Unlock is needed only for order placement (not in scope for v1).
+- ⚠️ **Untested edge cases (no live data to exercise):** HK position with USD pricing (no HK positions); partial-fill `pl_ratio` sign drift (no partial fills observed); `today_change_pct=None` (markets closed Saturday so `today_pl_val=0`, not None — `None` rendering still untested in production).
+- 📝 **§5 ambiguity resolved (option C: hybrid).** Added `simulate_with_no_positions: bool` to `PortfolioSummary`. `fetch_positions` sets it when query succeeds clean against `TRD_ENV=SIMULATE` and the paper book is empty. Empty-state view appends a quiet-ink third line: *"Querying SIMULATE. Set MOOMOO_TRD_ENV=REAL in .env to see the live book."* Critical fix-after-fact: the `dcc.Store` JSON ser/de pair (`_summary_to_json` / `_summary_from_json` in views/holdings.py) silently drops new fields — the field had to be added at all four locations (dataclass, _summarize, ser, de) for the round-trip to land. Add this rule to the v2 mental checklist for any future PortfolioSummary additions.
+
+**Visual evidence:**
+- `briefs/screenshots/holdings-real-data-default-1280.png` — REAL book, 5 positions, USD+SGD hero handling
+- `briefs/screenshots/holdings-real-simulate-empty-with-hint-1280.png` — SIMULATE empty state with the new third-line hint
+
 ## Decision log (for v2 sessions to read)
 
 - **Hero accent:** `oklch(55% 0.12 28)` muted rust. Fired on non-zero P&L regardless of direction. *Don't* tint by gain/loss — that drift would push the design back toward Robinhood reflex.
@@ -74,6 +86,7 @@ v1 of the holdings view shipped at 35/40 on Nielsen's heuristics, with the Top-3
 - **Spacing rhythm:** Row vertical padding is `md` (16px). The `sm` (8px) token is now reserved for tighter intra-row spacing only.
 - **Polling:** 30s `dcc.Interval`. No Page Visibility API yet — defer to v2 if active-tab detection becomes a real cost concern.
 - **Empty state copy:** *"No open positions. Once you hold something on moomoo, it appears here."* — matches PRODUCT.md voice. Don't add CTAs.
+- **Empty SIMULATE hint (added 2026-05-02 real-data verification):** *"Querying SIMULATE. Set MOOMOO_TRD_ENV=REAL in .env to see the live book."* Renders only when `simulate_with_no_positions` fires. Direct/instructional copy is intentional for a personal tool — chosen over softer alternatives ("This is the SIMULATE account") because the user is also the developer and the actionable instruction lands faster.
 - **Keyboard model:** ↑/↓ moves focus, Enter/Space toggles, Esc collapses-all. Don't add Tab-cycling shortcuts that compete with browser defaults.
 
 ## Reference screenshots in this session
@@ -84,3 +97,5 @@ v1 of the holdings view shipped at 35/40 on Nielsen's heuristics, with the Top-3
 - `holdings-bad-day-12pct-1280.png` — synthetic −12% calm-under-volatility verification
 - `holdings-keyboard-focus-1280.png` — focus-visible 2px accent ring on keyboard nav
 - `holdings-pltr-expanded-postharden-1280.png` — post-CSS-fix expanded row with 2px inset accent indicator
+- `holdings-real-data-default-1280.png` — first real-data render: 5 live positions (4 USD + 1 SGD), hero correctly shows USD primary
+- `holdings-real-simulate-empty-with-hint-1280.png` — empty SIMULATE state with the new third-line hint

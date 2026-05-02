@@ -74,6 +74,7 @@ def _summary_to_json(summary: PortfolioSummary) -> dict:
         "total_pnl_abs_by_ccy": dict(summary.total_pnl_abs_by_ccy),
         "last_updated": summary.last_updated.isoformat(),
         "fresh": summary.fresh,
+        "simulate_with_no_positions": summary.simulate_with_no_positions,
     }
 
 
@@ -85,6 +86,7 @@ def _summary_from_json(data: dict) -> PortfolioSummary:
         total_pnl_abs_by_ccy=data["total_pnl_abs_by_ccy"],
         last_updated=datetime.fromisoformat(data["last_updated"]),
         fresh=data["fresh"],
+        simulate_with_no_positions=data.get("simulate_with_no_positions", False),
     )
 
 
@@ -622,38 +624,51 @@ def _expansion_row(p: Position, summary: PortfolioSummary) -> html.Tr:
 
 
 def _empty_state(summary: PortfolioSummary):
-    return html.Div(
-        style={"borderBottom": theme.HAIRLINE, "paddingBottom": theme.SPACE["xl"]},
-        children=[
-            _page_header(summary),
-            html.Div(
-                style={
-                    "display": "flex",
-                    "alignItems": "baseline",
-                    "gap": theme.SPACE["lg"],
-                    "marginTop": theme.SPACE["lg"],
-                },
-                children=[
-                    html.Span("Portfolio", style=_label_style()),
-                    html.Span(
-                        "No open positions.",
-                        style={
-                            "fontSize": theme.TYPE["headline"]["size"],
-                            "fontWeight": 400,
-                            "color": theme.QUIET_INK,
-                        },
-                    ),
-                ],
-            ),
+    children = [
+        _page_header(summary),
+        html.Div(
+            style={
+                "display": "flex",
+                "alignItems": "baseline",
+                "gap": theme.SPACE["lg"],
+                "marginTop": theme.SPACE["lg"],
+            },
+            children=[
+                html.Span("Portfolio", style=_label_style()),
+                html.Span(
+                    "No open positions.",
+                    style={
+                        "fontSize": theme.TYPE["headline"]["size"],
+                        "fontWeight": 400,
+                        "color": theme.QUIET_INK,
+                    },
+                ),
+            ],
+        ),
+        html.P(
+            "Once you hold something on moomoo, it appears here.",
+            style={
+                "color": theme.QUIET_INK,
+                "marginTop": theme.SPACE["md"],
+                "maxWidth": theme.PROSE_MAX_CH,
+            },
+        ),
+    ]
+    if summary.simulate_with_no_positions:
+        children.append(
             html.P(
-                "Once you hold something on moomoo, it appears here.",
+                "Querying SIMULATE. Set MOOMOO_TRD_ENV=REAL in .env to see the live book.",
                 style={
                     "color": theme.QUIET_INK,
-                    "marginTop": theme.SPACE["md"],
+                    "marginTop": theme.SPACE["sm"],
+                    "fontSize": "0.875rem",
                     "maxWidth": theme.PROSE_MAX_CH,
                 },
-            ),
-        ],
+            )
+        )
+    return html.Div(
+        style={"borderBottom": theme.HAIRLINE, "paddingBottom": theme.SPACE["xl"]},
+        children=children,
     )
 
 

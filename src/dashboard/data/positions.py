@@ -47,6 +47,10 @@ class PortfolioSummary:
     total_pnl_abs_by_ccy: dict[Currency, float] = field(default_factory=dict)
     last_updated: datetime = field(default_factory=datetime.now)
     fresh: bool = True               # False = stale data, OpenD unreachable
+    # Set when fetch_positions ran cleanly against TRD_ENV=SIMULATE and the
+    # account had zero paper positions. Lets the empty-state copy nudge the
+    # user toward MOOMOO_TRD_ENV=REAL instead of the bare "no positions" line.
+    simulate_with_no_positions: bool = False
 
     @property
     def is_empty(self) -> bool:
