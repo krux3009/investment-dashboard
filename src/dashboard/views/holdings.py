@@ -20,7 +20,7 @@ import json
 from dataclasses import asdict
 from datetime import datetime
 
-from dash import ALL, Input, Output, State, callback, ctx, dcc, html, no_update
+from dash import ALL, Input, Output, State, callback, clientside_callback, ctx, dcc, html, no_update
 
 from dashboard import theme
 from dashboard.data import moomoo_client
@@ -47,6 +47,8 @@ def layout() -> html.Div:
             dcc.Interval(id="holdings-poll", interval=30_000, n_intervals=0),
             dcc.Store(id="holdings-summary"),
             dcc.Store(id="holdings-expanded", data=[]),
+            # Marker store consumed only to install the keyboard listener once.
+            dcc.Store(id="holdings-keyboard-installed", data=False),
             html.Section(id="holdings-root", **{"aria-label": "Portfolio holdings"}),
         ],
     )
@@ -107,7 +109,7 @@ def _render(data: dict | None, expanded: list[str] | None):
 
 
 @callback(
-    Output("holdings-expanded", "data"),
+    Output("holdings-expanded", "data", allow_duplicate=True),
     Input({"type": "holdings-row", "code": ALL}, "n_clicks"),
     State("holdings-expanded", "data"),
     prevent_initial_call=True,
@@ -125,6 +127,59 @@ def _toggle_row(clicks: list[int | None], expanded: list[str] | None):
     else:
         expanded.append(code)
     return expanded
+
+
+# ── Keyboard handling ───────────────────────────────────────────────────────
+# A single document-level listener handles all four bindings from §7 of the
+# brief. ↑/↓ moves focus between rows; Enter and Space trigger click on the
+# focused row; Esc clears the expanded set entirely.
+#
+# Esc updates the dcc.Store directly via dash_clientside.set_props to avoid
+# round-tripping through n_clicks. ↑/↓ and Enter/Space stay in the DOM —
+# arrow keys move focus, click events go through the existing toggle path.
+
+clientside_callback(
+    """
+    function installHoldingsKeyboard() {
+        if (window.__quietLedgerKeyboardInstalled) {
+            return true;
+        }
+        window.__quietLedgerKeyboardInstalled = true;
+        document.addEventListener('keydown', function (event) {
+            const active = document.activeElement;
+            const onRow = active && active.classList && active.classList.contains('holdings-row');
+            if (event.key === 'Escape') {
+                if (window.dash_clientside && window.dash_clientside.set_props) {
+                    window.dash_clientside.set_props('holdings-expanded', { data: [] });
+                    event.preventDefault();
+                }
+                return;
+            }
+            if (!onRow) {
+                return;
+            }
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                event.preventDefault();
+                const rows = Array.from(document.querySelectorAll('.holdings-row'));
+                const idx = rows.indexOf(active);
+                if (idx === -1) {
+                    return;
+                }
+                const next = event.key === 'ArrowDown'
+                    ? Math.min(idx + 1, rows.length - 1)
+                    : Math.max(idx - 1, 0);
+                rows[next].focus();
+            } else if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                active.click();
+            }
+        });
+        return true;
+    }
+    """,
+    Output("holdings-keyboard-installed", "data"),
+    Input("holdings-poll", "n_intervals"),
+)
 
 
 # ── Subcomponents ───────────────────────────────────────────────────────────
@@ -332,6 +387,12 @@ def _glance_row(p: Position, is_expanded: bool, summary: PortfolioSummary) -> ht
         n_clicks=0,
         title=p.name,  # company name on hover
         className="holdings-row" + (" holdings-row--expanded" if is_expanded else ""),
+        tabIndex=0,
+        **{
+            "role": "button",
+            "aria-expanded": "true" if is_expanded else "false",
+            "aria-label": f"{p.ticker}, {p.name}, {format_qty(p.qty)} shares, {format_pct(p.total_pnl_pct)} total",
+        },
         children=[
             html.Td(
                 html.Span(p.ticker, style={"color": ticker_color, "fontWeight": ticker_weight}),
