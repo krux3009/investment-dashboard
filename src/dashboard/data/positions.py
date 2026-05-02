@@ -141,12 +141,18 @@ def format_qty(value: float) -> str:
 
 
 def time_since(dt: datetime, now: datetime | None = None) -> str:
-    """Human-readable elapsed time: '3 sec ago', '14 min ago', '2 hr ago'."""
+    """Human-readable elapsed time tuned for a 30s polling cadence.
+
+    Sub-minute reads as 'just now' or 'moments ago' to match the brief's
+    matter-of-fact voice; literal 'X sec ago' read as a trading-floor twitch.
+    """
     now = now or datetime.now()
     delta = now - dt
     seconds = int(delta.total_seconds())
+    if seconds < 5:
+        return "just now"
     if seconds < 60:
-        return f"{seconds} sec ago"
+        return "moments ago"
     minutes = seconds // 60
     if minutes < 60:
         return f"{minutes} min ago"

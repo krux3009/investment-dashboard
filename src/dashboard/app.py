@@ -20,6 +20,10 @@ app = dash.Dash(
     title="The Quiet Ledger",
     external_stylesheets=[theme.GOOGLE_FONTS_URL],
     assets_folder=str(_ASSETS),
+    # Several view components (sort-reset button, expansion rows) are rendered
+    # conditionally inside callback outputs. Their callbacks would otherwise
+    # fail registration because the targets aren't in the initial layout.
+    suppress_callback_exceptions=True,
 )
 
 PAGE_STYLE = {

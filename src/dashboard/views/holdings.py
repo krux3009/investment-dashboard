@@ -113,7 +113,30 @@ def _render(data: dict | None, expanded: list[str] | None, sort_state: dict | No
     expanded_set = set(expanded or [])
     if summary.is_empty:
         return _empty_state(summary)
-    return [_hero(summary), _table(summary, expanded_set, sort_state)]
+    return [_hero(summary), _sort_status(sort_state), _table(summary, expanded_set, sort_state)]
+
+
+_DEFAULT_SORT = {"column": "mkt_value", "direction": "desc"}
+
+
+def _is_default_sort(state: dict | None) -> bool:
+    if not state:
+        return True
+    return (
+        state.get("column") == _DEFAULT_SORT["column"]
+        and state.get("direction") == _DEFAULT_SORT["direction"]
+    )
+
+
+@callback(
+    Output("holdings-sort", "data", allow_duplicate=True),
+    Input("holdings-sort-reset", "n_clicks"),
+    prevent_initial_call=True,
+)
+def _reset_sort(n_clicks: int | None):
+    if not n_clicks:
+        return no_update
+    return _DEFAULT_SORT
 
 
 @callback(
@@ -354,6 +377,48 @@ _SORT_KEYS = {
 }
 
 
+def _sort_status(state: dict | None) -> html.Div:
+    """Caption + reset link, visible only when sort is non-default.
+
+    The reset button always exists in the DOM so its callback can bind cleanly;
+    visibility flips via display style. When the sort matches the brief's
+    weight-desc default, the chip stays out of view to keep the page label-quiet.
+    """
+    is_default = _is_default_sort(state)
+    state = state or _DEFAULT_SORT
+    col_key = state["column"]
+    col_label = next((c["label"] for c in _COLS if c["key"] == col_key), col_key)
+    direction_word = "descending" if state["direction"] == "desc" else "ascending"
+    caption = f"sorted by {col_label.lower()}, {direction_word}"
+
+    return html.Div(
+        style={
+            "display": "none" if is_default else "flex",
+            "justifyContent": "flex-end",
+            "alignItems": "baseline",
+            "gap": theme.SPACE["sm"],
+            "marginBottom": theme.SPACE["sm"],
+        },
+        children=[
+            html.Span(caption, style=_label_style({"color": theme.QUIET_INK})),
+            html.Button(
+                "Reset",
+                id="holdings-sort-reset",
+                n_clicks=0,
+                className="holdings-sort-reset",
+                style={
+                    **_label_style({"color": theme.ACCENT}),
+                    "background": "none",
+                    "border": "none",
+                    "padding": 0,
+                    "cursor": "pointer",
+                },
+                **{"aria-label": "Reset sort to portfolio weight, descending"},
+            ),
+        ],
+    )
+
+
 def _sort_header(col: dict, state: dict) -> html.Th:
     """Column header. Click to resort. Indicator arrow on the active column."""
     is_active = state["column"] == col["key"]
@@ -373,7 +438,7 @@ def _sort_header(col: dict, state: dict) -> html.Th:
             "color": label_color,
             "textAlign": col["align"],
             "width": col["width"],
-            "padding": f"0 {theme.SPACE['md']} {theme.SPACE['sm']} 0",
+            "padding": f"0 {theme.SPACE['md']} {theme.SPACE['md']} 0",
             "borderBottom": theme.HAIRLINE,
             "cursor": "pointer",
             "userSelect": "none",
@@ -470,15 +535,15 @@ def _glance_row(p: Position, is_expanded: bool, summary: PortfolioSummary) -> ht
         children=[
             html.Td(
                 html.Span(p.ticker, style={"color": ticker_color, "fontWeight": ticker_weight}),
-                style={"padding": f"{theme.SPACE['sm']} {theme.SPACE['md']} {theme.SPACE['sm']} 0", "textAlign": "left"},
+                style={"padding": f"{theme.SPACE['md']} {theme.SPACE['md']} {theme.SPACE['md']} 0", "textAlign": "left"},
             ),
             html.Td(
                 format_qty(p.qty),
-                style={"padding": f"{theme.SPACE['sm']} {theme.SPACE['md']} {theme.SPACE['sm']} 0", "textAlign": "right"},
+                style={"padding": f"{theme.SPACE['md']} {theme.SPACE['md']} {theme.SPACE['md']} 0", "textAlign": "right"},
             ),
             html.Td(
                 children=[format_currency_full(p.market_value, p.currency, decimals=0), market_badge],
-                style={"padding": f"{theme.SPACE['sm']} {theme.SPACE['md']} {theme.SPACE['sm']} 0", "textAlign": "right", "whiteSpace": "nowrap"},
+                style={"padding": f"{theme.SPACE['md']} {theme.SPACE['md']} {theme.SPACE['md']} 0", "textAlign": "right", "whiteSpace": "nowrap"},
             ),
             html.Td(
                 children=[
@@ -486,7 +551,7 @@ def _glance_row(p: Position, is_expanded: bool, summary: PortfolioSummary) -> ht
                     html.Span(format_pct(p.today_change_pct)),
                 ],
                 style={
-                    "padding": f"{theme.SPACE['sm']} {theme.SPACE['md']} {theme.SPACE['sm']} 0",
+                    "padding": f"{theme.SPACE['md']} {theme.SPACE['md']} {theme.SPACE['md']} 0",
                     "textAlign": "right",
                     "color": today_color,
                     "whiteSpace": "nowrap",
@@ -502,7 +567,7 @@ def _glance_row(p: Position, is_expanded: bool, summary: PortfolioSummary) -> ht
                     ),
                 ],
                 style={
-                    "padding": f"{theme.SPACE['sm']} 0",
+                    "padding": f"{theme.SPACE['md']} 0",
                     "textAlign": "right",
                     "color": total_color,
                     "whiteSpace": "nowrap",
@@ -547,16 +612,9 @@ def _expansion_row(p: Position, summary: PortfolioSummary) -> html.Tr:
                         " · ".join(f"{label} {value}" for label, value in fields),
                         style={"marginTop": theme.SPACE["xs"]},
                     ),
-                    # Anomaly slot. v2 wires moomoo-anomaly skills here.
-                    html.Div(
-                        f"{p.ticker} · anomaly checks not wired in v1",
-                        style={
-                            "marginTop": theme.SPACE["xs"],
-                            "color": theme.QUIET_INK,
-                            "fontStyle": "italic",
-                            "fontSize": "0.8rem",
-                        },
-                    ),
+                    # Anomaly slot stays empty in v1; absence is the signal until
+                    # moomoo-anomaly skills wire in. Habituating the eye to a
+                    # placeholder line would make real signals get skimmed past.
                 ],
             )
         ],
