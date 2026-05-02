@@ -135,19 +135,31 @@ def get_history(code: str, days: int = 30) -> pd.DataFrame:
 
     with _DB_LOCK:
         res = _db().execute(
-            "SELECT MAX(date) FROM daily_prices WHERE code = ?",
+            "SELECT MIN(date), MAX(date) FROM daily_prices WHERE code = ?",
             [code],
         ).fetchone()
-    last_cached: date | None = res[0] if res else None
+    earliest_cached: date | None = res[0] if res and res[0] else None
+    last_cached: date | None = res[1] if res and res[1] else None
 
-    needs_refetch = last_cached is None or last_cached < (today - timedelta(days=2))
-    if needs_refetch and code not in _UNFETCHABLE:
-        fetch_start = (last_cached + timedelta(days=1)) if last_cached else start
-        # Always cap fetch_start to no earlier than the requested window —
-        # avoids re-pulling years of history when a long-cached ticker just
-        # missed a few days.
-        fetch_start = max(fetch_start, start)
-        _fetch_and_cache(code, fetch_start, today)
+    # Two reasons to fetch: (a) the cache is stale for "today" (last cached
+    # row > 2 calendar days old, absorbs weekend slack), or (b) the cache
+    # doesn't cover the requested historical window (earliest cached row is
+    # newer than `start`). The drill-in's 90-day window will trigger (b) if
+    # the sparkline previously cached only 30 days for the same ticker.
+    stale_recent = last_cached is None or last_cached < (today - timedelta(days=2))
+    needs_backfill = earliest_cached is not None and earliest_cached > start
+    if (stale_recent or needs_backfill) and code not in _UNFETCHABLE:
+        if last_cached is None:
+            fetch_start, fetch_end = start, today
+        elif stale_recent and needs_backfill:
+            fetch_start, fetch_end = start, today
+        elif stale_recent:
+            fetch_start = max(last_cached + timedelta(days=1), start)
+            fetch_end = today
+        else:  # needs_backfill only
+            fetch_start = start
+            fetch_end = earliest_cached - timedelta(days=1)
+        _fetch_and_cache(code, fetch_start, fetch_end)
 
     with _DB_LOCK:
         df = _db().execute(

@@ -557,6 +557,62 @@ def _sort_header(col: dict, state: dict) -> html.Th:
     )
 
 
+def _drillin_chart(code: str, days: int = 90) -> Any:
+    """N-day close-price line chart for the holdings drill-in.
+
+    Single warm-graphite line, no fill, right-side y-axis (trading-platform
+    convention). Hover shows date + close price. Returns None when the
+    cache + fetch produce no data — the drill-in stays clean for tickers
+    without history (e.g. SG.K71U with no SGX subscription).
+    """
+    df = prices.get_history(code, days=days)
+    if df.empty:
+        return None
+
+    fig = go.Figure(
+        go.Scatter(
+            x=df["date"],
+            y=df["close"],
+            mode="lines",
+            line=dict(color=theme.WARM_GRAPHITE_HEX, width=1.5),
+            hovertemplate="%{x|%b %-d, %Y}<br>$%{y:.2f}<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        showlegend=False,
+        margin=dict(l=0, r=0, t=8, b=24),
+        height=200,
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family=theme.FONT_FAMILY, color=theme.QUIET_INK_HEX, size=10),
+        xaxis=dict(
+            showgrid=False,
+            showline=False,
+            ticks="",
+            tickfont=dict(color=theme.QUIET_INK_HEX, size=10),
+        ),
+        yaxis=dict(
+            showgrid=True,
+            gridcolor=theme.BORDER_HEX,
+            gridwidth=0.5,
+            zeroline=False,
+            ticks="",
+            side="right",
+            tickfont=dict(color=theme.QUIET_INK_HEX, size=10),
+        ),
+        hoverlabel=dict(
+            bgcolor=theme.PAPER_CREAM_HEX,
+            bordercolor=theme.BORDER_HEX,
+            font=dict(family=theme.FONT_FAMILY, color=theme.WARM_GRAPHITE_HEX, size=11),
+        ),
+    )
+    return dcc.Graph(
+        figure=fig,
+        config={"displayModeBar": False},
+        style={"marginTop": theme.SPACE["md"]},
+    )
+
+
 def _sparkline(code: str, width: int = 90, height: int = 22) -> Any:
     """30-day close-price sparkline. Cached prices, single-line chart, no axes.
 
@@ -776,24 +832,29 @@ def _expansion_row(p: Position, summary: PortfolioSummary) -> html.Tr:
             )
         )
 
+    drillin_content: list = [
+        html.Div(
+            " · ".join(f"{label} {value}" for label, value in fields),
+            style={"marginTop": theme.SPACE["xs"]},
+        ),
+    ]
+    chart = _drillin_chart(p.code) if summary.fresh else None
+    if chart is not None:
+        drillin_content.append(chart)
+    drillin_content.extend(anomaly_blocks)
+
     return html.Tr(
         className="holdings-expansion",
         children=[
             html.Td(
                 colSpan=len(_COLS),
                 style={
-                    "padding": f"0 0 {theme.SPACE['md']} {theme.SPACE['lg']}",
+                    "padding": f"0 {theme.SPACE['lg']} {theme.SPACE['md']} {theme.SPACE['lg']}",
                     "borderBottom": theme.HAIRLINE,
                     "color": theme.QUIET_INK,
                     "fontSize": "0.9rem",
                 },
-                children=[
-                    html.Div(
-                        " · ".join(f"{label} {value}" for label, value in fields),
-                        style={"marginTop": theme.SPACE["xs"]},
-                    ),
-                    *anomaly_blocks,
-                ],
+                children=drillin_content,
             )
         ],
     )
