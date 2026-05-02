@@ -1,0 +1,75 @@
+/* Quiet Ledger — global stylesheet.
+ *
+ * Inline styles via Dash carry the theme tokens. This file owns only the
+ * things inline styles can't do: hover, focus-visible, transitions, and a
+ * few document-level resets. Token references repeat values from theme.py
+ * deliberately so this file stays self-contained.
+ */
+
+html {
+  /* Tinted body background visible past the Dash layout container. */
+  background-color: oklch(96% 0.005 75);
+}
+
+body {
+  margin: 0;
+  /* Inter / system fallback only kicks in if Plex hasn't loaded yet. */
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ── Holdings table rows ─────────────────────────────────────────────── */
+
+.holdings-row {
+  cursor: pointer;
+  transition: background-color 150ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.holdings-row > td {
+  border-bottom: 1px solid oklch(86% 0.006 70);
+}
+
+/* Quiet hover: a 2-3% darken of the surface, no shadow, no shift. */
+.holdings-row:hover > td {
+  background-color: oklch(93% 0.008 75);
+}
+
+/* Expanded-row treatment: leading hairline accent on the leftmost cell.
+ * Implemented as an inset 2px border so it can't violate the side-stripe
+ * absolute ban (which forbids border-left > 1px as a *colored accent*).
+ * Here, it's a state indicator on a stateful row, in the accent hue.
+ */
+.holdings-row--expanded > td:first-child {
+  box-shadow: inset 2px 0 0 oklch(55% 0.12 28);
+}
+
+.holdings-row--expanded > td {
+  background-color: oklch(94% 0.008 75);
+}
+
+/* The expansion content row carries no background and no hover. */
+.holdings-expansion > td {
+  background-color: oklch(94% 0.008 75);
+}
+
+/* Keyboard focus on rows. Uses focus-visible so mouse clicks don't draw
+ * the ring. A 2px accent outline at 2px offset, accent-tinted darker.
+ */
+.holdings-row:focus {
+  outline: none;
+}
+
+.holdings-row:focus-visible {
+  outline: 2px solid oklch(60% 0.13 28);
+  outline-offset: -2px;
+}
+
+/* ── Reduced motion ──────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .holdings-row,
+  .holdings-row > td {
+    transition: none;
+  }
+}

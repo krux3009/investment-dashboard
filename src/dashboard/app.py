@@ -1,7 +1,4 @@
-"""Dash app shell. Hello-world layout that proves the design tokens render.
-
-Real views go in `dashboard.views.*` and are added to `LAYOUT` once shaped.
-"""
+"""Dash app shell. Wires the holdings view in as the primary surface."""
 
 import os
 
@@ -9,6 +6,7 @@ import dash
 from dash import html
 
 from dashboard import theme
+from dashboard.views import holdings
 
 app = dash.Dash(
     __name__,
@@ -16,8 +14,6 @@ app = dash.Dash(
     external_stylesheets=[theme.GOOGLE_FONTS_URL],
 )
 
-# Body-level base styles. Dash injects `#react-entry-point` into <body>;
-# we set the page chrome via inline CSS on the outermost container.
 PAGE_STYLE = {
     "backgroundColor": theme.PAPER_CREAM,
     "color": theme.WARM_GRAPHITE,
@@ -29,36 +25,18 @@ PAGE_STYLE = {
     "fontFeatureSettings": theme.TABULAR_NUMS,
 }
 
-HEADLINE_STYLE = {
-    "fontSize": theme.TYPE["headline"]["size"],
-    "fontWeight": theme.TYPE["headline"]["weight"],
-    "margin": f"0 0 {theme.SPACE['md']} 0",
-}
-
-LABEL_STYLE = {
-    "fontSize": theme.TYPE["label"]["size"],
-    "fontWeight": theme.TYPE["label"]["weight"],
-    "letterSpacing": theme.TYPE["label"]["tracking"],
-    "textTransform": "uppercase",
-    "color": theme.QUIET_INK,
-    "margin": f"0 0 {theme.SPACE['xs']} 0",
+# Centered content column. Wide enough for the table at glance density,
+# narrow enough not to feel like an admin panel. ~64rem ≈ 1024px.
+CONTENT_STYLE = {
+    "maxWidth": "64rem",
+    "margin": "0 auto",
 }
 
 
-app.layout = html.Div(
+app.layout = html.Main(
     style=PAGE_STYLE,
     children=[
-        html.Div(
-            style={"borderBottom": theme.HAIRLINE, "paddingBottom": theme.SPACE["lg"]},
-            children=[
-                html.P("The Quiet Ledger", style=LABEL_STYLE),
-                html.H1("Hello.", style=HEADLINE_STYLE),
-                html.P(
-                    "Scaffold up. Theme tokens applied. Holdings view next.",
-                    style={"color": theme.QUIET_INK, "maxWidth": theme.PROSE_MAX_CH},
-                ),
-            ],
-        ),
+        html.Div(style=CONTENT_STYLE, children=[holdings.layout()]),
     ],
 )
 
