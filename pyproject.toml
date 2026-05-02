@@ -1,0 +1,24 @@
+[project]
+name = "dashboard"
+version = "0.1.0"
+description = "Personal investment dashboard on top of moomoo OpenD. The Quiet Ledger."
+readme = "README.md"
+authors = [
+    { name = "krux3009", email = "tanlixuan2005@gmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "dash>=4.1.0",
+    "duckdb>=1.5.2",
+    "moomoo-api==10.4.6408",
+    "pandas>=3.0.2",
+    "plotly>=6.7.0",
+    "python-dotenv>=1.2.2",
+]
+
+[project.scripts]
+dashboard = "dashboard:main"
+
+[build-system]
+requires = ["uv_build>=0.11.8,<0.12.0"]
+build-backend = "uv_build"
