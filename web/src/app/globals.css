@@ -1,26 +1,126 @@
+/* Quiet Ledger v3 — warm-graphite design tokens.
+ *
+ * Light theme = paper-cream surface + warm-graphite ink.
+ * Dark theme  = warm-graphite surface + paper-cream ink.
+ *
+ * Tokens mirror src/dashboard/theme.py so v2 and v3 can be eyeballed
+ * side-by-side until v2 is retired (Phase B end).
+ */
+
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Surfaces — light theme (default) */
+  --surface: oklch(96% 0.005 75);          /* paper cream */
+  --surface-raised: oklch(98% 0.004 75);   /* card lift */
+  --surface-hover: oklch(93% 0.008 75);    /* row hover */
+  --surface-expanded: oklch(94% 0.008 75); /* drill-in row */
+
+  /* Ink */
+  --ink: oklch(20% 0.008 60);              /* warm graphite */
+  --quiet: oklch(45% 0.008 60);            /* secondary text */
+  --whisper: oklch(58% 0.007 65);          /* tertiary / metadata */
+
+  /* Lines */
+  --rule: oklch(86% 0.006 70);             /* hairlines */
+
+  /* Accents (rare) */
+  --accent: oklch(55% 0.12 28);            /* muted rust */
+  --accent-strong: oklch(60% 0.13 28);     /* focus rings */
+
+  /* Direction tints (paired with arrows + signs, never sole signal) */
+  --gain: oklch(48% 0.10 145);             /* muted forest */
+  --loss: oklch(48% 0.13 25);              /* muted sienna */
+
+  /* Sequential graphite for charts (largest = darkest) */
+  --slice-1: oklch(28% 0.008 60);
+  --slice-2: oklch(38% 0.008 60);
+  --slice-3: oklch(48% 0.008 60);
+  --slice-4: oklch(58% 0.008 60);
+  --slice-5: oklch(68% 0.008 60);
+  --slice-6: oklch(76% 0.007 65);
+  --slice-7: oklch(82% 0.007 70);
+}
+
+.dark {
+  --surface: oklch(18% 0.008 60);
+  --surface-raised: oklch(22% 0.008 60);
+  --surface-hover: oklch(24% 0.008 60);
+  --surface-expanded: oklch(26% 0.008 60);
+
+  --ink: oklch(92% 0.005 75);
+  --quiet: oklch(70% 0.008 60);
+  --whisper: oklch(58% 0.008 60);
+
+  --rule: oklch(30% 0.008 60);
+
+  --accent: oklch(68% 0.12 28);
+  --accent-strong: oklch(72% 0.13 28);
+
+  --gain: oklch(62% 0.11 145);
+  --loss: oklch(62% 0.13 25);
+
+  --slice-1: oklch(85% 0.008 70);
+  --slice-2: oklch(75% 0.008 65);
+  --slice-3: oklch(65% 0.008 60);
+  --slice-4: oklch(55% 0.008 60);
+  --slice-5: oklch(45% 0.008 60);
+  --slice-6: oklch(36% 0.008 60);
+  --slice-7: oklch(28% 0.008 60);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Color tokens exposed to Tailwind utilities. */
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-hover: var(--surface-hover);
+  --color-surface-expanded: var(--surface-expanded);
+  --color-ink: var(--ink);
+  --color-quiet: var(--quiet);
+  --color-whisper: var(--whisper);
+  --color-rule: var(--rule);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-gain: var(--gain);
+  --color-loss: var(--loss);
+  --color-slice-1: var(--slice-1);
+  --color-slice-2: var(--slice-2);
+  --color-slice-3: var(--slice-3);
+  --color-slice-4: var(--slice-4);
+  --color-slice-5: var(--slice-5);
+  --color-slice-6: var(--slice-6);
+  --color-slice-7: var(--slice-7);
+
+  /* Type. IBM Plex Sans loads via next/font (--font-plex-sans). */
+  --font-sans: var(--font-plex-sans), "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), "IBM Plex Mono", ui-monospace, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html, body {
+  background-color: var(--surface);
+  color: var(--ink);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "tnum" 0;  /* tabular off by default; opt in on numeric cells */
+}
+
+.tabular {
+  font-feature-settings: "tnum" 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Quiet hover for stateful rows: 2-3% darken, no shadow, no shift. */
+.row-hover:hover {
+  background-color: var(--surface-hover);
+}
+
+/* Reduced motion respected by default. */
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
 }
