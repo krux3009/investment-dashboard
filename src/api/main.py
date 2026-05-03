@@ -16,7 +16,7 @@ load_dotenv()
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routes import holdings
+from api.routes import anomalies, holdings, prices
 
 app = FastAPI(title="investment-dashboard API", version="0.1.0")
 
@@ -28,6 +28,8 @@ app.add_middleware(
 )
 
 app.include_router(holdings.router, prefix="/api")
+app.include_router(prices.router, prefix="/api")
+app.include_router(anomalies.router, prefix="/api")
 
 
 @app.get("/api/health")

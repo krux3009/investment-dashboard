@@ -47,3 +47,43 @@ export async function fetchHoldings(): Promise<HoldingsResponse> {
   }
   return (await res.json()) as HoldingsResponse;
 }
+
+export interface PricePoint {
+  date: string;
+  close: number;
+}
+
+export interface PriceHistory {
+  code: string;
+  days: number;
+  points: PricePoint[];
+}
+
+export async function fetchPrices(code: string, days = 30): Promise<PriceHistory> {
+  const url = `${API_BASE}/api/prices/${encodeURIComponent(code)}?days=${days}`;
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`/api/prices/${code} ${res.status}: ${await res.text()}`);
+  }
+  return (await res.json()) as PriceHistory;
+}
+
+export interface AnomalyItem {
+  kind: "technical" | "capital";
+  label: string;
+  content: string;
+}
+
+export interface AnomaliesResponse {
+  code: string;
+  items: AnomalyItem[];
+}
+
+export async function fetchAnomalies(code: string): Promise<AnomaliesResponse> {
+  const url = `${API_BASE}/api/anomalies/${encodeURIComponent(code)}`;
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`/api/anomalies/${code} ${res.status}: ${await res.text()}`);
+  }
+  return (await res.json()) as AnomaliesResponse;
+}
