@@ -10,15 +10,24 @@ requires-python = ">=3.14"
 dependencies = [
     "dash>=4.1.0",
     "duckdb>=1.5.2",
+    "fastapi>=0.115",
     "moomoo-api==10.4.6408",
     "pandas>=3.0.2",
     "plotly>=6.7.0",
+    "pydantic>=2.9",
     "python-dotenv>=1.2.2",
+    "uvicorn[standard]>=0.32",
+    "yfinance>=0.2.50",
 ]
 
 [project.scripts]
 dashboard = "dashboard:main"
+api = "api.main:cli"
 
 [build-system]
 requires = ["uv_build>=0.11.8,<0.12.0"]
 build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = ["dashboard", "api"]
+module-root = "src"

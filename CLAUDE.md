@@ -22,19 +22,47 @@ Personal investment dashboard sitting on top of moomoo OpenD (the local brokerag
 
 See [moomoo-opend-setup.md](./moomoo-opend-setup.md) for the data-layer foundation and [`tooling-research.md`](./tooling-research.md) for the Claude Code tooling shortlist.
 
-## Status: v1 shipped (2026-05-02)
+## Status: v2 shipped (2026-05-02), v3 rewrite planned
 
-The holdings-view shipped at ~38/40 on Nielsen heuristics across 8 commits (`b677b58` → `fc2130a`). Stack: `uv` + Python 3.14 + Dash 4.1 + Plotly + DuckDB + `moomoo-api 10.4.6408`. Run with `uv run dashboard` (defaults to demo mode).
+End-to-end real on Dash + Plotly. Eleven commits past v1 ship, in order:
+real-data verification + dedupe-positions fix + SIMULATE-empty hint
+(`4b9739e`) → Phase 5 anomaly drill-in via direct moomoo SDK calls
+(`4e8f846`) → derivatives category trim (`615eb20`) → allocation donut in
+hero (`eaae6d0`) → DuckDB price-history cache + per-row sparklines
+(`2cd847d`) → drill-in 90-day price chart (`8f4a847`) → watchlist surface
+(`de9cb92`) → moomoo-sourced watchlist via `get_user_security('All')`
+(`aee7c92`) → watchlist rows expand into drill-in like holdings
+(`d489539`) → lazy-load anomaly section of watchlist drill-in (`79ebc5e`).
+GitHub: `krux3009/investment-dashboard`, default branch `main`, private.
 
-Confirmed brief: [briefs/holdings-view.md](./briefs/holdings-view.md). Deferred items + decision log: [briefs/holdings-view-v2-backlog.md](./briefs/holdings-view-v2-backlog.md). Visual evidence: [briefs/screenshots/](./briefs/screenshots/).
+**Stack now:** `uv` + Python 3.14 + Dash 4.1 + Plotly + DuckDB +
+`moomoo-api 10.4.6408`. Run with `uv run dashboard` (defaults to live
+REAL via `.env`). The v2 visual direction (donut + sparklines + drill-in
+chart + watchlist) replaced the original "Quiet Ledger / no charts"
+brief — design pivoted to "considered research surface" once living with
+v1 surfaced that prose-only didn't carry enough information.
 
-**Read the v2 backlog before opening any new shape on the holdings view.** v1 is signed off; further iteration goes in v2 territory.
+**Confirmed brief:** [briefs/holdings-view.md](./briefs/holdings-view.md).
+**Decision log + ship notes for everything past v1:**
+[briefs/holdings-view-v2-backlog.md](./briefs/holdings-view-v2-backlog.md).
+**Visual evidence:** [briefs/screenshots/](./briefs/screenshots/).
 
-## Next-step fork (deferred)
+## Next: v3 stack rewrite
 
-Four directions, ordered by user-leverage:
+Living with v2 surfaced four limits the Dash stack can't comfortably
+fix: residual interaction lag, low visual ceiling, the confusing "S$90
+SGD" mixed-currency hero caption, and donut-without-labels. Plus three
+advisor features the user wants layered in (AI daily digest, earnings
+calendar, tomorrow's preview).
 
-1. **Phase 4 — DuckDB price-history cache + watchlist view.** The next natural surface; reuses the holdings table vocabulary.
-2. **Phase 5 — anomaly skill integration.** Wire `moomoo-technical-anomaly`, `moomoo-capital-anomaly`, `moomoo-derivatives-anomaly` into the holdings drill-in slot.
-3. **Real-data verification.** Flip `MOOMOO_USE_DEMO=false` after unlocking trade in the OpenD GUI; surface real-position edge cases.
-4. **Stop and revisit later.** v1 is shippable as-is.
+**v3 plan:** [plan/v3-stack-rewrite.md](./plan/v3-stack-rewrite.md).
+Direction: FastAPI backend (reuses the existing `data/` layer verbatim)
++ Next.js + Tailwind + shadcn/ui + Recharts frontend. USD-converted
+hero. Phased: A foundation (next sitting) → B visual parity, retire
+Dash → C advisor features → D polish.
+
+## Plan folder convention
+
+Active and historical plans live in [plan/](./plan/). Future plans go
+there too — never `~/.claude/plans/`, never the repo root, never
+scattered into other folders. Plans pair with the project they steer.
