@@ -87,3 +87,15 @@ export async function fetchAnomalies(code: string): Promise<AnomaliesResponse> {
   }
   return (await res.json()) as AnomaliesResponse;
 }
+
+export interface WatchlistResponse {
+  codes: string[];
+}
+
+export async function fetchWatchlist(): Promise<WatchlistResponse> {
+  const res = await fetch(`${API_BASE}/api/watchlist`, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`/api/watchlist ${res.status}: ${await res.text()}`);
+  }
+  return (await res.json()) as WatchlistResponse;
+}

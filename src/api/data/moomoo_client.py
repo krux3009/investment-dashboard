@@ -19,7 +19,7 @@ import os
 from datetime import datetime
 from typing import Any
 
-from dashboard.data.positions import (
+from api.data.positions import (
     Currency,
     Market,
     PortfolioSummary,

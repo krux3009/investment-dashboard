@@ -1,23 +1,20 @@
-# web — Next.js frontend (v3, Phase A)
+# web — Next.js frontend
 
-Phase A scaffold: a Server Component renders one fetch from the FastAPI
-backend (`/api/holdings`) as an unstyled HTML table. No styling beyond
-Tailwind reset; visual work lives in Phase B (see
-[`../plan/v3-stack-rewrite.md`](../plan/v3-stack-rewrite.md)).
+The v3 dashboard surface. Hero with USD-aggregated totals and an
+allocation donut, holdings table with sortable columns + sparklines +
+expand-to-drill-in (90-day chart + anomaly prose), watchlist with the
+same expand pattern. IBM Plex Sans, warm-graphite oklch palette,
+dual-theme via `next-themes`.
 
-## Dev workflow (three terminals)
+## Dev workflow (two terminals)
 
-The v3 rewrite runs alongside the v2 Dash app until parity. From the
-project root in three separate terminals:
+From the project root in two separate terminals:
 
 ```bash
-# Terminal 1 — v2 Dash app (still primary)
-uv run dashboard          # http://localhost:8050
-
-# Terminal 2 — v3 FastAPI backend
+# Terminal 1 — FastAPI backend
 uv run api                # http://127.0.0.1:8000  (auto-reload on src/)
 
-# Terminal 3 — v3 Next.js frontend
+# Terminal 2 — Next.js frontend
 cd web && npm run dev     # http://localhost:3000
 ```
 
@@ -30,17 +27,21 @@ host/port, set `NEXT_PUBLIC_API_BASE` (e.g. in `web/.env.local`).
 ```bash
 curl -s http://127.0.0.1:8000/api/health           # {"status":"ok"}
 curl -s http://127.0.0.1:8000/api/holdings | jq    # full holdings JSON
+curl -s http://127.0.0.1:8000/api/watchlist | jq   # symbols
 ```
 
-`http://localhost:3000` should render a table of every position with a
-USD-converted market value, and a hero summary with the
-USD-aggregated total.
+`http://localhost:3000` renders the hero + donut + holdings table +
+watchlist, with every non-USD position FX-converted on the wire.
 
-## What the scaffold installed
+## Stack
 
 `create-next-app@latest` 16.2.4 with: TypeScript, Tailwind 4, App
-Router, `src/` layout, `@/*` alias, no ESLint, no Turbopack. Next.js
-16 has breaking changes from earlier versions — see
+Router, `src/` layout, `@/*` alias, no ESLint, no Turbopack. Plus
+Recharts (lazy drill-in chart only — sparkline + donut are
+hand-rolled SVG for SSR cleanliness), `next-themes`, `clsx`,
+`tailwind-merge`, `tailwind-variants`, `@remixicon/react`.
+
+Next.js 16 has breaking changes from earlier versions — see
 [`AGENTS.md`](./AGENTS.md) and the in-tree docs at
 `node_modules/next/dist/docs/`.
 
@@ -50,18 +51,24 @@ Router, `src/` layout, `@/*` alias, no ESLint, no Turbopack. Next.js
 web/
 ├── src/
 │   ├── app/
-│   │   ├── layout.tsx     ← scaffolded; Geist fonts, h-full body
-│   │   ├── page.tsx       ← Phase A: fetch + unstyled table
-│   │   └── globals.css    ← Tailwind reset + scaffolded base styles
+│   │   ├── layout.tsx       ← IBM Plex fonts, ThemeProvider
+│   │   ├── page.tsx         ← server-fetches holdings + watchlist + sparklines
+│   │   └── globals.css      ← Tailwind 4 + warm-graphite tokens (light + dark)
+│   ├── components/
+│   │   ├── hero.tsx
+│   │   ├── donut.tsx        ← hand-rolled SVG, labels on slices
+│   │   ├── holdings-table.tsx  ← sortable headers, sparkline col, drill-in
+│   │   ├── watchlist-table.tsx ← same shape, no qty/cost cols
+│   │   ├── sparkline.tsx    ← hand-rolled SVG path
+│   │   ├── price-chart.tsx  ← Recharts LineChart (drill-in only)
+│   │   ├── drill-in.tsx     ← lazy-loaded 90d chart + anomaly section
+│   │   ├── anomaly-block.tsx
+│   │   ├── theme-provider.tsx
+│   │   └── theme-toggle.tsx
 │   └── lib/
-│       └── api.ts         ← typed client; mirrors api/models.py
+│       ├── api.ts           ← typed client; mirrors api/models.py
+│       ├── format.ts        ← Unicode minus, signed numbers, arrows
+│       └── utils.ts         ← cn() helper
 ├── package.json
 └── tsconfig.json
 ```
-
-## What stays in Dash for now
-
-The v2 dashboard (donut hero, sparklines, drill-in chart, watchlist,
-anomaly drill-in) keeps running on `:8050` until Phase B reaches
-visual parity here. Don't edit `src/dashboard/` during Phase A — the
-plan is to retire it in one stroke once the React surface is ready.

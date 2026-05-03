@@ -243,7 +243,16 @@ export function HoldingsTable({ holdings, sparklines }: Props) {
                 {isExpanded && (
                   <tr>
                     <td colSpan={7} className="p-0">
-                      <DrillIn holding={h} />
+                      <DrillIn
+                        code={h.code}
+                        direction={
+                          h.total_pnl_pct > 0
+                            ? "gain"
+                            : h.total_pnl_pct < 0
+                            ? "loss"
+                            : "quiet"
+                        }
+                      />
                     </td>
                   </tr>
                 )}

@@ -1,12 +1,16 @@
-"""Daily-bar history fetcher for the v3 API.
+"""Daily-bar price-history fetcher backed by a DuckDB on-disk cache.
 
-Same shape as dashboard.data.prices, but writes to a SEPARATE DuckDB
-file (`data/prices_v3.duckdb`) so the v3 API can run alongside the
-still-running v2 Dash app — DuckDB takes an exclusive lock on the
-file at open time, and the two processes can't share.
+Wraps moomoo's `OpenQuoteContext.request_history_kline`. On every query
+the cache is consulted first; if the most-recent cached row is more than
+two calendar days old (handles weekend slack), only the missing window
+is refetched from moomoo and merged in via INSERT OR REPLACE.
 
-When v2 retires (chunk 3 of Phase B), this module's _DB_PATH should
-take over `prices.duckdb` outright and the v2 module gets deleted.
+Powers the holdings sparkline column today, and the future drill-in
+candlestick + watchlist view (Phase 4 staging in v2 backlog).
+
+Cache location: `data/prices.duckdb` at the repo root, gitignored. The
+file persists across dashboard restarts so Dash dev-mode reloads don't
+re-pay the moomoo API cost.
 """
 
 from __future__ import annotations
@@ -23,17 +27,26 @@ import pandas as pd
 
 log = logging.getLogger(__name__)
 
-_DB_PATH = Path(__file__).resolve().parents[2] / "data" / "prices_v3.duckdb"
+_DB_PATH = Path(__file__).resolve().parents[3] / "data" / "prices.duckdb"
 _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 _DB: Any = None
 _DB_LOCK = threading.Lock()
 _QUOTE_CTX: Any = None
+# Codes moomoo returns "Unknown stock" for (e.g. SG market without
+# subscription). Cached for the session so we stop hammering on every
+# 30s poll. Cleared on process restart, which gives the operator a
+# chance to re-verify after fixing access.
 _UNFETCHABLE: set[str] = set()
 
 
 def _db():
-    """Shared connection. Callers must hold _DB_LOCK around any execute."""
+    """A single shared DuckDB connection. Callers MUST hold _DB_LOCK around
+    any execute()/fetchone()/etc. — DuckDB connections are not thread-safe,
+    and Flask under Dash dispatches callbacks across multiple threads.
+    Without serialization, concurrent SELECTs raise opaque internal errors
+    like "Attempted to access index 0 within vector of size 0".
+    """
     global _DB
     if _DB is None:
         _DB = duckdb.connect(str(_DB_PATH))
@@ -55,21 +68,19 @@ def _db():
 
 
 def _quote_ctx():
-    """Lazy module-level OpenQuoteContext. Independent of v2's; FastAPI
-    runs in a separate process so each side has its own moomoo session.
+    """Reuse the same OpenQuoteContext that anomalies.py opens, if available;
+    otherwise open our own. moomoo's connection model lets us share a single
+    session across the whole dashboard, so we do.
     """
-    global _QUOTE_CTX
-    if _QUOTE_CTX is None:
-        from moomoo import OpenQuoteContext
+    from api.data import anomalies
 
-        _QUOTE_CTX = OpenQuoteContext(
-            host=os.environ.get("MOOMOO_HOST", "127.0.0.1"),
-            port=int(os.environ.get("MOOMOO_PORT", "11111")),
-        )
-    return _QUOTE_CTX
+    return anomalies._quote_ctx()  # noqa: SLF001 — deliberate reuse
 
 
 def _fetch_and_cache(code: str, start: date, end: date) -> int:
+    """Pull moomoo bars for [start, end] (inclusive) and merge into the cache.
+    Returns the number of rows fetched (0 on any failure).
+    """
     from moomoo import AuType, KLType
 
     try:
@@ -87,7 +98,7 @@ def _fetch_and_cache(code: str, start: date, end: date) -> int:
 
     if ret != 0 or data is None or len(data) == 0:
         if ret != 0:
-            log.warning("history_kline %s ret=%s", code, ret)
+            log.warning("history_kline %s ret=%s data=%s", code, ret, data)
             _UNFETCHABLE.add(code)
         return 0
 
@@ -113,10 +124,11 @@ def _fetch_and_cache(code: str, start: date, end: date) -> int:
 
 
 def get_history(code: str, days: int = 30) -> pd.DataFrame:
-    """Cached + fresh daily bars covering the last `days` calendar days.
+    """Return cached + fresh daily bars covering the last `days` calendar days.
 
-    Refetches if the cache is stale (>2 days old) or doesn't cover the
-    requested historical window. Identical algorithm to v2's prices.py.
+    Refetches from moomoo only if the cache is stale (last cached row >2
+    calendar days old, which absorbs weekend lag). A first-ever fetch for
+    a ticker pulls the full window in one round-trip.
     """
     today = date.today()
     start = today - timedelta(days=days)
@@ -129,9 +141,13 @@ def get_history(code: str, days: int = 30) -> pd.DataFrame:
     earliest_cached: date | None = res[0] if res and res[0] else None
     last_cached: date | None = res[1] if res and res[1] else None
 
+    # Two reasons to fetch: (a) the cache is stale for "today" (last cached
+    # row > 2 calendar days old, absorbs weekend slack), or (b) the cache
+    # doesn't cover the requested historical window (earliest cached row is
+    # newer than `start`). The drill-in's 90-day window will trigger (b) if
+    # the sparkline previously cached only 30 days for the same ticker.
     stale_recent = last_cached is None or last_cached < (today - timedelta(days=2))
     needs_backfill = earliest_cached is not None and earliest_cached > start
-
     if (stale_recent or needs_backfill) and code not in _UNFETCHABLE:
         if last_cached is None:
             fetch_start, fetch_end = start, today
@@ -140,7 +156,7 @@ def get_history(code: str, days: int = 30) -> pd.DataFrame:
         elif stale_recent:
             fetch_start = max(last_cached + timedelta(days=1), start)
             fetch_end = today
-        else:
+        else:  # needs_backfill only
             fetch_start = start
             fetch_end = earliest_cached - timedelta(days=1)
         _fetch_and_cache(code, fetch_start, fetch_end)
@@ -152,3 +168,13 @@ def get_history(code: str, days: int = 30) -> pd.DataFrame:
             [code, start],
         ).fetchdf()
     return df
+
+
+def get_close_series(code: str, days: int = 30) -> list[float]:
+    """Convenience for sparkline rendering: chronological list of close prices.
+    Returns an empty list when the cache + fetch both produce no data.
+    """
+    df = get_history(code, days=days)
+    if df.empty:
+        return []
+    return df["close"].astype(float).tolist()

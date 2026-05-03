@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from dashboard.data.anomalies import fetch_all
+from api.data.anomalies import fetch_all
 
 router = APIRouter()
 

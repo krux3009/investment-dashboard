@@ -11,7 +11,7 @@ from fastapi import APIRouter
 
 from api import fx
 from api.models import Holding, HoldingsResponse
-from dashboard.data.moomoo_client import get_summary
+from api.data.moomoo_client import get_summary
 
 router = APIRouter()
 

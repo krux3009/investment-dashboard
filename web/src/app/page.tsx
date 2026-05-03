@@ -1,22 +1,31 @@
-import { fetchHoldings, fetchPrices } from "@/lib/api";
+import { fetchHoldings, fetchPrices, fetchWatchlist } from "@/lib/api";
 import type { PriceHistory } from "@/lib/api";
 import { Hero } from "@/components/hero";
 import { HoldingsTable } from "@/components/holdings-table";
+import { WatchlistTable } from "@/components/watchlist-table";
 import { ThemeToggle } from "@/components/theme-toggle";
 
-export default async function Home() {
-  const data = await fetchHoldings();
-
-  // Fetch 30d sparkline data in parallel for fast first paint. A failure
-  // for one symbol shouldn't break the page; allSettled keeps the others.
-  const sparkResults = await Promise.allSettled(
-    data.holdings.map((h) => fetchPrices(h.code, 30))
-  );
-  const sparklines: Record<string, PriceHistory> = {};
-  sparkResults.forEach((r, i) => {
-    const code = data.holdings[i].code;
-    if (r.status === "fulfilled") sparklines[code] = r.value;
+async function fetchSparklineMap(codes: string[]): Promise<Record<string, PriceHistory>> {
+  const results = await Promise.allSettled(codes.map((c) => fetchPrices(c, 30)));
+  const map: Record<string, PriceHistory> = {};
+  results.forEach((r, i) => {
+    if (r.status === "fulfilled") map[codes[i]] = r.value;
   });
+  return map;
+}
+
+export default async function Home() {
+  // Holdings + watchlist fetch in parallel; sparklines depend on the codes
+  // returned, so they fetch in a second round.
+  const [data, watchlist] = await Promise.all([
+    fetchHoldings(),
+    fetchWatchlist(),
+  ]);
+
+  const holdingsCodes = data.holdings.map((h) => h.code);
+  const watchlistCodes = watchlist.codes;
+  const allCodes = Array.from(new Set([...holdingsCodes, ...watchlistCodes]));
+  const sparklines = await fetchSparklineMap(allCodes);
 
   return (
     <main className="max-w-6xl mx-auto px-8 py-12">
@@ -29,6 +38,7 @@ export default async function Home() {
 
       <Hero data={data} />
       <HoldingsTable holdings={data.holdings} sparklines={sparklines} />
+      <WatchlistTable codes={watchlistCodes} sparklines={sparklines} />
     </main>
   );
 }

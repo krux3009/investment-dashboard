@@ -1,6 +1,6 @@
 [project]
-name = "dashboard"
-version = "0.1.0"
+name = "investment-dashboard"
+version = "0.2.0"
 description = "Personal investment dashboard on top of moomoo OpenD. The Quiet Ledger."
 readme = "README.md"
 authors = [
@@ -8,12 +8,10 @@ authors = [
 ]
 requires-python = ">=3.14"
 dependencies = [
-    "dash>=4.1.0",
     "duckdb>=1.5.2",
     "fastapi>=0.115",
     "moomoo-api==10.4.6408",
     "pandas>=3.0.2",
-    "plotly>=6.7.0",
     "pydantic>=2.9",
     "python-dotenv>=1.2.2",
     "uvicorn[standard]>=0.32",
@@ -21,7 +19,6 @@ dependencies = [
 ]
 
 [project.scripts]
-dashboard = "dashboard:main"
 api = "api.main:cli"
 
 [build-system]
@@ -29,5 +26,5 @@ requires = ["uv_build>=0.11.8,<0.12.0"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]
-module-name = ["dashboard", "api"]
+module-name = "api"
 module-root = "src"

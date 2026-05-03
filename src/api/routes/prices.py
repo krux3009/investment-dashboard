@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Query
 
-from api.prices import get_history
+from api.data.prices import get_history
 
 router = APIRouter()
 

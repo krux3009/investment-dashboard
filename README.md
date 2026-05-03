@@ -2,28 +2,43 @@
 
 Personal investment dashboard on top of moomoo OpenD.
 
-> Strategic context: [PRODUCT.md](./PRODUCT.md) · Visual system: [DESIGN.md](./DESIGN.md) · Tooling: [tooling-research.md](./tooling-research.md)
+> Strategic context: [PRODUCT.md](./PRODUCT.md) · Visual system: [DESIGN.md](./DESIGN.md) · Project context: [CLAUDE.md](./CLAUDE.md)
 
 ## Run it
 
 Prerequisites:
 - moomoo OpenD running on `127.0.0.1:11111` (see [moomoo-opend-setup.md](./moomoo-opend-setup.md))
 - [`uv`](https://docs.astral.sh/uv/) installed
+- [Node.js 18+](https://nodejs.org/) for the frontend
 
 ```bash
 cp .env.example .env          # first time only
-uv sync                       # install / update deps from uv.lock
-uv run dashboard              # open http://127.0.0.1:8050
+uv sync                       # install backend deps from uv.lock
+cd web && npm install && cd ..
+
+# Two terminals
+uv run api                    # http://127.0.0.1:8000  FastAPI backend
+cd web && npm run dev         # http://localhost:3000  Next.js frontend
 ```
 
 ## Layout
 
 ```
-src/dashboard/
-├── __init__.py    # exposes main()
-├── __main__.py    # `python -m dashboard` entry
-├── app.py         # Dash app + layout assembly
-├── theme.py       # design tokens (mirrors DESIGN.md)
-├── data/          # moomoo client + DuckDB cache (Phase 2-4)
-└── views/         # holdings, watchlist, anomalies (Phase 3-5)
+src/api/                       ← FastAPI backend
+├── main.py                    ← app + CORS + uvicorn cli
+├── models.py                  ← Pydantic response models
+├── fx.py                      ← yfinance FX rates (1h in-memory cache)
+├── data/                      ← live moomoo data layer
+│   ├── positions.py
+│   ├── moomoo_client.py       ← OpenSecTradeContext wrapper
+│   ├── prices.py              ← DuckDB-cached daily bars
+│   └── anomalies.py           ← OpenQuoteContext.get_*_unusual wrappers
+└── routes/                    ← /api/holdings, /api/prices/{code},
+                                 /api/anomalies/{code}, /api/watchlist
+
+web/                           ← Next.js 16 + Tailwind 4 + Recharts
+├── src/app/                   ← App Router (Server Components)
+├── src/components/            ← Hero, Holdings, Watchlist, Donut,
+│                                Sparkline, PriceChart, DrillIn, …
+└── src/lib/                   ← typed API client, formatters
 ```

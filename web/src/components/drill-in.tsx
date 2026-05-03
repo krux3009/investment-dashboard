@@ -1,18 +1,21 @@
 "use client";
 
 import { fetchAnomalies, fetchPrices } from "@/lib/api";
-import type { AnomalyItem, Holding, PricePoint } from "@/lib/api";
+import type { AnomalyItem, PricePoint } from "@/lib/api";
 import { useEffect, useState } from "react";
 import { AnomalyBlock } from "./anomaly-block";
 import { PriceChart } from "./price-chart";
 
 interface Props {
-  holding: Holding;
+  code: string;
+  // Direction tints the price line. Use total return for holdings; for
+  // watchlist rows pass the 30d delta direction.
+  direction: "gain" | "loss" | "quiet";
 }
 
 // Lazy-loaded drill-in content — fetched on first expand, cached per
-// symbol via component state. Mounts inside the expansion <tr>.
-export function DrillIn({ holding }: Props) {
+// code via component state. Symmetric for holdings + watchlist rows.
+export function DrillIn({ code, direction }: Props) {
   const [points, setPoints] = useState<PricePoint[] | null>(null);
   const [pricesError, setPricesError] = useState<string | null>(null);
   const [anomalyItems, setAnomalyItems] = useState<AnomalyItem[]>([]);
@@ -23,7 +26,7 @@ export function DrillIn({ holding }: Props) {
     let cancelled = false;
     (async () => {
       try {
-        const data = await fetchPrices(holding.code, 90);
+        const data = await fetchPrices(code, 90);
         if (!cancelled) setPoints(data.points);
       } catch (e) {
         if (!cancelled) setPricesError(String(e));
@@ -31,7 +34,7 @@ export function DrillIn({ holding }: Props) {
     })();
     (async () => {
       try {
-        const data = await fetchAnomalies(holding.code);
+        const data = await fetchAnomalies(code);
         if (!cancelled) {
           setAnomalyItems(data.items);
           setAnomaliesLoading(false);
@@ -46,16 +49,7 @@ export function DrillIn({ holding }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [holding.code]);
-
-  // Direction tint follows the holding's total return — what a
-  // long-horizon investor cares about more than a 90-day window.
-  const direction =
-    holding.total_pnl_pct > 0
-      ? "gain"
-      : holding.total_pnl_pct < 0
-      ? "loss"
-      : "quiet";
+  }, [code]);
 
   return (
     <div className="px-6 py-6 bg-surface-expanded border-t border-rule">
