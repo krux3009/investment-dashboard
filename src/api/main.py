@@ -24,6 +24,8 @@ from api.routes import (
     holdings,
     insight,
     prices,
+    preview,
+    preview_insight,
     watchlist,
 )
 
@@ -44,6 +46,8 @@ app.include_router(digest.router, prefix="/api")
 app.include_router(insight.router, prefix="/api")
 app.include_router(earnings.router, prefix="/api")
 app.include_router(earnings_insight.router, prefix="/api")
+app.include_router(preview.router, prefix="/api")
+app.include_router(preview_insight.router, prefix="/api")
 
 
 @app.get("/api/health")

@@ -215,3 +215,61 @@ export async function fetchEarningsInsight(
   }
   return { ok: true, data: (await res.json()) as EarningsInsightResponse };
 }
+
+export type PreviewKind = "us_futures" | "asia_close";
+
+export interface PreviewRow {
+  symbol: string;
+  label: string;
+  kind: PreviewKind;
+  last_price: number;
+  previous_close: number;
+  change_pct: number;
+}
+
+export interface PreviewResponse {
+  rows: PreviewRow[];
+  in_window: boolean;
+  fetched_at: string;
+}
+
+export async function fetchPreview(): Promise<PreviewResponse> {
+  const res = await fetch(`${API_BASE}/api/preview`, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`/api/preview ${res.status}: ${await res.text()}`);
+  }
+  return (await res.json()) as PreviewResponse;
+}
+
+export interface PreviewInsightResponse {
+  symbol: string;
+  label: string;
+  what: string;
+  meaning: string;
+  watch: string;
+  generated_at: string;
+  cached: boolean;
+}
+
+export type PreviewInsightResult =
+  | { ok: true; data: PreviewInsightResponse }
+  | { ok: false; status: number; detail: string };
+
+export async function fetchPreviewInsight(
+  symbol: string,
+  refresh = false,
+): Promise<PreviewInsightResult> {
+  const url = `${API_BASE}/api/preview-insight/${encodeURIComponent(symbol)}${refresh ? "?refresh=true" : ""}`;
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) {
+    let detail = `${res.status}`;
+    try {
+      const body = await res.json();
+      detail = body.detail ?? detail;
+    } catch {
+      detail = await res.text();
+    }
+    return { ok: false, status: res.status, detail };
+  }
+  return { ok: true, data: (await res.json()) as PreviewInsightResponse };
+}

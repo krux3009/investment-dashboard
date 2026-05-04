@@ -6,6 +6,7 @@ import { WatchlistTable } from "@/components/watchlist-table";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { DailyDigest } from "@/components/daily-digest";
 import { EarningsStrip } from "@/components/earnings-strip";
+import { PreviewBlock } from "@/components/preview-block";
 
 async function fetchSparklineMap(codes: string[]): Promise<Record<string, PriceHistory>> {
   const results = await Promise.allSettled(codes.map((c) => fetchPrices(c, 30)));
@@ -63,6 +64,7 @@ export default async function Home() {
         earningsByCode={earningsByCode}
       />
       <WatchlistTable codes={watchlistCodes} sparklines={sparklines} />
+      <PreviewBlock />
     </main>
   );
 }
