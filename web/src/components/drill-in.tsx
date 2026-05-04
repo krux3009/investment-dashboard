@@ -4,6 +4,7 @@ import { fetchAnomalies, fetchPrices } from "@/lib/api";
 import type { AnomalyItem, PricePoint } from "@/lib/api";
 import { useEffect, useState } from "react";
 import { AnomalyBlock } from "./anomaly-block";
+import { InsightBlock } from "./insight-block";
 import { PriceChart } from "./price-chart";
 
 interface Props {
@@ -71,12 +72,20 @@ export function DrillIn({ code, direction }: Props) {
           )}
         </div>
 
-        <div>
-          <AnomalyBlock
-            items={anomalyItems}
-            loading={anomaliesLoading}
-            error={anomaliesError}
-          />
+        <div className="flex flex-col gap-7">
+          <div>
+            <div className="text-xs uppercase tracking-[0.06em] text-quiet mb-3">
+              What this means
+            </div>
+            <InsightBlock code={code} />
+          </div>
+          <div>
+            <AnomalyBlock
+              items={anomalyItems}
+              loading={anomaliesLoading}
+              error={anomaliesError}
+            />
+          </div>
         </div>
       </div>
     </div>

@@ -99,3 +99,59 @@ export async function fetchWatchlist(): Promise<WatchlistResponse> {
   }
   return (await res.json()) as WatchlistResponse;
 }
+
+export interface DigestResponse {
+  prose: string;
+  generated_at: string;
+  holdings_covered: string[];
+  cached: boolean;
+}
+
+export type DigestResult =
+  | { ok: true; data: DigestResponse }
+  | { ok: false; status: number; detail: string };
+
+export async function fetchDigest(refresh = false): Promise<DigestResult> {
+  const url = `${API_BASE}/api/digest${refresh ? "?refresh=true" : ""}`;
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) {
+    let detail = `${res.status}`;
+    try {
+      const body = await res.json();
+      detail = body.detail ?? detail;
+    } catch {
+      detail = await res.text();
+    }
+    return { ok: false, status: res.status, detail };
+  }
+  return { ok: true, data: (await res.json()) as DigestResponse };
+}
+
+export interface InsightResponse {
+  code: string;
+  ticker: string;
+  meaning: string;
+  watch: string;
+  generated_at: string;
+  cached: boolean;
+}
+
+export type InsightResult =
+  | { ok: true; data: InsightResponse }
+  | { ok: false; status: number; detail: string };
+
+export async function fetchInsight(code: string, refresh = false): Promise<InsightResult> {
+  const url = `${API_BASE}/api/insight/${encodeURIComponent(code)}${refresh ? "?refresh=true" : ""}`;
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) {
+    let detail = `${res.status}`;
+    try {
+      const body = await res.json();
+      detail = body.detail ?? detail;
+    } catch {
+      detail = await res.text();
+    }
+    return { ok: false, status: res.status, detail };
+  }
+  return { ok: true, data: (await res.json()) as InsightResponse };
+}

@@ -4,6 +4,7 @@ import { Hero } from "@/components/hero";
 import { HoldingsTable } from "@/components/holdings-table";
 import { WatchlistTable } from "@/components/watchlist-table";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { DailyDigest } from "@/components/daily-digest";
 
 async function fetchSparklineMap(codes: string[]): Promise<Record<string, PriceHistory>> {
   const results = await Promise.allSettled(codes.map((c) => fetchPrices(c, 30)));
@@ -37,6 +38,7 @@ export default async function Home() {
       </header>
 
       <Hero data={data} />
+      <DailyDigest />
       <HoldingsTable holdings={data.holdings} sparklines={sparklines} />
       <WatchlistTable codes={watchlistCodes} sparklines={sparklines} />
     </main>

@@ -8,6 +8,7 @@ authors = [
 ]
 requires-python = ">=3.14"
 dependencies = [
+    "anthropic>=0.40",
     "duckdb>=1.5.2",
     "fastapi>=0.115",
     "moomoo-api==10.4.6408",
