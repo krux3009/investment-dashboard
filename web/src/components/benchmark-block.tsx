@@ -53,12 +53,13 @@ export function BenchmarkBlock({ initial }: Props) {
     };
   }, [days, initial]);
 
+  const symbolsKey = data.symbols.join(",");
   useEffect(() => {
-    if (!expanded || insight.kind !== "idle") return;
+    if (!expanded) return;
     let cancelled = false;
     setInsight({ kind: "loading" });
     (async () => {
-      const result = await fetchBenchmarkInsight(days, data.symbols.join(","));
+      const result = await fetchBenchmarkInsight(days, symbolsKey);
       if (cancelled) return;
       if (result.ok) {
         setInsight({ kind: "ready", data: result.data });
@@ -71,11 +72,11 @@ export function BenchmarkBlock({ initial }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [expanded, days, data.symbols, insight.kind]);
+  }, [expanded, days, symbolsKey]);
 
   useEffect(() => {
-    setInsight({ kind: "idle" });
     setExpanded(false);
+    setInsight({ kind: "idle" });
   }, [days]);
 
   const portfolioFinal = data.portfolio.at(-1)?.pct ?? 0;

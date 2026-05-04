@@ -80,7 +80,7 @@ export function ConcentrationBlock({ initial }: Props) {
   const [insight, setInsight] = useState<InsightState>({ kind: "idle" });
 
   useEffect(() => {
-    if (!expanded || insight.kind !== "idle") return;
+    if (!expanded) return;
     let cancelled = false;
     setInsight({ kind: "loading" });
     (async () => {
@@ -97,7 +97,7 @@ export function ConcentrationBlock({ initial }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [expanded, insight.kind]);
+  }, [expanded]);
 
   if (initial.count === 0) return null;
 
