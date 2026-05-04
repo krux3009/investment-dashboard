@@ -139,8 +139,10 @@ export function WatchlistTable({ codes, sparklines, quotes = {} }: Props) {
                     </div>
                   </td>
 
-                  <td className="py-3 pl-4 text-right">
-                    <Sparkline points={points} direction={direction} />
+                  <td className="py-3 pl-4">
+                    <div className="flex justify-end">
+                      <Sparkline points={points} direction={direction} />
+                    </div>
                   </td>
                 </tr>
 
