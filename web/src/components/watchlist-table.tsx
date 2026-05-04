@@ -61,7 +61,7 @@ export function WatchlistTable({ codes, sparklines, quotes = {} }: Props) {
                 30d
               </span>
             </th>
-            <th className="pb-3 pl-4">
+            <th className="text-left pb-3 pl-4">
               <span className="text-xs uppercase tracking-[0.04em] font-medium text-whisper">
                 Trend
               </span>
