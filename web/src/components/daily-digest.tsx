@@ -1,32 +1,20 @@
 "use client";
 
-// Phase C.1 — AI daily digest. Collapsed by default. First expand triggers
-// a lazy fetch of /api/digest; the backend caches for 6h so subsequent
-// loads stay free. 503 from the API (missing ANTHROPIC_API_KEY) renders
-// a quiet hint instead of an error.
+// AI daily digest. Always-on at the top of the home page since the
+// route split made the surface uncluttered enough to render
+// expanded by default. /api/digest is server-cached for 6h.
+// 503 from the API (missing ANTHROPIC_API_KEY) renders a quiet hint.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { fetchDigest, type DigestResponse } from "@/lib/api";
 import { timeSince } from "@/lib/format";
 
 type State =
-  | { kind: "idle" }
   | { kind: "loading" }
   | { kind: "ready"; data: DigestResponse }
   | { kind: "unavailable"; detail: string }
   | { kind: "error"; detail: string };
 
-// The v4-summary prompt asks Claude for a short top-of-page digest:
-//
-//   LEAD: <one sentence portfolio-level read>
-//
-//   <TICKER>: <one short sentence>
-//   <TICKER>: <one short sentence>
-//
-// Deeper Meaning + Watch lines live in each holding's drill-in via
-// /api/insight/{code}. The parser also tolerates older v3-edu prose
-// (Today/Meaning/Watch blocks) — it pulls just the Today line so a
-// stale cache still renders as a summary.
 interface ParsedRow {
   ticker: string;
   text: string;
@@ -46,7 +34,6 @@ function parseDigest(prose: string): ParsedDigest {
   let lead = "";
   const rows: ParsedRow[] = [];
 
-  // For v3-edu fallback parsing.
   let pendingTicker: string | null = null;
   const tickerHeaderRe = /^([A-Z0-9.]{1,12})$/;
   const sectionRe = /^(today|meaning|watch)\s*:\s*(.+)$/i;
@@ -60,7 +47,6 @@ function parseDigest(prose: string): ParsedDigest {
       continue;
     }
 
-    // v4-summary current shape: "<TICKER>: <one sentence>"
     const colonMatch = tickerColonRe.exec(line);
     if (colonMatch) {
       rows.push({ ticker: colonMatch[1], text: colonMatch[2].trim() });
@@ -68,8 +54,6 @@ function parseDigest(prose: string): ParsedDigest {
       continue;
     }
 
-    // v3-edu fallback: bare ticker line opens a block; only the
-    // following Today: line counts toward the summary.
     const headerMatch = tickerHeaderRe.exec(line);
     if (headerMatch) {
       pendingTicker = headerMatch[1];
@@ -80,10 +64,8 @@ function parseDigest(prose: string): ParsedDigest {
       const label = sectionMatch[1].toLowerCase();
       if (label === "today") {
         rows.push({ ticker: pendingTicker, text: sectionMatch[2].trim() });
+        pendingTicker = null;
       }
-      // meaning/watch from old prose are intentionally dropped — those
-      // belong in the per-stock drill-in now.
-      if (label === "today") pendingTicker = null;
       continue;
     }
   }
@@ -104,8 +86,7 @@ function formatGeneratedAt(iso: string): string {
 }
 
 export function DailyDigest() {
-  const [expanded, setExpanded] = useState(false);
-  const [state, setState] = useState<State>({ kind: "idle" });
+  const [state, setState] = useState<State>({ kind: "loading" });
 
   async function load(refresh = false) {
     setState({ kind: "loading" });
@@ -119,133 +100,98 @@ export function DailyDigest() {
     }
   }
 
-  function toggle() {
-    const next = !expanded;
-    setExpanded(next);
-    if (next && state.kind === "idle") {
-      void load(false);
-    }
-  }
-
-  const subtitle =
-    state.kind === "ready"
-      ? `Generated ${timeSince(state.data.generated_at)}${state.data.cached ? " · cached" : ""}`
-      : state.kind === "loading"
-        ? "Loading…"
-        : state.kind === "unavailable"
-          ? "Set ANTHROPIC_API_KEY in .env to enable"
-          : state.kind === "error"
-            ? "Could not load"
-            : "Click to read today's digest";
+  useEffect(() => {
+    void load(false);
+  }, []);
 
   return (
     <section className="border-b border-rule pb-10 mb-10">
-      <button
-        type="button"
-        onClick={toggle}
-        aria-expanded={expanded}
-        className="flex w-full items-baseline justify-between gap-4 text-left"
-      >
-        <div>
-          <div className="text-xs uppercase tracking-[0.06em] text-quiet mb-1.5">
-            Daily digest
-          </div>
-          <div className="text-sm text-whisper italic">{subtitle}</div>
-        </div>
-        <span
-          aria-hidden
-          className={`text-quiet text-sm transition-transform ${expanded ? "rotate-90" : ""}`}
+      <div className="text-xs uppercase tracking-[0.06em] text-quiet mb-4">
+        Daily digest
+      </div>
+
+      {state.kind === "loading" && (
+        <div
+          role="status"
+          aria-label="Drafting digest…"
+          className="space-y-3 max-w-[68ch]"
         >
-          ›
-        </span>
-      </button>
-
-      {expanded && (
-        <div className="mt-6">
-          {state.kind === "loading" && (
-            <div
-              role="status"
-              aria-label="Drafting digest…"
-              className="space-y-3 max-w-[68ch]"
-            >
-              <div className="h-4 w-3/4 rounded bg-rule/40 animate-pulse" />
-              <div className="h-4 w-2/3 rounded bg-rule/40 animate-pulse" />
-              <div className="h-4 w-1/2 rounded bg-rule/40 animate-pulse" />
-            </div>
-          )}
-
-          {state.kind === "ready" && (
-            <>
-              <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 mb-6 pb-4 border-b border-rule/60">
-                <div className="text-sm text-ink">
-                  {formatGeneratedAt(state.data.generated_at)}
-                </div>
-                <div className="flex items-center gap-3 text-xs text-quiet">
-                  <span className="tracking-wide">
-                    {state.data.holdings_covered.join(" · ")}
-                  </span>
-                  <span aria-hidden className="text-rule">|</span>
-                  <span>
-                    {state.data.cached
-                      ? `cached ${timeSince(state.data.generated_at)}`
-                      : `fresh ${timeSince(state.data.generated_at)}`}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => void load(true)}
-                    className="underline-offset-4 hover:underline"
-                  >
-                    refresh
-                  </button>
-                </div>
-              </div>
-
-              {(() => {
-                const parsed = parseDigest(state.data.prose);
-                return (
-                  <div className="max-w-[68ch]">
-                    {parsed.lead && (
-                      <p className="text-[17px] text-ink leading-[1.55] mb-7">
-                        {parsed.lead}
-                      </p>
-                    )}
-                    {parsed.rows.length > 0 && (
-                      <dl className="flex flex-col gap-4">
-                        {parsed.rows.map((r) => (
-                          <div
-                            key={r.ticker}
-                            className="grid grid-cols-[5rem_1fr] gap-x-5 items-baseline"
-                          >
-                            <dt className="font-mono text-xs uppercase tracking-[0.08em] text-quiet">
-                              {r.ticker}
-                            </dt>
-                            <dd className="text-[14px] text-ink leading-[1.7]">
-                              {r.text}
-                            </dd>
-                          </div>
-                        ))}
-                      </dl>
-                    )}
-                    <p className="mt-7 text-xs text-whisper italic">
-                      Expand a holding for a deeper read of what its
-                      numbers mean and what to watch.
-                    </p>
-                  </div>
-                );
-              })()}
-            </>
-          )}
-
-          {state.kind === "unavailable" && (
-            <p className="text-sm text-whisper italic">{state.detail}</p>
-          )}
-
-          {state.kind === "error" && (
-            <p className="text-sm text-loss">
-              digest unavailable: {state.detail}
-            </p>
-          )}
+          <div className="h-4 w-3/4 rounded bg-rule/40 animate-pulse" />
+          <div className="h-4 w-2/3 rounded bg-rule/40 animate-pulse" />
+          <div className="h-4 w-1/2 rounded bg-rule/40 animate-pulse" />
         </div>
+      )}
+
+      {state.kind === "ready" && (
+        <>
+          <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 mb-6 pb-4 border-b border-rule/60">
+            <div className="text-sm text-ink">
+              {formatGeneratedAt(state.data.generated_at)}
+            </div>
+            <div className="flex items-center gap-3 text-xs text-quiet">
+              <span className="tracking-wide">
+                {state.data.holdings_covered.join(" · ")}
+              </span>
+              <span aria-hidden className="text-rule">|</span>
+              <span>
+                {state.data.cached
+                  ? `cached ${timeSince(state.data.generated_at)}`
+                  : `fresh ${timeSince(state.data.generated_at)}`}
+              </span>
+              <button
+                type="button"
+                onClick={() => void load(true)}
+                className="underline-offset-4 hover:underline"
+              >
+                refresh
+              </button>
+            </div>
+          </div>
+
+          {(() => {
+            const parsed = parseDigest(state.data.prose);
+            return (
+              <div className="max-w-[68ch]">
+                {parsed.lead && (
+                  <p className="text-[17px] text-ink leading-[1.55] mb-7">
+                    {parsed.lead}
+                  </p>
+                )}
+                {parsed.rows.length > 0 && (
+                  <dl className="flex flex-col gap-4">
+                    {parsed.rows.map((r) => (
+                      <div
+                        key={r.ticker}
+                        className="grid grid-cols-[5rem_1fr] gap-x-5 items-baseline"
+                      >
+                        <dt className="font-mono text-xs uppercase tracking-[0.08em] text-quiet">
+                          {r.ticker}
+                        </dt>
+                        <dd className="text-[14px] text-ink leading-[1.7]">
+                          {r.text}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                )}
+                <p className="mt-7 text-xs text-whisper italic">
+                  Expand a holding on the portfolio page for a deeper read
+                  of what its numbers mean and what to watch.
+                </p>
+              </div>
+            );
+          })()}
+        </>
+      )}
+
+      {state.kind === "unavailable" && (
+        <p className="text-sm text-whisper italic">{state.detail}</p>
+      )}
+
+      {state.kind === "error" && (
+        <p className="text-sm text-loss">
+          digest unavailable: {state.detail}
+        </p>
       )}
     </section>
   );
