@@ -1,10 +1,11 @@
-import { fetchHoldings, fetchPrices, fetchWatchlist } from "@/lib/api";
-import type { PriceHistory } from "@/lib/api";
+import { fetchEarnings, fetchHoldings, fetchPrices, fetchWatchlist } from "@/lib/api";
+import type { EarningsItem, EarningsResponse, PriceHistory } from "@/lib/api";
 import { Hero } from "@/components/hero";
 import { HoldingsTable } from "@/components/holdings-table";
 import { WatchlistTable } from "@/components/watchlist-table";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { DailyDigest } from "@/components/daily-digest";
+import { EarningsStrip } from "@/components/earnings-strip";
 
 async function fetchSparklineMap(codes: string[]): Promise<Record<string, PriceHistory>> {
   const results = await Promise.allSettled(codes.map((c) => fetchPrices(c, 30)));
@@ -15,18 +16,34 @@ async function fetchSparklineMap(codes: string[]): Promise<Record<string, PriceH
   return map;
 }
 
+async function safeFetchEarnings(): Promise<EarningsResponse> {
+  try {
+    return await fetchEarnings();
+  } catch (e) {
+    // yfinance occasionally rate-limits or returns malformed payloads.
+    // Earnings are nice-to-have on a single page render — if the call
+    // fails we just hide the strip rather than bail the whole page.
+    console.warn("fetchEarnings failed, hiding strip:", e);
+    return { items: [], next_within_14: false };
+  }
+}
+
 export default async function Home() {
-  // Holdings + watchlist fetch in parallel; sparklines depend on the codes
-  // returned, so they fetch in a second round.
-  const [data, watchlist] = await Promise.all([
+  // Holdings + watchlist + earnings fetch in parallel; sparklines depend
+  // on the codes returned, so they fetch in a second round.
+  const [data, watchlist, earnings] = await Promise.all([
     fetchHoldings(),
     fetchWatchlist(),
+    safeFetchEarnings(),
   ]);
 
   const holdingsCodes = data.holdings.map((h) => h.code);
   const watchlistCodes = watchlist.codes;
   const allCodes = Array.from(new Set([...holdingsCodes, ...watchlistCodes]));
   const sparklines = await fetchSparklineMap(allCodes);
+
+  const earningsByCode: Record<string, EarningsItem> = {};
+  for (const e of earnings.items) earningsByCode[e.code] = e;
 
   return (
     <main className="max-w-6xl mx-auto px-8 py-12">
@@ -39,7 +56,12 @@ export default async function Home() {
 
       <Hero data={data} />
       <DailyDigest />
-      <HoldingsTable holdings={data.holdings} sparklines={sparklines} />
+      <EarningsStrip items={earnings.items} />
+      <HoldingsTable
+        holdings={data.holdings}
+        sparklines={sparklines}
+        earningsByCode={earningsByCode}
+      />
       <WatchlistTable codes={watchlistCodes} sparklines={sparklines} />
     </main>
   );

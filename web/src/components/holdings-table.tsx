@@ -1,10 +1,12 @@
 "use client";
 
-import type { Holding, PriceHistory } from "@/lib/api";
+import type { EarningsItem, Holding, PriceHistory } from "@/lib/api";
 import { arrowFor, directionClass, fmtCurrency, fmtPct, fmtUsd } from "@/lib/format";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { DrillIn } from "./drill-in";
 import { Sparkline } from "./sparkline";
+
+const EARNINGS_SOON_DAYS = 14;
 
 type SortKey = "ticker" | "qty" | "current_price" | "today_change_pct" | "market_value_usd" | "total_pnl_pct";
 type SortDir = "asc" | "desc";
@@ -79,9 +81,12 @@ interface Props {
   // Map of code → 30-day price history, fetched server-side in page.tsx
   // for fast first paint. Missing keys render the sparkline empty state.
   sparklines: Record<string, PriceHistory>;
+  // Map of code → next-earnings record. Tickers reporting within
+  // EARNINGS_SOON_DAYS get a small calendar icon next to the name.
+  earningsByCode: Record<string, EarningsItem>;
 }
 
-export function HoldingsTable({ holdings, sparklines }: Props) {
+export function HoldingsTable({ holdings, sparklines, earningsByCode }: Props) {
   const [sort, setSort] = useState<SortState | null>(null);
   const [expandedCode, setExpandedCode] = useState<string | null>(null);
 
@@ -184,7 +189,30 @@ export function HoldingsTable({ holdings, sparklines }: Props) {
                 >
                   <td className="py-4 pr-4">
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-base font-medium text-ink">{h.ticker}</span>
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-base font-medium text-ink">{h.ticker}</span>
+                        {(() => {
+                          const e = earningsByCode[h.code];
+                          if (!e || e.days_until > EARNINGS_SOON_DAYS) return null;
+                          const dateLabel = new Intl.DateTimeFormat("en-US", {
+                            month: "long",
+                            day: "numeric",
+                          }).format(new Date(e.date));
+                          const daysLabel =
+                            e.days_until === 0
+                              ? "today"
+                              : `in ${e.days_until} day${e.days_until === 1 ? "" : "s"}`;
+                          return (
+                            <span
+                              title={`Earnings ${dateLabel} · ${daysLabel}`}
+                              aria-label={`Earnings ${dateLabel} (${daysLabel})`}
+                              className="text-quiet text-sm cursor-help"
+                            >
+                              ◷
+                            </span>
+                          );
+                        })()}
+                      </div>
                       <span className="text-xs text-quiet">
                         {h.name}{" "}
                         <span className="text-whisper">

@@ -16,7 +16,16 @@ load_dotenv()
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routes import anomalies, digest, holdings, insight, prices, watchlist
+from api.routes import (
+    anomalies,
+    digest,
+    earnings,
+    earnings_insight,
+    holdings,
+    insight,
+    prices,
+    watchlist,
+)
 
 app = FastAPI(title="investment-dashboard API", version="0.1.0")
 
@@ -33,6 +42,8 @@ app.include_router(anomalies.router, prefix="/api")
 app.include_router(watchlist.router, prefix="/api")
 app.include_router(digest.router, prefix="/api")
 app.include_router(insight.router, prefix="/api")
+app.include_router(earnings.router, prefix="/api")
+app.include_router(earnings_insight.router, prefix="/api")
 
 
 @app.get("/api/health")

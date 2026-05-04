@@ -155,3 +155,63 @@ export async function fetchInsight(code: string, refresh = false): Promise<Insig
   }
   return { ok: true, data: (await res.json()) as InsightResponse };
 }
+
+export interface EarningsItem {
+  code: string;
+  ticker: string;
+  name: string;
+  date: string;          // ISO date "2026-06-25"
+  days_until: number;
+  eps_low: number | null;
+  eps_high: number | null;
+  eps_avg: number | null;
+  revenue_low: number | null;
+  revenue_high: number | null;
+  revenue_avg: number | null;
+}
+
+export interface EarningsResponse {
+  items: EarningsItem[];
+  next_within_14: boolean;
+}
+
+export async function fetchEarnings(): Promise<EarningsResponse> {
+  const res = await fetch(`${API_BASE}/api/earnings`, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`/api/earnings ${res.status}: ${await res.text()}`);
+  }
+  return (await res.json()) as EarningsResponse;
+}
+
+export interface EarningsInsightResponse {
+  code: string;
+  ticker: string;
+  what: string;
+  meaning: string;
+  watch: string;
+  generated_at: string;
+  cached: boolean;
+}
+
+export type EarningsInsightResult =
+  | { ok: true; data: EarningsInsightResponse }
+  | { ok: false; status: number; detail: string };
+
+export async function fetchEarningsInsight(
+  code: string,
+  refresh = false,
+): Promise<EarningsInsightResult> {
+  const url = `${API_BASE}/api/earnings-insight/${encodeURIComponent(code)}${refresh ? "?refresh=true" : ""}`;
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) {
+    let detail = `${res.status}`;
+    try {
+      const body = await res.json();
+      detail = body.detail ?? detail;
+    } catch {
+      detail = await res.text();
+    }
+    return { ok: false, status: res.status, detail };
+  }
+  return { ok: true, data: (await res.json()) as EarningsInsightResponse };
+}
