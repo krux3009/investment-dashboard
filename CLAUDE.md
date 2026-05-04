@@ -20,9 +20,9 @@ Personal investment dashboard sitting on top of moomoo OpenD (the local brokerag
 
 See [moomoo-opend-setup.md](./moomoo-opend-setup.md) for the data-layer foundation.
 
-## Status: Phase D D1+D2+D3 shipped (2026-05-04)
+## Status: Phase D + foresight + three-route split shipped (2026-05-04)
 
-End-to-end on **FastAPI + Next.js + Tailwind 4 + Recharts + Anthropic SDK** with USD home currency. Phase C added the three advisor surfaces (digest, earnings, preview); Phase D D1+D2+D3 layered position notes, portfolio-vs-benchmark performance, and concentration shape. Mobile responsive (D4) and real-time push (D5) remain parked at `plan/v3-phase-d.md`.
+End-to-end on **FastAPI + Next.js + Tailwind 4 + Recharts + Anthropic SDK** with USD home currency. Three routes: `/` home (daily glance), `/portfolio` (weekend study), `/watchlist`. Phase D D1+D2+D3 layered position notes, portfolio-vs-benchmark performance, and concentration shape. The home page's tomorrow's-preview block was retired in favour of a 7/30-day foresight section combining earnings + macro releases (FOMC/CPI/NFP/PPI) + Claude-curated company events. Mobile responsive (D4) and real-time push (D5) remain parked at `plan/v3-phase-d.md`.
 
 **Stack:** `uv` + Python 3.14 + FastAPI 0.136 + Pydantic 2.13 + DuckDB
 1.5 + yfinance 1.3 + moomoo-api 10.4.6408 + anthropic 0.97 on the
@@ -41,69 +41,83 @@ SECURITY_FIRM, optional WATCHLIST) and `ANTHROPIC_API_KEY` for the
 advisor surfaces. Default home currency = USD; non-USD positions get
 FX-converted via yfinance, in-memory cached with a 1h TTL.
 
-## Surfaces (one page, top-to-bottom)
+## Surfaces
+
+Three routes, layered for the two reading modes from PRODUCT.md.
+
+### `/` home (15-second daily glance)
 
 1. **Hero.** USD-aggregated total + signed P&L + per-currency
    breakdown caption + FX rates used. Allocation donut on the right
    with labels-on-slices.
-2. **Portfolio vs benchmark (D2).** Hand-rolled SVG line chart
-   comparing the portfolio's cumulative %Δ against SPY (default,
+2. **Daily digest.** Always-on (no toggle) — auto-fetches on mount.
+   LEAD line + per-ticker one-sentence summaries in plain English.
+   Server-cached 6h. Footer hint points to per-stock drill-ins on
+   `/portfolio`.
+3. **Foresight (7/30 days).** Chronological timeline of upcoming
+   events combining three sources: per-holding earnings dates +
+   macro releases (FOMC/CPI/NFP/PPI from a static JSON) +
+   Claude-curated company events (product launches, investor days,
+   conference talks, pre-announced earnings calls). Default 7-day
+   window with toggle to 30D. Per-event [learn more] expands a
+   Claude What/Meaning/Watch trio cached 6h. Replaced the prior
+   tomorrow's-preview block (retired).
+
+### `/portfolio` (weekend study)
+
+1. **Portfolio vs benchmark.** Hand-rolled SVG line chart comparing
+   portfolio's cumulative %Δ against SPY (default,
    `MOOMOO_BENCHMARKS` env-overridable) over 30D / 90D / 1Y windows.
-   Tabular legend below; [learn more] expands a Claude-generated
-   What/Meaning/Watch comparison. Caveat caption notes that the
-   path uses current weights projected backward.
-3. **Daily digest.** Collapsed by default. LEAD line + per-ticker
-   one-sentence summaries in plain English. Lazy-fetched on first
-   expand, server-cached 6h. Footer hint points the reader to per-
-   stock drill-ins for deeper teaching.
-4. **Upcoming earnings strip.** Static plain-English list of next-
-   report dates per holding with inline analyst-estimate sentence.
-   Each row has a [learn more] toggle that lazy-fetches a Claude-
-   generated What/Meaning/Watch block specific to that report.
-5. **Holdings table.** Sortable column headers (localStorage-persisted),
-   30-day SVG sparklines, calendar mark next to tickers reporting
-   in ≤14 days, click-to-expand drill-in. Drill-in shows: 90-day
-   price chart, "What this means" (per-stock Meaning + Watch),
-   freeform position notes (D1, debounced auto-save to DuckDB),
-   then plain-English Technical + Capital-flow anomaly prose
-   (lazy-fetched, server-cached per symbol).
-6. **Concentration shape (D3).** Top-1/3/5 USD share + holdings
-   count, stacked-bar SVG by descending position weight, currency
-   exposure stacked bar, single-name max line. [learn more] toggle
-   expands a Claude-generated What/Meaning/Watch trio. Observational
-   only — no thresholds, no rebalance language. Sits between the
-   holdings table and the watchlist.
-7. **Watchlist.** Codes resolved from MOOMOO_WATCHLIST env >
-   `get_user_security('All')` > hardcoded fallback. Same drill-in
-   pattern as holdings (notes included).
-8. **Tomorrow's preview.** Footer block — US futures (ES=F, NQ=F) +
-   Asia closes (^N225, ^HSI). Always renders; dims outside the SGT
-   pre-market window (17:00–22:00). Per-row [learn more] toggle
-   lazy-fetches a Claude block, server-cached 1h.
+   Tabular legend below; [learn more] expands a Claude commentary.
+   Caveat caption: path uses current weights projected backward.
+2. **Holdings table.** Sortable column headers (localStorage-
+   persisted), 30-day SVG sparklines, calendar mark next to tickers
+   reporting in ≤14 days, click-to-expand drill-in. Drill-in shows:
+   90-day price chart, "What this means" (per-stock Meaning + Watch),
+   freeform position notes (debounced auto-save to DuckDB), then
+   plain-English Technical + Capital-flow anomaly prose. The
+   earnings-strip section was retired — its [learn more] depth
+   moved into the unified foresight insight on home.
+3. **Concentration shape.** Top-1/3/5 USD share + holdings count,
+   stacked-bar SVG by descending position weight, currency exposure
+   stacked bar, single-name max line. [learn more] toggle expands
+   a Claude What/Meaning/Watch trio. Observational only — no
+   thresholds, no rebalance language.
+
+### `/watchlist`
+
+Same drill-in pattern as holdings (notes included). Codes resolved
+from MOOMOO_WATCHLIST env > `get_user_security('All')` > hardcoded
+fallback.
 
 Theme cycles `system → light → dark → system` via next-themes.
 warm-graphite tokens defined as CSS variables in `web/src/app/globals.css`,
 mirroring the v2 oklch palette in both modes.
 
-## Phase C — advisor pattern (digest + earnings + preview)
+## Advisor pattern
 
-All three advisor surfaces share the same pattern:
+Surfaces that include Claude-generated commentary share a common
+shape: digest, per-stock insight, benchmark commentary, concentration
+commentary, foresight per-event, plus the company-events fetcher
+that feeds foresight.
 
-- **Static plain-English baseline** — the surface is useful even
-  without an Anthropic key. Strip + digest summaries + preview rows
-  render with handwritten labels and inline phrasing in everyday
-  words (no EPS / RSI / MA / death-cross / futures jargon).
-- **Optional Claude depth** — every entry has a [learn more] / drill-
-  in affordance that fetches a `What / Meaning / Watch` block, lazily.
-  Endpoints are paired (`/api/digest`, `/api/insight/{code}`,
-  `/api/earnings-insight/{code}`, `/api/preview-insight/{symbol}`)
-  and each caches in DuckDB with a `_PROMPT_VERSION` field so prompt
-  edits invalidate cleanly.
+- **Static plain-English baseline** — every surface is useful even
+  without an Anthropic key. Tables, charts, ratios, and event
+  timelines render with handwritten labels and plain phrasing.
+- **Optional Claude depth** — [learn more] / drill-in toggles fetch
+  a `What / Meaning / Watch` block lazily. Endpoints are paired
+  (`/api/digest`, `/api/insight/{code}`, `/api/benchmark-insight`,
+  `/api/concentration-insight`, `/api/foresight-insight/{event_id}`)
+  and each caches in DuckDB keyed on `(dimension, _PROMPT_VERSION)`
+  so prompt edits invalidate cleanly.
 - **Educational framing only** — every prompt forbids buy / sell /
-  hold / target / forecast / predict / recommend / "you should",
-  every prompt translates technical concepts to everyday meaning, and
-  every "Watch" line names an observation target instead of an
-  action. See `~/.claude/projects/-Users-tanlixuan-Me-Vault/memory/feedback_financial_framing.md`.
+  hold / trim / add / target / forecast / predict / expect /
+  recommend / "you should" / rally / surge / soar / crash / etc.
+  Surface-specific bans extend the list (concentration forbids
+  rebalance/diversify/over-weight/under-weight; benchmark forbids
+  alpha/beta/outperform; foresight forbids predicting outcomes).
+  Every "Watch" line names an observation target, never an action.
+  See `~/.claude/projects/-Users-tanlixuan-Me-Vault/memory/feedback_financial_framing.md`.
 
 ## Architecture
 

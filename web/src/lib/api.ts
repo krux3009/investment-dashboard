@@ -457,3 +457,68 @@ export async function fetchConcentrationInsight(
   }
   return { ok: true, data: (await res.json()) as ConcentrationInsightResponse };
 }
+
+export type ForesightKind = "earnings" | "macro" | "company_event";
+
+export interface ForesightEvent {
+  event_id: string;
+  date: string;
+  days_until: number;
+  kind: ForesightKind;
+  code: string | null;
+  ticker: string | null;
+  label: string;
+  description: string;
+}
+
+export interface ForesightResponse {
+  days: number;
+  as_of: string;
+  holdings_covered: string[];
+  events: ForesightEvent[];
+}
+
+export async function fetchForesight(days = 7): Promise<ForesightResponse> {
+  const res = await fetch(`${API_BASE}/api/foresight?days=${days}`, {
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error(`/api/foresight ${res.status}: ${await res.text()}`);
+  }
+  return (await res.json()) as ForesightResponse;
+}
+
+export interface ForesightInsightResponse {
+  event_id: string;
+  what: string;
+  meaning: string;
+  watch: string;
+  generated_at: string;
+  cached: boolean;
+}
+
+export type ForesightInsightResult =
+  | { ok: true; data: ForesightInsightResponse }
+  | { ok: false; status: number; detail: string };
+
+export async function fetchForesightInsight(
+  eventId: string,
+  days = 30,
+  refresh = false,
+): Promise<ForesightInsightResult> {
+  const qs = new URLSearchParams({ days: String(days) });
+  if (refresh) qs.set("refresh", "true");
+  const url = `${API_BASE}/api/foresight-insight/${encodeURIComponent(eventId)}?${qs}`;
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) {
+    let detail = `${res.status}`;
+    try {
+      const body = await res.json();
+      detail = body.detail ?? detail;
+    } catch {
+      detail = await res.text();
+    }
+    return { ok: false, status: res.status, detail };
+  }
+  return { ok: true, data: (await res.json()) as ForesightInsightResponse };
+}

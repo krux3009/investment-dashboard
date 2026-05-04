@@ -13,7 +13,6 @@ import type {
   PriceHistory,
 } from "@/lib/api";
 import { HoldingsTable } from "@/components/holdings-table";
-import { EarningsStrip } from "@/components/earnings-strip";
 import { BenchmarkBlock } from "@/components/benchmark-block";
 import { ConcentrationBlock } from "@/components/concentration-block";
 
@@ -70,7 +69,6 @@ export default async function Portfolio() {
   return (
     <>
       {benchmark && <BenchmarkBlock initial={benchmark} />}
-      <EarningsStrip items={earnings.items} />
       <HoldingsTable
         holdings={data.holdings}
         sparklines={sparklines}
