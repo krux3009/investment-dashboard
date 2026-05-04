@@ -23,6 +23,7 @@ from api.routes import (
     earnings_insight,
     holdings,
     insight,
+    notes,
     prices,
     preview,
     preview_insight,
@@ -34,7 +35,7 @@ app = FastAPI(title="investment-dashboard API", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
-    allow_methods=["GET"],
+    allow_methods=["GET", "PUT", "DELETE"],
     allow_headers=["*"],
 )
 
@@ -48,6 +49,7 @@ app.include_router(earnings.router, prefix="/api")
 app.include_router(earnings_insight.router, prefix="/api")
 app.include_router(preview.router, prefix="/api")
 app.include_router(preview_insight.router, prefix="/api")
+app.include_router(notes.router, prefix="/api")
 
 
 @app.get("/api/health")

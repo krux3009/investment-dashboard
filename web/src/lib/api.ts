@@ -273,3 +273,62 @@ export async function fetchPreviewInsight(
   }
   return { ok: true, data: (await res.json()) as PreviewInsightResponse };
 }
+
+export interface Note {
+  code: string;
+  body: string;
+  updated_at: string;
+}
+
+export type NoteResult =
+  | { ok: true; data: Note | null }
+  | { ok: false; status: number; detail: string };
+
+export async function fetchNote(code: string): Promise<NoteResult> {
+  const url = `${API_BASE}/api/notes/${encodeURIComponent(code)}`;
+  const res = await fetch(url, { cache: "no-store" });
+  if (res.status === 404) return { ok: true, data: null };
+  if (!res.ok) {
+    let detail = `${res.status}`;
+    try {
+      const body = await res.json();
+      detail = body.detail ?? detail;
+    } catch {
+      detail = await res.text();
+    }
+    return { ok: false, status: res.status, detail };
+  }
+  return { ok: true, data: (await res.json()) as Note };
+}
+
+export type PutNoteResult =
+  | { ok: true; data: Note | null }
+  | { ok: false; status: number; detail: string };
+
+export async function putNote(code: string, body: string): Promise<PutNoteResult> {
+  const url = `${API_BASE}/api/notes/${encodeURIComponent(code)}`;
+  const res = await fetch(url, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ body }),
+    cache: "no-store",
+  });
+  if (res.status === 204) return { ok: true, data: null };
+  if (!res.ok) {
+    let detail = `${res.status}`;
+    try {
+      const j = await res.json();
+      detail = j.detail ?? detail;
+    } catch {
+      detail = await res.text();
+    }
+    return { ok: false, status: res.status, detail };
+  }
+  return { ok: true, data: (await res.json()) as Note };
+}
+
+export async function deleteNote(code: string): Promise<{ ok: boolean }> {
+  const url = `${API_BASE}/api/notes/${encodeURIComponent(code)}`;
+  const res = await fetch(url, { method: "DELETE", cache: "no-store" });
+  return { ok: res.status === 204 };
+}

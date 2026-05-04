@@ -46,3 +46,9 @@ class HoldingsResponse(BaseModel):
     last_updated: str                   # ISO 8601
     fresh: bool
     simulate_with_no_positions: bool
+
+
+class Note(BaseModel):
+    code: str
+    body: str
+    updated_at: str                     # ISO 8601

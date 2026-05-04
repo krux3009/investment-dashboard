@@ -5,6 +5,7 @@ import type { AnomalyItem, PricePoint } from "@/lib/api";
 import { useEffect, useState } from "react";
 import { AnomalyBlock } from "./anomaly-block";
 import { InsightBlock } from "./insight-block";
+import { NotesBlock } from "./notes-block";
 import { PriceChart } from "./price-chart";
 
 interface Props {
@@ -79,6 +80,7 @@ export function DrillIn({ code, direction }: Props) {
             </div>
             <InsightBlock code={code} />
           </div>
+          <NotesBlock code={code} />
           <div>
             <AnomalyBlock
               items={anomalyItems}
