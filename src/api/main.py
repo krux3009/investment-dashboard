@@ -18,6 +18,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.routes import (
     anomalies,
+    benchmark,
+    benchmark_insight,
     digest,
     earnings,
     earnings_insight,
@@ -50,6 +52,8 @@ app.include_router(earnings_insight.router, prefix="/api")
 app.include_router(preview.router, prefix="/api")
 app.include_router(preview_insight.router, prefix="/api")
 app.include_router(notes.router, prefix="/api")
+app.include_router(benchmark.router, prefix="/api")
+app.include_router(benchmark_insight.router, prefix="/api")
 
 
 @app.get("/api/health")

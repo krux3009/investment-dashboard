@@ -332,3 +332,73 @@ export async function deleteNote(code: string): Promise<{ ok: boolean }> {
   const res = await fetch(url, { method: "DELETE", cache: "no-store" });
   return { ok: res.status === 204 };
 }
+
+export interface SeriesPoint {
+  trade_date: string;
+  pct: number;
+}
+
+export interface BenchmarkSeries {
+  symbol: string;
+  points: SeriesPoint[];
+}
+
+export interface BenchmarkResponse {
+  days: number;
+  symbols: string[];
+  as_of: string;
+  portfolio: SeriesPoint[];
+  benchmarks: BenchmarkSeries[];
+  weighting_caveat: string;
+}
+
+export async function fetchBenchmark(
+  days = 90,
+  symbols?: string,
+): Promise<BenchmarkResponse> {
+  const qs = new URLSearchParams({ days: String(days) });
+  if (symbols) qs.set("symbols", symbols);
+  const url = `${API_BASE}/api/benchmark?${qs}`;
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`/api/benchmark ${res.status}: ${await res.text()}`);
+  }
+  return (await res.json()) as BenchmarkResponse;
+}
+
+export interface BenchmarkInsightResponse {
+  days: number;
+  symbols: string[];
+  what: string;
+  meaning: string;
+  watch: string;
+  generated_at: string;
+  cached: boolean;
+}
+
+export type BenchmarkInsightResult =
+  | { ok: true; data: BenchmarkInsightResponse }
+  | { ok: false; status: number; detail: string };
+
+export async function fetchBenchmarkInsight(
+  days = 90,
+  symbols?: string,
+  refresh = false,
+): Promise<BenchmarkInsightResult> {
+  const qs = new URLSearchParams({ days: String(days) });
+  if (symbols) qs.set("symbols", symbols);
+  if (refresh) qs.set("refresh", "true");
+  const url = `${API_BASE}/api/benchmark-insight?${qs}`;
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) {
+    let detail = `${res.status}`;
+    try {
+      const body = await res.json();
+      detail = body.detail ?? detail;
+    } catch {
+      detail = await res.text();
+    }
+    return { ok: false, status: res.status, detail };
+  }
+  return { ok: true, data: (await res.json()) as BenchmarkInsightResponse };
+}

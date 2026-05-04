@@ -52,3 +52,22 @@ class Note(BaseModel):
     code: str
     body: str
     updated_at: str                     # ISO 8601
+
+
+class SeriesPoint(BaseModel):
+    trade_date: str                     # ISO date
+    pct: float                          # cumulative %Δ from window start
+
+
+class BenchmarkSeries(BaseModel):
+    symbol: str
+    points: list[SeriesPoint]
+
+
+class BenchmarkResponse(BaseModel):
+    days: int
+    symbols: list[str]
+    as_of: str                          # ISO date
+    portfolio: list[SeriesPoint]
+    benchmarks: list[BenchmarkSeries]
+    weighting_caveat: str

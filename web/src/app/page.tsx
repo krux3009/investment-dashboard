@@ -1,5 +1,5 @@
-import { fetchEarnings, fetchHoldings, fetchPrices, fetchWatchlist } from "@/lib/api";
-import type { EarningsItem, EarningsResponse, PriceHistory } from "@/lib/api";
+import { fetchBenchmark, fetchEarnings, fetchHoldings, fetchPrices, fetchWatchlist } from "@/lib/api";
+import type { BenchmarkResponse, EarningsItem, EarningsResponse, PriceHistory } from "@/lib/api";
 import { Hero } from "@/components/hero";
 import { HoldingsTable } from "@/components/holdings-table";
 import { WatchlistTable } from "@/components/watchlist-table";
@@ -7,6 +7,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { DailyDigest } from "@/components/daily-digest";
 import { EarningsStrip } from "@/components/earnings-strip";
 import { PreviewBlock } from "@/components/preview-block";
+import { BenchmarkBlock } from "@/components/benchmark-block";
 
 async function fetchSparklineMap(codes: string[]): Promise<Record<string, PriceHistory>> {
   const results = await Promise.allSettled(codes.map((c) => fetchPrices(c, 30)));
@@ -29,13 +30,23 @@ async function safeFetchEarnings(): Promise<EarningsResponse> {
   }
 }
 
+async function safeFetchBenchmark(): Promise<BenchmarkResponse | null> {
+  try {
+    return await fetchBenchmark(90);
+  } catch (e) {
+    console.warn("fetchBenchmark failed, hiding block:", e);
+    return null;
+  }
+}
+
 export default async function Home() {
   // Holdings + watchlist + earnings fetch in parallel; sparklines depend
   // on the codes returned, so they fetch in a second round.
-  const [data, watchlist, earnings] = await Promise.all([
+  const [data, watchlist, earnings, benchmark] = await Promise.all([
     fetchHoldings(),
     fetchWatchlist(),
     safeFetchEarnings(),
+    safeFetchBenchmark(),
   ]);
 
   const holdingsCodes = data.holdings.map((h) => h.code);
@@ -56,6 +67,7 @@ export default async function Home() {
       </header>
 
       <Hero data={data} />
+      {benchmark && <BenchmarkBlock initial={benchmark} />}
       <DailyDigest />
       <EarningsStrip items={earnings.items} />
       <HoldingsTable
