@@ -24,15 +24,12 @@ from api.routes import (
     concentration_insight,
     digest,
     earnings,
-    earnings_insight,
     foresight,
     foresight_insight,
     holdings,
     insight,
     notes,
     prices,
-    preview,
-    preview_insight,
     watchlist,
 )
 
@@ -52,9 +49,6 @@ app.include_router(watchlist.router, prefix="/api")
 app.include_router(digest.router, prefix="/api")
 app.include_router(insight.router, prefix="/api")
 app.include_router(earnings.router, prefix="/api")
-app.include_router(earnings_insight.router, prefix="/api")
-app.include_router(preview.router, prefix="/api")
-app.include_router(preview_insight.router, prefix="/api")
 app.include_router(notes.router, prefix="/api")
 app.include_router(benchmark.router, prefix="/api")
 app.include_router(benchmark_insight.router, prefix="/api")
