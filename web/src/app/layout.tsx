@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
+import { NavBar } from "@/components/nav-bar";
 
 const plexSans = IBM_Plex_Sans({
   variable: "--font-plex-sans",
@@ -38,7 +39,10 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {children}
+          <main className="max-w-6xl mx-auto px-8 py-12">
+            <NavBar />
+            {children}
+          </main>
         </ThemeProvider>
       </body>
     </html>
