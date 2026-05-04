@@ -67,9 +67,7 @@ function StackedBar({
             stroke="var(--surface)"
             strokeWidth={0.75}
           >
-            <title>
-              {seg.label} · {(seg.pct * 100).toFixed(1)}%
-            </title>
+            <title>{`${seg.label} · ${(seg.pct * 100).toFixed(1)}%`}</title>
           </rect>
         );
       })}
