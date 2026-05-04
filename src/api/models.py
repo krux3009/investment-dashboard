@@ -88,3 +88,24 @@ class ConcentrationResponse(BaseModel):
     top_names: list[TopName]
     currency_exposure: dict[str, float]
     single_name_max: TopName | None
+
+
+ForesightKind = Literal["earnings", "macro", "company_event"]
+
+
+class ForesightEvent(BaseModel):
+    event_id: str
+    date: str               # ISO
+    days_until: int
+    kind: ForesightKind
+    code: str | None
+    ticker: str | None
+    label: str
+    description: str
+
+
+class ForesightResponse(BaseModel):
+    days: int
+    as_of: str              # ISO
+    holdings_covered: list[str]
+    events: list[ForesightEvent]

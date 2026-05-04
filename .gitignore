@@ -13,7 +13,8 @@ wheels/
 .env
 
 # Local data caches (DuckDB, parquet snapshots, etc.) at repo root only
-/data/
+/data/*
+!/data/macro-events.json
 *.duckdb
 *.duckdb.wal
 *.parquet
