@@ -145,7 +145,7 @@ export function HoldingsTable({ holdings, sparklines, earningsByCode }: Props) {
             <th className="text-right pb-3 px-4">
               <SortableHeader label="Today" sortKey="today_change_pct" sort={sort} onSort={handleSort} className="text-right" />
             </th>
-            <th className="pb-3 px-4">
+            <th className="text-right pb-3 px-4">
               <span className="text-xs uppercase tracking-[0.04em] font-medium text-whisper">30d</span>
             </th>
             <th className="text-right pb-3 px-4">
@@ -260,8 +260,8 @@ export function HoldingsTable({ holdings, sparklines, earningsByCode }: Props) {
                     )}
                   </td>
 
-                  <td className="py-4 px-4">
-                    <div className="flex justify-center">
+                  <td className="py-4 px-4 text-right">
+                    <div className="flex justify-end">
                       <Sparkline points={sparkData} direction={sparkDirection} />
                     </div>
                   </td>
