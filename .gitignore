@@ -23,3 +23,6 @@ wheels/
 .DS_Store
 .idea/
 .vscode/
+
+# Local-only session retrospectives (personal review, not shared)
+/sessions/
