@@ -163,7 +163,15 @@ export function DailyDigest() {
       {expanded && (
         <div className="mt-6">
           {state.kind === "loading" && (
-            <div className="text-sm text-quiet italic">drafting digest…</div>
+            <div
+              role="status"
+              aria-label="Drafting digest…"
+              className="space-y-3 max-w-[68ch]"
+            >
+              <div className="h-4 w-3/4 rounded bg-rule/40 animate-pulse" />
+              <div className="h-4 w-2/3 rounded bg-rule/40 animate-pulse" />
+              <div className="h-4 w-1/2 rounded bg-rule/40 animate-pulse" />
+            </div>
           )}
 
           {state.kind === "ready" && (

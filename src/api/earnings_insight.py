@@ -32,7 +32,7 @@ from api.data import prices
 log = logging.getLogger(__name__)
 
 _TTL = timedelta(hours=24)
-_PROMPT_VERSION = "v1"
+_PROMPT_VERSION = "v2-tight"
 
 _PROMPT = """\
 You are writing three short educational lines about ONE upcoming
@@ -50,7 +50,7 @@ Watch: <one sentence — what to monitor when results actually land. Frame as ob
 Hard rules:
 - EXACTLY three lines, with the literal labels "What:", "Meaning:",
   "Watch:".
-- Each line is ONE sentence, ≤30 words.
+- Each line is ONE sentence, ≤22 words. Aim for 15. Brevity is valued.
 - Quote the company name + ticker + date verbatim if you use them.
 - Quote the exact estimate numbers if you reference them.
 
@@ -227,7 +227,7 @@ def _call_claude(user_message: str) -> tuple[str, str, str]:
 
     response = client.messages.create(
         model=model,
-        max_tokens=400,
+        max_tokens=320,
         system=_PROMPT,
         messages=[{"role": "user", "content": user_message}],
     )

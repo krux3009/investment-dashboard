@@ -96,7 +96,21 @@ export function PreviewBlock() {
         <div className="text-xs uppercase tracking-[0.06em] text-quiet mb-3">
           Tomorrow&apos;s preview
         </div>
-        <div className="text-sm text-quiet italic">loading market read…</div>
+        <ul
+          role="status"
+          aria-label="Loading market read…"
+          className="flex flex-col gap-4 max-w-[68ch]"
+        >
+          {[0, 1, 2, 3].map((i) => (
+            <li
+              key={i}
+              className="grid grid-cols-[1fr_4rem] items-baseline gap-x-6"
+            >
+              <div className="h-4 w-2/3 rounded bg-rule/40 animate-pulse" />
+              <div className="h-4 w-full rounded bg-rule/40 animate-pulse" />
+            </li>
+          ))}
+        </ul>
       </section>
     );
   }
@@ -109,9 +123,7 @@ export function PreviewBlock() {
   if (rows.length === 0) return null;
 
   return (
-    <section
-      className={`mt-12 pt-8 border-t border-rule ${in_window ? "" : "opacity-60"}`}
-    >
+    <section className="mt-12 pt-8 border-t border-rule">
       <div className="flex items-baseline justify-between gap-4 mb-1.5">
         <div className="text-xs uppercase tracking-[0.06em] text-quiet">
           Tomorrow&apos;s preview
@@ -122,6 +134,9 @@ export function PreviewBlock() {
             : `last update ${fmtTimeSinceHours(fetched_at)} · US market open`}
         </div>
       </div>
+      {/* Dim only the body. Header + freshness line stay legible so the
+          reader can always see when the data was last refreshed. */}
+      <div className={in_window ? "" : "opacity-75"}>
       <p className="text-sm text-whisper italic mb-5 max-w-[60ch]">
         Overnight futures and Asia closes give a hint at how the US market
         may open. Most useful in the hours before the New York open
@@ -142,9 +157,21 @@ export function PreviewBlock() {
               {isOpen && (
                 <div className="mt-3 pl-4 border-l border-rule/60">
                   {insight?.kind === "loading" && (
-                    <div className="text-sm text-quiet italic">
-                      drafting explanation…
-                    </div>
+                    <dl
+                      role="status"
+                      aria-label="Drafting explanation…"
+                      className="flex flex-col gap-2.5"
+                    >
+                      {[0, 1, 2].map((i) => (
+                        <div
+                          key={i}
+                          className="grid grid-cols-[5rem_1fr] gap-x-3 items-center"
+                        >
+                          <div className="h-3 w-12 rounded bg-rule/40 animate-pulse" />
+                          <div className="h-4 w-full rounded bg-rule/40 animate-pulse" />
+                        </div>
+                      ))}
+                    </dl>
                   )}
                   {insight?.kind === "unavailable" && (
                     <div className="text-sm text-whisper italic">
@@ -190,6 +217,7 @@ export function PreviewBlock() {
           );
         })}
       </ul>
+      </div>
     </section>
   );
 }

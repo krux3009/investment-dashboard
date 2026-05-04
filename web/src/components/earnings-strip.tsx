@@ -144,9 +144,21 @@ export function EarningsStrip({ items }: Props) {
               {isOpen && (
                 <div className="mt-3 pl-4 border-l border-rule/60">
                   {insight?.kind === "loading" && (
-                    <div className="text-sm text-quiet italic">
-                      drafting explanation…
-                    </div>
+                    <dl
+                      role="status"
+                      aria-label="Drafting explanation…"
+                      className="flex flex-col gap-2.5"
+                    >
+                      {[0, 1, 2].map((i) => (
+                        <div
+                          key={i}
+                          className="grid grid-cols-[5rem_1fr] gap-x-3 items-center"
+                        >
+                          <div className="h-3 w-12 rounded bg-rule/40 animate-pulse" />
+                          <div className="h-4 w-full rounded bg-rule/40 animate-pulse" />
+                        </div>
+                      ))}
+                    </dl>
                   )}
                   {insight?.kind === "unavailable" && (
                     <div className="text-sm text-whisper italic">

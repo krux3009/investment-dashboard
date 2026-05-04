@@ -20,7 +20,7 @@ from api.data import prices
 log = logging.getLogger(__name__)
 
 _TTL = timedelta(hours=1)
-_PROMPT_VERSION = "v1"
+_PROMPT_VERSION = "v2-tight"
 
 _PROMPT = """\
 You are writing three short educational lines about ONE row of an
@@ -38,7 +38,7 @@ Watch: <one sentence — what to monitor when the US market opens or as the day 
 Hard rules:
 - EXACTLY three lines, with the literal labels "What:", "Meaning:",
   "Watch:".
-- Each line ONE sentence, ≤30 words.
+- Each line ONE sentence, ≤22 words. Aim for 15. Brevity is valued.
 - Quote the symbol + label + percentage figure verbatim if you use them.
 
 NEVER use these terms — translate them first:
@@ -183,7 +183,7 @@ def _call_claude(user_message: str) -> tuple[str, str, str]:
 
     response = client.messages.create(
         model=model,
-        max_tokens=400,
+        max_tokens=320,
         system=_PROMPT,
         messages=[{"role": "user", "content": user_message}],
     )

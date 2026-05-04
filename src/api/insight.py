@@ -35,7 +35,7 @@ from api.digest import _fetch_news
 log = logging.getLogger(__name__)
 
 _TTL = timedelta(hours=6)
-_PROMPT_VERSION = "v1"
+_PROMPT_VERSION = "v2-tight"
 
 _INSIGHT_PROMPT = """\
 You are writing two short educational lines for ONE stock holding in a
@@ -50,7 +50,7 @@ Watch: <one sentence — what to monitor in the next few sessions. Frame as obse
 
 Hard rules:
 - EXACTLY two lines, with the literal labels "Meaning:" and "Watch:".
-- Each line ONE sentence, ≤30 words.
+- Each line ONE sentence, ≤22 words. Aim for 15. Brevity is valued.
 - Do not repeat the today's-move number — the summary already has it.
   Use it as context for the educational point.
 - Quote tickers, percentages, and currency figures verbatim if you use
@@ -266,7 +266,7 @@ def _call_claude(user_message: str) -> tuple[str, str]:
 
     response = client.messages.create(
         model=model,
-        max_tokens=400,
+        max_tokens=320,
         system=_INSIGHT_PROMPT,
         messages=[{"role": "user", "content": user_message}],
     )

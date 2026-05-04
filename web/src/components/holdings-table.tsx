@@ -202,13 +202,31 @@ export function HoldingsTable({ holdings, sparklines, earningsByCode }: Props) {
                             e.days_until === 0
                               ? "today"
                               : `in ${e.days_until} day${e.days_until === 1 ? "" : "s"}`;
+                          // Inline calendar SVG, currentColor for theme
+                          // tracking. 12px, paired with the ticker via
+                          // a tooltip (date + days-until) on hover.
                           return (
                             <span
                               title={`Earnings ${dateLabel} · ${daysLabel}`}
                               aria-label={`Earnings ${dateLabel} (${daysLabel})`}
-                              className="text-quiet text-sm cursor-help"
+                              className="text-quiet inline-flex items-center cursor-help"
                             >
-                              ◷
+                              <svg
+                                width="12"
+                                height="12"
+                                viewBox="0 0 16 16"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.4"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                aria-hidden
+                              >
+                                <rect x="2.5" y="3.5" width="11" height="10" rx="1" />
+                                <line x1="2.5" y1="6.5" x2="13.5" y2="6.5" />
+                                <line x1="5.5" y1="2" x2="5.5" y2="4.5" />
+                                <line x1="10.5" y1="2" x2="10.5" y2="4.5" />
+                              </svg>
                             </span>
                           );
                         })()}
