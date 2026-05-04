@@ -100,6 +100,28 @@ export async function fetchWatchlist(): Promise<WatchlistResponse> {
   return (await res.json()) as WatchlistResponse;
 }
 
+export interface Quote {
+  code: string;
+  last_price: number | null;
+  prev_close: number | null;
+  today_change_pct: number | null;
+  today_change_abs: number | null;
+}
+
+export interface QuotesResponse {
+  quotes: Record<string, Quote>;
+}
+
+export async function fetchQuotes(codes: string[]): Promise<QuotesResponse> {
+  if (codes.length === 0) return { quotes: {} };
+  const url = `${API_BASE}/api/quotes?codes=${encodeURIComponent(codes.join(","))}`;
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`/api/quotes ${res.status}: ${await res.text()}`);
+  }
+  return (await res.json()) as QuotesResponse;
+}
+
 export interface DigestResponse {
   prose: string;
   generated_at: string;

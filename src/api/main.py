@@ -30,6 +30,7 @@ from api.routes import (
     insight,
     notes,
     prices,
+    quotes,
     watchlist,
 )
 
@@ -44,6 +45,7 @@ app.add_middleware(
 
 app.include_router(holdings.router, prefix="/api")
 app.include_router(prices.router, prefix="/api")
+app.include_router(quotes.router, prefix="/api")
 app.include_router(anomalies.router, prefix="/api")
 app.include_router(watchlist.router, prefix="/api")
 app.include_router(digest.router, prefix="/api")

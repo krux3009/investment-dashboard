@@ -1,6 +1,6 @@
 "use client";
 
-import type { PriceHistory } from "@/lib/api";
+import type { PriceHistory, Quote } from "@/lib/api";
 import { arrowFor, directionClass, fmtPct } from "@/lib/format";
 import { Fragment, useState } from "react";
 import { DrillIn } from "./drill-in";
@@ -11,6 +11,9 @@ interface Props {
   // Map of code → 30-day price history, fetched server-side. Codes
   // missing from the map render as quiet placeholder rows.
   sparklines: Record<string, PriceHistory>;
+  // Map of code → live moomoo snapshot for today's intraday move.
+  // Empty map (or missing code) collapses the Today column to "–".
+  quotes?: Record<string, Quote>;
 }
 
 const tickerFromCode = (code: string) =>
@@ -18,7 +21,7 @@ const tickerFromCode = (code: string) =>
 const marketFromCode = (code: string) =>
   code.includes(".") ? code.split(".")[0] : "?";
 
-export function WatchlistTable({ codes, sparklines }: Props) {
+export function WatchlistTable({ codes, sparklines, quotes = {} }: Props) {
   const [expandedCode, setExpandedCode] = useState<string | null>(null);
 
   if (codes.length === 0) return null;
@@ -50,6 +53,11 @@ export function WatchlistTable({ codes, sparklines }: Props) {
             </th>
             <th className="text-right pb-3 px-4">
               <span className="text-xs uppercase tracking-[0.04em] font-medium text-whisper">
+                Today
+              </span>
+            </th>
+            <th className="text-right pb-3 px-4">
+              <span className="text-xs uppercase tracking-[0.04em] font-medium text-whisper">
                 30d
               </span>
             </th>
@@ -66,12 +74,19 @@ export function WatchlistTable({ codes, sparklines }: Props) {
             const market = marketFromCode(code);
             const points = sparklines[code]?.points ?? [];
             const has = points.length >= 2;
-            const last = has ? points[points.length - 1].close : null;
+            const sparkLast = has ? points[points.length - 1].close : null;
             const first = has ? points[0].close : null;
             const change30 =
-              has && first && first !== 0 ? (last! - first) / first : null;
+              has && first && first !== 0 ? (sparkLast! - first) / first : null;
             const direction: "gain" | "loss" | "quiet" =
               change30 === null ? "quiet" : change30 > 0 ? "gain" : change30 < 0 ? "loss" : "quiet";
+
+            const quote = quotes[code];
+            // Prefer the live snapshot price when available; fall back
+            // to the sparkline's last cached close so the Last column
+            // never shows "–" when daily bars exist.
+            const last = quote?.last_price ?? sparkLast;
+            const today = quote?.today_change_pct ?? null;
 
             const isExpanded = expandedCode === code;
 
@@ -110,6 +125,13 @@ export function WatchlistTable({ codes, sparklines }: Props) {
                         })}`}
                   </td>
 
+                  <td className={`py-3 px-4 text-right tabular ${directionClass(today)}`}>
+                    <div className="flex items-baseline justify-end gap-1.5">
+                      <span aria-hidden>{arrowFor(today)}</span>
+                      <span>{fmtPct(today, 2)}</span>
+                    </div>
+                  </td>
+
                   <td className={`py-3 px-4 text-right tabular ${directionClass(change30)}`}>
                     <div className="flex items-baseline justify-end gap-1.5">
                       <span aria-hidden>{arrowFor(change30)}</span>
@@ -124,7 +146,7 @@ export function WatchlistTable({ codes, sparklines }: Props) {
 
                 {isExpanded && (
                   <tr>
-                    <td colSpan={4} className="p-0">
+                    <td colSpan={5} className="p-0">
                       <DrillIn code={code} direction={direction} />
                     </td>
                   </tr>

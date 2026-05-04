@@ -109,3 +109,15 @@ class ForesightResponse(BaseModel):
     as_of: str              # ISO
     holdings_covered: list[str]
     events: list[ForesightEvent]
+
+
+class Quote(BaseModel):
+    code: str
+    last_price: float | None
+    prev_close: float | None
+    today_change_pct: float | None
+    today_change_abs: float | None
+
+
+class QuotesResponse(BaseModel):
+    quotes: dict[str, Quote]
