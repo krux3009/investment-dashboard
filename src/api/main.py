@@ -20,6 +20,8 @@ from api.routes import (
     anomalies,
     benchmark,
     benchmark_insight,
+    concentration,
+    concentration_insight,
     digest,
     earnings,
     earnings_insight,
@@ -54,6 +56,8 @@ app.include_router(preview_insight.router, prefix="/api")
 app.include_router(notes.router, prefix="/api")
 app.include_router(benchmark.router, prefix="/api")
 app.include_router(benchmark_insight.router, prefix="/api")
+app.include_router(concentration.router, prefix="/api")
+app.include_router(concentration_insight.router, prefix="/api")
 
 
 @app.get("/api/health")

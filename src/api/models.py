@@ -71,3 +71,20 @@ class BenchmarkResponse(BaseModel):
     portfolio: list[SeriesPoint]
     benchmarks: list[BenchmarkSeries]
     weighting_caveat: str
+
+
+class TopName(BaseModel):
+    code: str
+    ticker: str
+    pct: float
+
+
+class ConcentrationResponse(BaseModel):
+    count: int
+    total_market_value_usd: float
+    top1_pct: float
+    top3_pct: float
+    top5_pct: float
+    top_names: list[TopName]
+    currency_exposure: dict[str, float]
+    single_name_max: TopName | None

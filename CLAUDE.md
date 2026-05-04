@@ -20,9 +20,9 @@ Personal investment dashboard sitting on top of moomoo OpenD (the local brokerag
 
 See [moomoo-opend-setup.md](./moomoo-opend-setup.md) for the data-layer foundation.
 
-## Status: Phase C shipped (2026-05-04)
+## Status: Phase D D1+D2+D3 shipped (2026-05-04)
 
-End-to-end on **FastAPI + Next.js + Tailwind 4 + Recharts + Anthropic SDK** with USD home currency. Replaced the v2 Dash app (retired in Phase B chunk 3) and added three advisor surfaces in Phase C — daily digest, upcoming earnings, tomorrow's preview.
+End-to-end on **FastAPI + Next.js + Tailwind 4 + Recharts + Anthropic SDK** with USD home currency. Phase C added the three advisor surfaces (digest, earnings, preview); Phase D D1+D2+D3 layered position notes, portfolio-vs-benchmark performance, and concentration shape. Mobile responsive (D4) and real-time push (D5) remain parked at `plan/v3-phase-d.md`.
 
 **Stack:** `uv` + Python 3.14 + FastAPI 0.136 + Pydantic 2.13 + DuckDB
 1.5 + yfinance 1.3 + moomoo-api 10.4.6408 + anthropic 0.97 on the
@@ -46,24 +46,37 @@ FX-converted via yfinance, in-memory cached with a 1h TTL.
 1. **Hero.** USD-aggregated total + signed P&L + per-currency
    breakdown caption + FX rates used. Allocation donut on the right
    with labels-on-slices.
-2. **Daily digest.** Collapsed by default. LEAD line + per-ticker
+2. **Portfolio vs benchmark (D2).** Hand-rolled SVG line chart
+   comparing the portfolio's cumulative %Δ against SPY (default,
+   `MOOMOO_BENCHMARKS` env-overridable) over 30D / 90D / 1Y windows.
+   Tabular legend below; [learn more] expands a Claude-generated
+   What/Meaning/Watch comparison. Caveat caption notes that the
+   path uses current weights projected backward.
+3. **Daily digest.** Collapsed by default. LEAD line + per-ticker
    one-sentence summaries in plain English. Lazy-fetched on first
    expand, server-cached 6h. Footer hint points the reader to per-
    stock drill-ins for deeper teaching.
-3. **Upcoming earnings strip.** Static plain-English list of next-
+4. **Upcoming earnings strip.** Static plain-English list of next-
    report dates per holding with inline analyst-estimate sentence.
    Each row has a [learn more] toggle that lazy-fetches a Claude-
    generated What/Meaning/Watch block specific to that report.
-4. **Holdings table.** Sortable column headers (localStorage-persisted),
+5. **Holdings table.** Sortable column headers (localStorage-persisted),
    30-day SVG sparklines, calendar mark next to tickers reporting
    in ≤14 days, click-to-expand drill-in. Drill-in shows: 90-day
-   price chart, "What this means" (per-stock Meaning + Watch), then
-   plain-English Technical + Capital-flow anomaly prose (lazy-fetched,
-   server-cached per symbol).
-5. **Watchlist.** Codes resolved from MOOMOO_WATCHLIST env >
+   price chart, "What this means" (per-stock Meaning + Watch),
+   freeform position notes (D1, debounced auto-save to DuckDB),
+   then plain-English Technical + Capital-flow anomaly prose
+   (lazy-fetched, server-cached per symbol).
+6. **Concentration shape (D3).** Top-1/3/5 USD share + holdings
+   count, stacked-bar SVG by descending position weight, currency
+   exposure stacked bar, single-name max line. [learn more] toggle
+   expands a Claude-generated What/Meaning/Watch trio. Observational
+   only — no thresholds, no rebalance language. Sits between the
+   holdings table and the watchlist.
+7. **Watchlist.** Codes resolved from MOOMOO_WATCHLIST env >
    `get_user_security('All')` > hardcoded fallback. Same drill-in
-   pattern as holdings.
-6. **Tomorrow's preview.** Footer block — US futures (ES=F, NQ=F) +
+   pattern as holdings (notes included).
+8. **Tomorrow's preview.** Footer block — US futures (ES=F, NQ=F) +
    Asia closes (^N225, ^HSI). Always renders; dims outside the SGT
    pre-market window (17:00–22:00). Per-row [learn more] toggle
    lazy-fetches a Claude block, server-cached 1h.

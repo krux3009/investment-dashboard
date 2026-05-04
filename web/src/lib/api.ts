@@ -402,3 +402,58 @@ export async function fetchBenchmarkInsight(
   }
   return { ok: true, data: (await res.json()) as BenchmarkInsightResponse };
 }
+
+export interface TopName {
+  code: string;
+  ticker: string;
+  pct: number;
+}
+
+export interface ConcentrationResponse {
+  count: number;
+  total_market_value_usd: number;
+  top1_pct: number;
+  top3_pct: number;
+  top5_pct: number;
+  top_names: TopName[];
+  currency_exposure: Record<string, number>;
+  single_name_max: TopName | null;
+}
+
+export async function fetchConcentration(): Promise<ConcentrationResponse> {
+  const res = await fetch(`${API_BASE}/api/concentration`, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`/api/concentration ${res.status}: ${await res.text()}`);
+  }
+  return (await res.json()) as ConcentrationResponse;
+}
+
+export interface ConcentrationInsightResponse {
+  what: string;
+  meaning: string;
+  watch: string;
+  generated_at: string;
+  cached: boolean;
+}
+
+export type ConcentrationInsightResult =
+  | { ok: true; data: ConcentrationInsightResponse }
+  | { ok: false; status: number; detail: string };
+
+export async function fetchConcentrationInsight(
+  refresh = false,
+): Promise<ConcentrationInsightResult> {
+  const url = `${API_BASE}/api/concentration-insight${refresh ? "?refresh=true" : ""}`;
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) {
+    let detail = `${res.status}`;
+    try {
+      const body = await res.json();
+      detail = body.detail ?? detail;
+    } catch {
+      detail = await res.text();
+    }
+    return { ok: false, status: res.status, detail };
+  }
+  return { ok: true, data: (await res.json()) as ConcentrationInsightResponse };
+}

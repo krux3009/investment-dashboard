@@ -1,5 +1,5 @@
-import { fetchBenchmark, fetchEarnings, fetchHoldings, fetchPrices, fetchWatchlist } from "@/lib/api";
-import type { BenchmarkResponse, EarningsItem, EarningsResponse, PriceHistory } from "@/lib/api";
+import { fetchBenchmark, fetchConcentration, fetchEarnings, fetchHoldings, fetchPrices, fetchWatchlist } from "@/lib/api";
+import type { BenchmarkResponse, ConcentrationResponse, EarningsItem, EarningsResponse, PriceHistory } from "@/lib/api";
 import { Hero } from "@/components/hero";
 import { HoldingsTable } from "@/components/holdings-table";
 import { WatchlistTable } from "@/components/watchlist-table";
@@ -8,6 +8,7 @@ import { DailyDigest } from "@/components/daily-digest";
 import { EarningsStrip } from "@/components/earnings-strip";
 import { PreviewBlock } from "@/components/preview-block";
 import { BenchmarkBlock } from "@/components/benchmark-block";
+import { ConcentrationBlock } from "@/components/concentration-block";
 
 async function fetchSparklineMap(codes: string[]): Promise<Record<string, PriceHistory>> {
   const results = await Promise.allSettled(codes.map((c) => fetchPrices(c, 30)));
@@ -39,14 +40,24 @@ async function safeFetchBenchmark(): Promise<BenchmarkResponse | null> {
   }
 }
 
+async function safeFetchConcentration(): Promise<ConcentrationResponse | null> {
+  try {
+    return await fetchConcentration();
+  } catch (e) {
+    console.warn("fetchConcentration failed, hiding block:", e);
+    return null;
+  }
+}
+
 export default async function Home() {
   // Holdings + watchlist + earnings fetch in parallel; sparklines depend
   // on the codes returned, so they fetch in a second round.
-  const [data, watchlist, earnings, benchmark] = await Promise.all([
+  const [data, watchlist, earnings, benchmark, concentration] = await Promise.all([
     fetchHoldings(),
     fetchWatchlist(),
     safeFetchEarnings(),
     safeFetchBenchmark(),
+    safeFetchConcentration(),
   ]);
 
   const holdingsCodes = data.holdings.map((h) => h.code);
@@ -75,6 +86,7 @@ export default async function Home() {
         sparklines={sparklines}
         earningsByCode={earningsByCode}
       />
+      {concentration && <ConcentrationBlock initial={concentration} />}
       <WatchlistTable codes={watchlistCodes} sparklines={sparklines} />
       <PreviewBlock />
     </main>
