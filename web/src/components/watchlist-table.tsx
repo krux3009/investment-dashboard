@@ -126,10 +126,14 @@ export function WatchlistTable({ codes, sparklines, quotes = {} }: Props) {
                   </td>
 
                   <td className={`py-3 px-4 text-right tabular ${directionClass(today)}`}>
-                    <div className="flex items-baseline justify-end gap-1.5">
-                      <span aria-hidden>{arrowFor(today)}</span>
-                      <span>{fmtPct(today, 2)}</span>
-                    </div>
+                    {today === null || today === 0 ? (
+                      <span className="text-whisper">—</span>
+                    ) : (
+                      <div className="flex items-baseline justify-end gap-1.5">
+                        <span aria-hidden>{arrowFor(today)}</span>
+                        <span>{fmtPct(today, 2)}</span>
+                      </div>
+                    )}
                   </td>
 
                   <td className={`py-3 px-4 text-right tabular ${directionClass(change30)}`}>

@@ -187,8 +187,8 @@ export function ForesightBlock({ initial }: Props) {
   return (
     <section className="mb-12">
       <div className="flex items-baseline justify-between mb-4">
-        <h2 className="text-sm font-medium tracking-wide text-ink">
-          Next <span className="text-quiet">{data.days} days</span>
+        <h2 className="text-xs uppercase tracking-[0.06em] text-quiet">
+          Next <span className="text-ink">{data.days} days</span>
         </h2>
         <div className="flex gap-1 text-xs">
           {WINDOWS.map((w) => (

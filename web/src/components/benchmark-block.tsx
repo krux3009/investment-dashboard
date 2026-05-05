@@ -84,9 +84,9 @@ export function BenchmarkBlock({ initial }: Props) {
   return (
     <section className="mb-12">
       <div className="flex items-baseline justify-between mb-3">
-        <h2 className="text-sm font-medium tracking-wide text-ink">
-          Portfolio vs {data.symbols.join(" · ")} ·{" "}
-          <span className="text-quiet">{data.days} days</span>
+        <h2 className="text-xs uppercase tracking-[0.06em] text-quiet">
+          Portfolio vs <span className="text-ink">{data.symbols.join(" · ")}</span> ·{" "}
+          <span className="text-ink">{data.days} days</span>
         </h2>
         <div className="flex gap-1 text-xs">
           {WINDOWS.map((w) => (

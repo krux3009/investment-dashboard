@@ -114,7 +114,11 @@ export function Donut({ holdings, size = 200 }: Props) {
         </path>
       ))}
       {slices.map((s) => {
-        if (s.fraction < 0.025) return null;
+        // Hide labels under 5%. Below that the wedge is so thin that
+        // an on-arc label overlaps the ring or its neighbour, and the
+        // tooltip + the underlying allocation table already carry the
+        // ticker → percentage mapping.
+        if (s.fraction < 0.05) return null;
         const mid = (s.startAngle + s.endAngle) / 2;
         const x = cx + labelR * Math.sin(mid);
         const y = cy - labelR * Math.cos(mid);

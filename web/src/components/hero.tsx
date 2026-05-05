@@ -49,23 +49,43 @@ export function Hero({ data }: Props) {
           )}
 
           {isMixed && (
-            <div className="text-xs text-whisper mt-3 tabular">
+            <div className="text-xs text-whisper mt-3 tabular flex flex-wrap items-baseline gap-x-3 gap-y-1">
               {ccyEntries
                 .sort(([, a], [, b]) => b - a)
-                .map(([ccy, amount]) => {
+                .map(([ccy, amount], i, arr) => {
                   const sym = CURRENCY_SYMBOLS[ccy] ?? "";
-                  return `${sym}${amount.toLocaleString("en-US", {
-                    maximumFractionDigits: 0,
-                  })} ${ccy}`;
-                })
-                .join("  ·  ")}
+                  return (
+                    <span key={ccy} className="inline-flex items-baseline gap-1">
+                      <span>
+                        {sym}
+                        {amount.toLocaleString("en-US", {
+                          maximumFractionDigits: 0,
+                        })}
+                      </span>
+                      <span className="text-whisper/80">{ccy}</span>
+                      {i < arr.length - 1 && (
+                        <span aria-hidden className="text-rule">·</span>
+                      )}
+                    </span>
+                  );
+                })}
               {data.fx_rates_used &&
                 Object.keys(data.fx_rates_used).length > 0 && (
-                  <span className="ml-3 text-whisper">
-                    {Object.entries(data.fx_rates_used)
-                      .map(([pair, rate]) => `${pair} ${rate.toFixed(4)}`)
-                      .join("  ·  ")}
-                  </span>
+                  <>
+                    <span aria-hidden className="text-rule">·</span>
+                    {Object.entries(data.fx_rates_used).map(
+                      ([pair, rate], i, arr) => (
+                        <span key={pair} className="inline-flex items-baseline gap-1">
+                          <span>
+                            {pair} {rate.toFixed(4)}
+                          </span>
+                          {i < arr.length - 1 && (
+                            <span aria-hidden className="text-rule">·</span>
+                          )}
+                        </span>
+                      ),
+                    )}
+                  </>
                 )}
             </div>
           )}

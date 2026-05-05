@@ -249,15 +249,34 @@ export function HoldingsTable({ holdings, sparklines, earningsByCode }: Props) {
                   </td>
 
                   <td className={`py-4 px-4 text-right tabular ${directionClass(h.today_change_pct)}`}>
-                    <div className="flex items-baseline justify-end gap-1.5">
-                      <span aria-hidden>{arrowFor(h.today_change_pct)}</span>
-                      <span>{fmtPct(h.today_change_pct, 2)}</span>
-                    </div>
-                    {h.today_change_abs !== null && (
-                      <div className="text-xs text-whisper">
-                        {fmtCurrency(h.today_change_abs, h.currency, { decimals: 2, signed: true })}
-                      </div>
-                    )}
+                    {(() => {
+                      // Both literal-zero pct AND zero abs is the
+                      // off-hours / market-closed footprint (moomoo's
+                      // position-side today_pl_val returns 0 outside
+                      // RTH, quote overlay null-fell-through). Render a
+                      // single em-dash placeholder rather than a
+                      // misleading "0.0% / $0" that reads as "no
+                      // movement today".
+                      const noData =
+                        (h.today_change_pct === 0 || h.today_change_pct === null) &&
+                        (h.today_change_abs === 0 || h.today_change_abs === null);
+                      if (noData) {
+                        return <span className="text-whisper">—</span>;
+                      }
+                      return (
+                        <>
+                          <div className="flex items-baseline justify-end gap-1.5">
+                            <span aria-hidden>{arrowFor(h.today_change_pct)}</span>
+                            <span>{fmtPct(h.today_change_pct, 2)}</span>
+                          </div>
+                          {h.today_change_abs !== null && (
+                            <div className="text-xs text-whisper">
+                              {fmtCurrency(h.today_change_abs, h.currency, { decimals: 2, signed: true })}
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </td>
 
                   <td className="py-4 px-4 text-right">

@@ -118,7 +118,7 @@ export function ConcentrationBlock({ initial }: Props) {
   return (
     <section className="my-12">
       <div className="flex items-baseline justify-between mb-3">
-        <h2 className="text-sm font-medium tracking-wide text-ink">
+        <h2 className="text-xs uppercase tracking-[0.06em] text-quiet">
           Shape of the book
         </h2>
         <button
