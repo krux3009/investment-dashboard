@@ -93,7 +93,7 @@ def _fetch_one(code: str, kind: AnomalyKind, time_range: int, language_id: int) 
 
 def fetch_all(
     code: str,
-    time_range: int = 7,
+    time_range: int = 30,
     language_id: int = 2,
 ) -> tuple[Anomaly, ...]:
     """Fetch both anomaly categories for a ticker. Cached per session.
@@ -117,7 +117,7 @@ def fetch_all(
 
 def fetch_all_plain(
     code: str,
-    time_range: int = 7,
+    time_range: int = 30,
     language_id: int = 2,
 ) -> tuple[Anomaly, ...]:
     """Same as fetch_all but rewrites moomoo's technical prose into plain

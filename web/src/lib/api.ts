@@ -77,6 +77,7 @@ export interface AnomalyItem {
 export interface AnomaliesResponse {
   code: string;
   items: AnomalyItem[];
+  time_range: number;
 }
 
 export async function fetchAnomalies(code: string): Promise<AnomaliesResponse> {

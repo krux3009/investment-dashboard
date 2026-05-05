@@ -21,6 +21,7 @@ export function DrillIn({ code, direction }: Props) {
   const [points, setPoints] = useState<PricePoint[] | null>(null);
   const [pricesError, setPricesError] = useState<string | null>(null);
   const [anomalyItems, setAnomalyItems] = useState<AnomalyItem[]>([]);
+  const [anomalyWindow, setAnomalyWindow] = useState(30);
   const [anomaliesLoading, setAnomaliesLoading] = useState(true);
   const [anomaliesError, setAnomaliesError] = useState<string | null>(null);
 
@@ -39,6 +40,7 @@ export function DrillIn({ code, direction }: Props) {
         const data = await fetchAnomalies(code);
         if (!cancelled) {
           setAnomalyItems(data.items);
+          setAnomalyWindow(data.time_range);
           setAnomaliesLoading(false);
         }
       } catch (e) {
@@ -79,6 +81,7 @@ export function DrillIn({ code, direction }: Props) {
           <div>
             <AnomalyBlock
               items={anomalyItems}
+              timeRange={anomalyWindow}
               loading={anomaliesLoading}
               error={anomaliesError}
             />
