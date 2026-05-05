@@ -1,0 +1,283 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-05-05T00:00:00Z",
+  "title": "Design System: Quiet Ledger",
+  "extensions": {
+    "colorMeta": {
+      "surface": {
+        "role": "neutral",
+        "displayName": "Paper Cream",
+        "canonical": "oklch(96% 0.005 75)",
+        "tonalRamp": [
+          "oklch(15% 0.005 75)",
+          "oklch(25% 0.005 75)",
+          "oklch(38% 0.005 75)",
+          "oklch(52% 0.005 75)",
+          "oklch(66% 0.005 75)",
+          "oklch(80% 0.005 75)",
+          "oklch(92% 0.005 75)",
+          "oklch(98% 0.004 75)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Warm Graphite Ink",
+        "canonical": "oklch(20% 0.008 60)",
+        "tonalRamp": [
+          "oklch(15% 0.008 60)",
+          "oklch(20% 0.008 60)",
+          "oklch(30% 0.008 60)",
+          "oklch(45% 0.008 60)",
+          "oklch(58% 0.007 65)",
+          "oklch(70% 0.008 60)",
+          "oklch(86% 0.006 70)",
+          "oklch(96% 0.005 75)"
+        ]
+      },
+      "quiet": {
+        "role": "neutral",
+        "displayName": "Quiet Ink",
+        "canonical": "oklch(45% 0.008 60)"
+      },
+      "whisper": {
+        "role": "neutral",
+        "displayName": "Whisper Ink",
+        "canonical": "oklch(58% 0.007 65)"
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Hairline Rule",
+        "canonical": "oklch(86% 0.006 70)"
+      },
+      "accent": {
+        "role": "primary",
+        "displayName": "Muted Rust Accent",
+        "canonical": "oklch(55% 0.12 28)",
+        "tonalRamp": [
+          "oklch(20% 0.06 28)",
+          "oklch(30% 0.09 28)",
+          "oklch(40% 0.11 28)",
+          "oklch(50% 0.12 28)",
+          "oklch(55% 0.12 28)",
+          "oklch(65% 0.11 28)",
+          "oklch(80% 0.07 28)",
+          "oklch(94% 0.025 28)"
+        ]
+      },
+      "accent-strong": {
+        "role": "primary",
+        "displayName": "Accent Strong",
+        "canonical": "oklch(60% 0.13 28)"
+      },
+      "gain": {
+        "role": "tertiary",
+        "displayName": "Muted Forest (Gain)",
+        "canonical": "oklch(48% 0.10 145)",
+        "tonalRamp": [
+          "oklch(20% 0.05 145)",
+          "oklch(30% 0.08 145)",
+          "oklch(40% 0.10 145)",
+          "oklch(48% 0.10 145)",
+          "oklch(58% 0.10 145)",
+          "oklch(70% 0.08 145)",
+          "oklch(85% 0.05 145)",
+          "oklch(94% 0.02 145)"
+        ]
+      },
+      "loss": {
+        "role": "tertiary",
+        "displayName": "Muted Sienna (Loss)",
+        "canonical": "oklch(48% 0.13 25)",
+        "tonalRamp": [
+          "oklch(20% 0.06 25)",
+          "oklch(30% 0.09 25)",
+          "oklch(40% 0.12 25)",
+          "oklch(48% 0.13 25)",
+          "oklch(58% 0.12 25)",
+          "oklch(70% 0.09 25)",
+          "oklch(85% 0.05 25)",
+          "oklch(94% 0.02 25)"
+        ]
+      },
+      "slice-1": {
+        "role": "secondary",
+        "displayName": "Sequential Graphite (largest)",
+        "canonical": "oklch(28% 0.008 60)",
+        "tonalRamp": [
+          "oklch(28% 0.008 60)",
+          "oklch(38% 0.008 60)",
+          "oklch(48% 0.008 60)",
+          "oklch(58% 0.008 60)",
+          "oklch(68% 0.008 60)",
+          "oklch(76% 0.007 65)",
+          "oklch(82% 0.007 70)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Hero USD total only. One per page."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Section anchors when prose introduces a block."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Card headings, ticker names, drill-in subheaders."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Default reading text. Insight prose, anomaly translations, position notes."
+      },
+      "label": {
+        "displayName": "Label cap",
+        "purpose": "Recurring section caption. The single most-used type role."
+      },
+      "numeric": {
+        "displayName": "Numeric",
+        "purpose": "Tabular figures via .tabular class on every numeric cell."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "Inline <code> only. Numbers do not switch to mono."
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "transition-colors",
+        "value": "color 200ms, background-color 200ms, border-color 200ms",
+        "purpose": "The only transition in the system. Applied to row hover, nav tab hover, theme toggle hover, sortable header hover, textarea focus."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "all transitions and animations zeroed via prefers-reduced-motion: reduce",
+        "purpose": "Global respect for OS-level reduced-motion."
+      }
+    ],
+    "breakpoints": [
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Section caption (label cap)",
+      "kind": "custom",
+      "refersTo": "label-cap",
+      "description": "The recurring uppercase caption that opens every block. The single most-used type role in the system; recurrence is the affordance.",
+      "html": "<div class=\"ds-label-cap\">Holdings</div>",
+      "css": ".ds-label-cap { font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 0.75rem; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: oklch(45% 0.008 60); margin-bottom: 0.75rem; }"
+    },
+    {
+      "name": "Sortable table header",
+      "kind": "button",
+      "refersTo": "sortable-header",
+      "description": "The header cell trigger inside holdings + watchlist tables. Three-click cycle: desc, asc, cleared. Persists in localStorage.",
+      "html": "<button type=\"button\" class=\"ds-sortable-header ds-sortable-header-active\" aria-sort=\"descending\">Total return<span class=\"ds-sortable-indicator\">↓</span></button>",
+      "css": ".ds-sortable-header { font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 0.75rem; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; color: oklch(58% 0.007 65); background: none; border: 0; padding: 0; cursor: pointer; transition: color 200ms; } .ds-sortable-header:hover { color: oklch(20% 0.008 60); } .ds-sortable-header-active { color: oklch(20% 0.008 60); } .ds-sortable-indicator { margin-left: 0.25rem; color: oklch(45% 0.008 60); }"
+    },
+    {
+      "name": "Drill-in container",
+      "kind": "card",
+      "refersTo": "drill-in",
+      "description": "Closest thing to a card in the system. Full-bleed inside the table row that expanded it. Two-column grid with chart left, insight + notes + anomalies right.",
+      "html": "<div class=\"ds-drill-in\"><div class=\"ds-drill-in-grid\"><div><div class=\"ds-label-cap\">Last 90 days</div><div style=\"height:220px;background:oklch(96% 0.005 75);border:1px solid oklch(86% 0.006 70);border-radius:2px;\"></div></div><div><div class=\"ds-label-cap\">What this means</div><div style=\"font-family:'IBM Plex Sans',system-ui,sans-serif;font-size:0.875rem;line-height:1.65;color:oklch(20% 0.008 60);\">Plain-English insight goes here, two short sentences, no jargon.</div></div></div></div>",
+      "css": ".ds-drill-in { background: oklch(94% 0.008 75); border-top: 1px solid oklch(86% 0.006 70); padding: 1.5rem; } .ds-drill-in-grid { display: grid; grid-template-columns: 1fr; gap: 2rem; } @media (min-width: 1024px) { .ds-drill-in-grid { grid-template-columns: 1fr 360px; } } .ds-label-cap { font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 0.75rem; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: oklch(45% 0.008 60); margin-bottom: 0.5rem; }"
+    },
+    {
+      "name": "Notes textarea",
+      "kind": "input",
+      "refersTo": "textarea-notes",
+      "description": "The only input in the system. Debounced auto-save (800ms idle). Empty placeholder is italic whisper text. Focus shifts the border to the muted rust accent.",
+      "html": "<div><div class=\"ds-label-cap\">Notes</div><textarea class=\"ds-textarea-notes\" rows=\"4\" placeholder=\"Thesis, triggers, risks…\" aria-label=\"Notes for US.NVDA\"></textarea><div class=\"ds-textarea-status\">Last saved · 30s ago</div></div>",
+      "css": ".ds-label-cap { font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 0.75rem; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: oklch(45% 0.008 60); margin-bottom: 0.75rem; } .ds-textarea-notes { width: 100%; background: oklch(98% 0.004 75); border: 1px solid oklch(86% 0.006 70); border-radius: 2px; padding: 0.5rem 0.75rem; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 0.875rem; line-height: 1.55; color: oklch(20% 0.008 60); resize: vertical; transition: border-color 200ms; } .ds-textarea-notes::placeholder { color: oklch(58% 0.007 65); font-style: italic; } .ds-textarea-notes:focus { outline: none; border-color: oklch(55% 0.12 28); } .ds-textarea-status { font-size: 0.75rem; color: oklch(58% 0.007 65); margin-top: 0.375rem; height: 1rem; }"
+    },
+    {
+      "name": "Navigation tab strip",
+      "kind": "nav",
+      "refersTo": "nav-tab-active",
+      "description": "Single header row across all routes. Lowercase tabs with a pb-1 border-b underline; active tab inks both the text and the underline.",
+      "html": "<header class=\"ds-nav\"><div class=\"ds-nav-group\"><div class=\"ds-nav-masthead\">quiet ledger</div><nav class=\"ds-nav-tabs\"><a class=\"ds-nav-tab ds-nav-tab-active\" href=\"/\">home</a><a class=\"ds-nav-tab\" href=\"/portfolio\">portfolio</a><a class=\"ds-nav-tab\" href=\"/watchlist\">watchlist</a></nav></div><button class=\"ds-theme-toggle\" type=\"button\">system (light)</button></header>",
+      "css": ".ds-nav { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 3rem; font-family: 'IBM Plex Sans', system-ui, sans-serif; } .ds-nav-group { display: flex; align-items: baseline; gap: 2rem; } .ds-nav-masthead { font-size: 0.875rem; font-weight: 500; letter-spacing: 0.025em; color: oklch(45% 0.008 60); } .ds-nav-tabs { display: flex; align-items: baseline; gap: 1.25rem; font-size: 0.75rem; } .ds-nav-tab { padding-bottom: 0.25rem; border-bottom: 1px solid transparent; color: oklch(45% 0.008 60); text-decoration: none; transition: color 200ms; } .ds-nav-tab:hover { color: oklch(20% 0.008 60); } .ds-nav-tab-active { color: oklch(20% 0.008 60); border-bottom-color: oklch(20% 0.008 60); } .ds-theme-toggle { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: oklch(45% 0.008 60); background: none; border: 0; cursor: pointer; transition: color 200ms; } .ds-theme-toggle:hover { color: oklch(20% 0.008 60); }"
+    },
+    {
+      "name": "Sparkline (30-day)",
+      "kind": "custom",
+      "refersTo": "sparkline",
+      "description": "Hand-rolled SVG path, 96x28 viewBox. Stroke color is the gain, loss, or quiet token depending on net direction over the window. SSR-renderable.",
+      "html": "<svg class=\"ds-sparkline\" width=\"96\" height=\"28\" viewBox=\"0 0 96 28\" role=\"img\" aria-label=\"30-day price trend, gain\"><path d=\"M2,22 L5,20 L8,18 L11,19 L14,17 L17,15 L20,16 L23,14 L26,13 L29,15 L32,12 L35,11 L38,12 L41,10 L44,9 L47,11 L50,8 L53,7 L56,9 L59,6 L62,5 L65,7 L68,4 L71,6 L74,3 L77,5 L80,2 L83,4 L86,6 L89,3 L92,5 L94,4\" fill=\"none\" stroke=\"oklch(48% 0.10 145)\" stroke-width=\"1.25\" stroke-linecap=\"round\" stroke-linejoin=\"round\" /></svg>",
+      "css": ".ds-sparkline { display: inline-block; }"
+    },
+    {
+      "name": "Calendar mark",
+      "kind": "custom",
+      "refersTo": "calendar-mark",
+      "description": "Inline 12px outlined-stroke calendar glyph next to a ticker name when earnings is within 14 days. currentColor follows theme; title attribute carries the date.",
+      "html": "<span class=\"ds-calendar-mark\" title=\"Earnings May 13 · in 8 days\" aria-label=\"Earnings May 13 (in 8 days)\"><svg width=\"12\" height=\"12\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"2.5\" y=\"3.5\" width=\"11\" height=\"10\" rx=\"1\" /><line x1=\"2.5\" y1=\"6.5\" x2=\"13.5\" y2=\"6.5\" /><line x1=\"5.5\" y1=\"2\" x2=\"5.5\" y2=\"4.5\" /><line x1=\"10.5\" y1=\"2\" x2=\"10.5\" y2=\"4.5\" /></svg></span>",
+      "css": ".ds-calendar-mark { display: inline-flex; align-items: center; color: oklch(45% 0.008 60); cursor: help; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Quiet Ledger",
+    "overview": "The dashboard is a paper-and-ink ledger for a long-horizon investor, a place for sitting with positions, not reacting to them. Warm graphite type rests on cream in light mode; in dark mode the same family inverts to paper-cream ink on a warm-graphite surface. The accent is rare on purpose. Numbers are reported with the same typographic gravity at 0.2% as at 5%; the data does the talking, not the chrome. Mercury for restraint, Linear for craft, Notion for the canvas-as-page feel.\n\nExplicitly not a Bloomberg full-clone, not Robinhood, not the generic LLM SaaS dashboard. The reading room rejects all three by construction.\n\nThree thin server-component routes (/, /portfolio, /watchlist) share a single max-w-6xl column, a NavBar tab strip in pb-1 border-b underline form, and a theme toggle that cycles system → light → dark → system. Tokens are CSS custom properties in web/src/app/globals.css; light is default, dark inverts under the .dark class. Both modes are first-class.",
+    "keyCharacteristics": [
+      "Paper-cream surface, warm-graphite ink, one rare rust accent.",
+      "One humanist sans family (IBM Plex Sans + Plex Mono), tabular figures opt-in on numeric cells.",
+      "Flat by default; depth from spacing, hairline borders, and tonal contrast within the warm-neutral family.",
+      "Two densities (glance, study) sharing one visual vocabulary; drill-in not switch-of-surface is how density scales.",
+      "Color never carries meaning alone; gain/loss always paired with arrow + sign.",
+      "Charts that ship in SSR HTML are hand-rolled SVG; Recharts only inside lazy-mounted drill-ins.",
+      "Restrained motion: state changes only; prefers-reduced-motion: reduce zeroes all transitions and animations globally."
+    ],
+    "rules": [
+      { "name": "The OKLCH Doctrine", "body": "Every color in the system is OKLCH, even where it triggers a Stitch linter warning on the frontmatter. The surface family lives in a narrow chroma band (0.005-0.013) so neutrals visibly belong to the warm cream rather than drift into cool gray.", "section": "colors" },
+      { "name": "The One Voice Rule", "body": "The accent is used on ≤10% of any screen. Its rarity is the message. Two accents on one view is one accent too many.", "section": "colors" },
+      { "name": "The No-Green-On-Red Rule", "body": "Gain and loss are never communicated by color alone. Every up/down value carries an arrow (↑/↓), explicit sign (+/−), or positional cue. Color is reinforcement, never the signal.", "section": "colors" },
+      { "name": "The Tinted-Neutral Rule", "body": "Pure black and pure white are forbidden. Every neutral is tinted toward the warm surface family with chroma 0.005-0.01.", "section": "colors" },
+      { "name": "The Dark-Mode Parity Rule", "body": "Dark is not a reskin and not an afterthought. Every token has a paired dark value, every component reads on both surfaces, and the theme toggle cycles system → light → dark → system.", "section": "colors" },
+      { "name": "The One Family Rule", "body": "Every glyph in the interface comes from IBM Plex Sans (or Plex Mono for inline code) at varying weights.", "section": "typography" },
+      { "name": "The Tabular-Numbers Rule", "body": "All numeric data uses tabular figures. Body text keeps tabular off so prose reads naturally; the .tabular class is opt-in on every numeric cell, header, and data caption.", "section": "typography" },
+      { "name": "The Same-Gravity Rule", "body": "A 0.2% move and a 5% move share the same typographic treatment. Magnitude is read from the digits, not from size.", "section": "typography" },
+      { "name": "The Lowercase-Chrome Rule", "body": "Navigation tabs and chrome labels render lowercase. The label cap above each block is the only uppercase element in the system.", "section": "typography" },
+      { "name": "The Flat-By-Default Rule", "body": "Surfaces have no shadow at rest. If a hover state ever introduces shadow, it is hairline and reserved for genuinely interactive elements.", "section": "elevation" },
+      { "name": "The No-Floating-Cards Rule", "body": "Cards are not the default container. Most things are sections divided by spacing and a hairline rule. The drill-in is the closest thing to a card and is full-bleed within the row it expands from.", "section": "elevation" },
+      { "name": "The Color-Only Transitions Rule", "body": "Transitions animate color and opacity. Never transform, never layout properties. Numbers do not animate in or out; they update.", "section": "elevation" },
+      { "name": "The Hand-Rolled-SVG Rule", "body": "Charts that ship in SSR HTML are hand-rolled SVG (sparkline, donut, concentration stack, currency stack, benchmark line). Recharts is reserved for lazy-mounted drill-in surfaces.", "section": "elevation" },
+      { "name": "The Same-Caption Rule", "body": "Every block opens with the text-xs uppercase tracking-[0.06em] text-quiet caption. Recurrence is the affordance.", "section": "elevation" },
+      { "name": "The Drill-In-Not-Modal Rule", "body": "A row's depth is reached by expanding inline, not by opening a modal or navigating to a sub-page.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do keep the accent under 10% of any screen. Its rarity is the point.",
+      "Do pair every gain/loss color with an arrow and explicit sign. Color is reinforcement, never the signal.",
+      "Do add the .tabular class to every numeric cell, header, and caption. Body text stays non-tabular.",
+      "Do tint every neutral toward the warm surface family. Chroma 0.005-0.01. No #000. No #fff.",
+      "Do treat a 5% move and a 0.2% move with the same typographic gravity.",
+      "Do scale glance-density to study-density by drilling in, not by switching to a different layout.",
+      "Do keep prose at 65-75ch line length where prose runs long.",
+      "Do reach for full borders or background tint when separation is needed.",
+      "Do ship hand-rolled SVG for any chart that lives in SSR HTML; reserve Recharts for lazy-mounted drill-ins.",
+      "Do open every block with the text-xs uppercase tracking-[0.06em] text-quiet caption. The recurrence is the affordance.",
+      "Do keep advisor copy plain-English: never buy, sell, hold, trim, add, target, forecast, predict, recommend, you should, rally, surge, soar, crash."
+    ],
+    "donts": [
+      "Don't become a Bloomberg / MarketWatch full-clone. Twenty widgets, blinking tickers, every metric possible.",
+      "Don't use the crypto neon-on-black hype look. Hot pink / cyan on near-black, glow effects.",
+      "Don't become Robinhood. No gotcha-green, no candy gradients, no confetti, no big-number-flex hero.",
+      "Don't ship the generic LLM-default SaaS dashboard. No Inter, no slate-blue, no cards-nested-in-cards.",
+      "Don't use border-left greater than 1px as a colored accent stripe on cards or alerts.",
+      "Don't apply background-clip: text with a gradient. Use a single solid color, with emphasis through weight.",
+      "Don't apply backdrop-filter: blur decoratively. No glassmorphism unless purposeful and rare.",
+      "Don't build a hero-metric template (huge number, small label, supporting stats, gradient accent).",
+      "Don't repeat identical card grids. Same-sized cards with icon + heading + text endlessly is a layout failure.",
+      "Don't reach for a modal as the first thought. Exhaust inline and progressive (drill-in) alternatives first.",
+      "Don't animate prices in or out. Numbers updating is the data doing its job.",
+      "Don't animate transform or layout. Color and opacity only, ≤200ms.",
+      "Don't use bounce or elastic easing. Ease out with exponential curves.",
+      "Don't use em dashes in copy. Use commas, colons, semicolons, periods, or parentheses.",
+      "Don't introduce a second sans family. One Plex Sans for everything; Plex Mono only for inline code."
+    ]
+  }
+}

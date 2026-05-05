@@ -2,7 +2,7 @@
 
 ## Design Context
 
-This project uses [Impeccable](https://impeccable.style) for design fluency. Strategic context lives in [PRODUCT.md](./PRODUCT.md); visual system in [DESIGN.md](./DESIGN.md) (currently a `<!-- SEED -->` — re-run `/impeccable document` once the v3 React surface stabilises to capture actual tokens).
+This project uses [Impeccable](https://impeccable.style) for design fluency. Strategic context lives in [PRODUCT.md](./PRODUCT.md); visual system in [DESIGN.md](./DESIGN.md) and [DESIGN.json](./DESIGN.json) sidecar (captured 2026-05-05 via `/impeccable document` against the v3 React surface — frontmatter tokens, six-section body, hand-rolled-SVG + label-cap rules, dark/light parity tables, drill-in / textarea / nav-tab component primitives).
 
 **Quick read:**
 - **Register:** product (dashboard, app UI). Design serves the data.
