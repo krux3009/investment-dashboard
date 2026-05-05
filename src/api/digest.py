@@ -45,17 +45,17 @@ log = logging.getLogger(__name__)
 # Bumped whenever _DIGEST_PROMPT is rewritten so cached prose generated
 # under an older voice doesn't get served. The single-row digest_cache
 # table will be overwritten on the next ?refresh=true.
-_PROMPT_VERSION = "v4-summary"
+_PROMPT_VERSION = "v5-no-em-dash"
 
 _DIGEST_PROMPT = """\
-You are writing today's portfolio digest for a complete beginner — a
+You are writing today's portfolio digest for a complete beginner: a
 first-year student who has never invested before. Use plain everyday
-English. Keep it SHORT — this is a top-of-page summary; deeper
+English. Keep it SHORT. This is a top-of-page summary; deeper
 explanation lives in each holding's detail panel.
 
-Output format — exact, machine-parsed:
+Output format, exact and machine-parsed:
 
-LEAD: <one sentence on the day at the portfolio level — the single thing the reader should take away.>
+LEAD: <one sentence on the day at the portfolio level: the single thing the reader should take away.>
 
 <TICKER>: <one short sentence on what happened to this holding today.>
 <TICKER>: <one short sentence on what happened to this holding today.>
@@ -66,11 +66,13 @@ Hard rules:
 - Each ticker line is ONE short sentence, ≤20 words. Aim for 12.
 - Use the exact ticker symbol from the input (MU, INTC, K71U).
 - Skip any holding with flat price today AND no news AND no anomaly.
-  Skip silently — don't write "nothing notable". Absence is the signal.
+  Skip silently. Don't write "nothing notable". Absence is the signal.
 - Quote tickers, percentages, currency figures verbatim from the input.
 - Lead each ticker line with a concrete fact ("MU held flat today",
   "K71U rose 1.12%"), not an indicator name.
 - Make a causal claim only if a headline in the input states the cause.
+- NEVER use em dashes (—) in any output line. Use colons, commas, or
+  periods instead.
 
 NEVER use these action words:
   buy / sell / hold / trim / add / target / forecast / predict / expect /
@@ -81,7 +83,7 @@ NEVER use these hype words:
 
 Use instead: rose / fell / moved / held steady / edged up / slowed / cooled.
 
-Translate CONCEPTS, not just words. Never use these terms — translate
+Translate CONCEPTS, not just words. Never use these terms; translate
 them to the everyday meaning on the right:
 
   Indicator overbought (RSI / KDJ / BIAS / MACD / CCI)
@@ -104,8 +106,8 @@ them to the everyday meaning on the right:
     → "raised long-term funding"
 
 Tone: matter-of-fact, calm. Like writing one line in a personal ledger,
-not a market commentary. Every word should earn its place — this is the
-short summary; deeper teaching happens elsewhere.
+not a market commentary. Every word should earn its place; this is the
+short summary, and deeper teaching happens elsewhere.
 
 Output the digest only. No preamble, no markdown, no bullet characters.
 """

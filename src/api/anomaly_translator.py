@@ -37,7 +37,7 @@ _TTL = timedelta(days=7)
 # Bumped whenever _TRANSLATOR_PROMPT is rewritten so the cache key
 # changes and old translations aren't served. The actual cached row
 # stays in DuckDB until the 7d TTL expires; we just stop reading it.
-_PROMPT_VERSION = "v2"
+_PROMPT_VERSION = "v3-no-em-dash"
 
 # The translator's system prompt. Mirrors the digest prompt's banned
 # words so the LEAD / ticker rows and the drill-in speak the same voice.
@@ -55,6 +55,8 @@ Hard rules:
 - State observations only. No buy / sell / hold / target / forecast /
   predict / recommend. No hype words (surge, plunge, soar, crash,
   breakout, rally, tank).
+- NEVER use em dashes (—) in the output. Use colons, commas, or
+  periods instead.
 
 Translate these CONCEPTS, not just the words. The output must read
 like everyday English a parent could understand:

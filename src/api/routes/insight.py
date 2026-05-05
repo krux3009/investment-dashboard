@@ -1,9 +1,10 @@
-"""GET /api/insight/{code} — per-stock Meaning + Watch lines.
+"""GET /api/insight/{code}: per-stock Meaning + Watch lines.
 
 Wraps api.insight.get_insight. Returns 503 if ANTHROPIC_API_KEY is
 missing so the drill-in can render a quiet "configure API key" hint
-instead of erroring out. Returns 404 if the code isn't a current
-holding.
+instead of erroring out. Returns 200 with empty `meaning` / `watch`
+when the code isn't a current holding so the watchlist drill-in
+doesn't log a console error for every non-held name.
 """
 
 from __future__ import annotations
@@ -30,7 +31,15 @@ def get_insight(code: str, refresh: bool = Query(False)) -> dict:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     if ins is None:
-        raise HTTPException(status_code=404, detail=f"{code} is not a current holding")
+        return {
+            "code": code,
+            "ticker": code.split(".", 1)[-1],
+            "meaning": "",
+            "watch": "",
+            "generated_at": "",
+            "cached": False,
+            "available": False,
+        }
 
     return {
         "code": ins.code,
@@ -39,4 +48,5 @@ def get_insight(code: str, refresh: bool = Query(False)) -> dict:
         "watch": ins.watch,
         "generated_at": ins.generated_at.isoformat(),
         "cached": ins.cached,
+        "available": True,
     }

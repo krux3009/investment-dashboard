@@ -1,11 +1,12 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
+
 import type { PricePoint } from "@/lib/api";
 import {
   CartesianGrid,
   Line,
   LineChart,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
@@ -43,6 +44,23 @@ const fmtPrice = (n: number) =>
   n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export function PriceChart({ points, height = 220, direction = "quiet" }: Props) {
+  // Measure our wrapper ourselves rather than rely on Recharts'
+  // ResponsiveContainer. ResponsiveContainer reports width(-1) height(-1)
+  // on the first paint inside a freshly-expanded drill-in (the parent
+  // flex column hasn't measured yet) and emits a noisy console warning.
+  // A ResizeObserver gives us a positive width before we mount the chart.
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    if (!wrapperRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width ?? 0;
+      if (w > 0) setWidth(w);
+    });
+    observer.observe(wrapperRef.current);
+    return () => observer.disconnect();
+  }, []);
+
   if (!points || points.length < 2) {
     return (
       <div
@@ -54,16 +72,16 @@ export function PriceChart({ points, height = 220, direction = "quiet" }: Props)
     );
   }
 
-  // Decide how many x-axis ticks to render — every ~12 points is plenty.
+  // Decide how many x-axis ticks to render: every ~12 points is plenty.
   const tickStep = Math.max(1, Math.floor(points.length / 6));
   const xTicks = points
     .filter((_, i) => i % tickStep === 0)
     .map((p) => p.date);
 
   return (
-    <div style={{ height }} className="w-full">
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={points} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
+    <div ref={wrapperRef} style={{ height }} className="w-full">
+      {width > 0 && (
+        <LineChart width={width} height={height} data={points} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
           <CartesianGrid
             stroke="var(--rule)"
             strokeDasharray="0"
@@ -111,7 +129,7 @@ export function PriceChart({ points, height = 220, direction = "quiet" }: Props)
             isAnimationActive={false}
           />
         </LineChart>
-      </ResponsiveContainer>
+      )}
     </div>
   );
 }

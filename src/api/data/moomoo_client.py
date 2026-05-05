@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import os
+from dataclasses import replace
 from datetime import datetime
 from typing import Any
 
@@ -126,6 +127,42 @@ class MoomooClient:
             except Exception as exc:
                 log.warning("Failed to fetch %s positions: %s", market, exc)
                 any_failure = True
+
+        # Overlay today's % / abs from the quote-side snapshot. The
+        # position-side today_pl_val often returns 0 outside US RTH (even
+        # on SG/HK names that are actively trading), while the same quote
+        # snapshot the watchlist uses returns a live change_rate. Prefer
+        # the quote whenever it has a value; fall back to the position
+        # field when the quote is null.
+        if positions:
+            try:
+                from api.data import quotes as _quotes
+                quote_map = _quotes.get_quotes([p.code for p in positions])
+            except Exception as exc:
+                log.warning("quote overlay failed: %s", exc)
+                quote_map = {}
+            if quote_map:
+                new_positions: list[Position] = []
+                for p in positions:
+                    q = quote_map.get(p.code)
+                    if q is not None and q.today_change_pct is not None:
+                        # quote.today_change_abs is per-share; position abs
+                        # is the dollar change for the whole holding.
+                        new_abs = (
+                            q.today_change_abs * p.qty
+                            if q.today_change_abs is not None
+                            else None
+                        )
+                        new_positions.append(
+                            replace(
+                                p,
+                                today_change_pct=q.today_change_pct,
+                                today_change_abs=new_abs,
+                            )
+                        )
+                    else:
+                        new_positions.append(p)
+                positions = new_positions
 
         # If the whole fetch failed AND we have a cache, return stale.
         if any_failure and not positions and self._cache is not None:

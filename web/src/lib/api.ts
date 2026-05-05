@@ -156,10 +156,11 @@ export interface InsightResponse {
   watch: string;
   generated_at: string;
   cached: boolean;
+  available?: boolean;
 }
 
 export type InsightResult =
-  | { ok: true; data: InsightResponse }
+  | { ok: true; data: InsightResponse | null }
   | { ok: false; status: number; detail: string };
 
 export async function fetchInsight(code: string, refresh = false): Promise<InsightResult> {
@@ -175,7 +176,9 @@ export async function fetchInsight(code: string, refresh = false): Promise<Insig
     }
     return { ok: false, status: res.status, detail };
   }
-  return { ok: true, data: (await res.json()) as InsightResponse };
+  const data = (await res.json()) as InsightResponse;
+  if (data.available === false) return { ok: true, data: null };
+  return { ok: true, data };
 }
 
 export interface EarningsItem {
@@ -218,7 +221,6 @@ export type NoteResult =
 export async function fetchNote(code: string): Promise<NoteResult> {
   const url = `${API_BASE}/api/notes/${encodeURIComponent(code)}`;
   const res = await fetch(url, { cache: "no-store" });
-  if (res.status === 404) return { ok: true, data: null };
   if (!res.ok) {
     let detail = `${res.status}`;
     try {
@@ -229,7 +231,11 @@ export async function fetchNote(code: string): Promise<NoteResult> {
     }
     return { ok: false, status: res.status, detail };
   }
-  return { ok: true, data: (await res.json()) as Note };
+  const note = (await res.json()) as Note;
+  // Backend now returns 200 with body="" when no note exists yet.
+  // Collapse that to null so consumers can use a single "no note" path.
+  if (!note.body) return { ok: true, data: null };
+  return { ok: true, data: note };
 }
 
 export type PutNoteResult =

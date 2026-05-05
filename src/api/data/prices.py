@@ -77,9 +77,76 @@ def _quote_ctx():
     return anomalies._quote_ctx()  # noqa: SLF001 — deliberate reuse
 
 
-def _fetch_and_cache(code: str, start: date, end: date) -> int:
-    """Pull moomoo bars for [start, end] (inclusive) and merge into the cache.
-    Returns the number of rows fetched (0 on any failure).
+def _to_yfinance_symbol(code: str) -> str | None:
+    """Convert moomoo's `MARKET.TICKER` to yfinance's symbol."""
+    if "." not in code:
+        return code
+    market, ticker = code.split(".", 1)
+    market = market.upper()
+    if market == "US":
+        return ticker
+    if market == "HK":
+        return f"{ticker.zfill(4)}.HK"
+    if market == "SG":
+        return f"{ticker}.SI"
+    if market == "JP":
+        return f"{ticker}.T"
+    if market == "CN":
+        if ticker.startswith("6"):
+            return f"{ticker}.SS"
+        return f"{ticker}.SZ"
+    return None
+
+
+def _fetch_yfinance_rows(code: str, start: date, end: date) -> list[tuple]:
+    """yfinance fallback for markets moomoo OpenD can't serve (SG without
+    subscription, etc.). Returns rows in the same shape as moomoo's path
+    so the caller's INSERT statement is identical.
+    """
+    symbol = _to_yfinance_symbol(code)
+    if not symbol:
+        return []
+    try:
+        import yfinance as yf
+
+        # yfinance's `end` is exclusive; bump by one day so the last bar
+        # is included.
+        df = yf.Ticker(symbol).history(
+            start=start.strftime("%Y-%m-%d"),
+            end=(end + timedelta(days=1)).strftime("%Y-%m-%d"),
+            auto_adjust=True,
+            actions=False,
+        )
+    except Exception as exc:
+        log.warning("yfinance history %s (%s) exception: %s", code, symbol, exc)
+        return []
+    if df is None or df.empty:
+        return []
+
+    rows: list[tuple] = []
+    for ts, r in df.iterrows():
+        try:
+            d = ts.date()
+        except AttributeError:
+            d = pd.to_datetime(ts).date()
+        rows.append(
+            (
+                code,
+                d,
+                float(r.get("Open") or 0),
+                float(r.get("Close") or 0),
+                float(r.get("High") or 0),
+                float(r.get("Low") or 0),
+                int(r.get("Volume") or 0),
+            )
+        )
+    return rows
+
+
+def _fetch_moomoo_rows(code: str, start: date, end: date) -> list[tuple] | None:
+    """Pull moomoo bars for [start, end]. Returns None on RPC error /
+    empty result (caller decides whether to try yfinance). Returns []
+    on a real-but-empty response.
     """
     from moomoo import AuType, KLType
 
@@ -94,13 +161,13 @@ def _fetch_and_cache(code: str, start: date, end: date) -> int:
         )
     except Exception as exc:
         log.warning("history_kline %s [%s..%s] exception: %s", code, start, end, exc)
-        return 0
+        return None
 
-    if ret != 0 or data is None or len(data) == 0:
-        if ret != 0:
-            log.warning("history_kline %s ret=%s data=%s", code, ret, data)
-            _UNFETCHABLE.add(code)
-        return 0
+    if ret != 0:
+        log.warning("history_kline %s ret=%s data=%s", code, ret, data)
+        return None
+    if data is None or len(data) == 0:
+        return []
 
     rows: list[tuple] = []
     for _, r in data.iterrows():
@@ -115,11 +182,31 @@ def _fetch_and_cache(code: str, start: date, end: date) -> int:
                 int(r.get("volume") or 0),
             )
         )
+    return rows
+
+
+def _fetch_and_cache(code: str, start: date, end: date) -> int:
+    """Pull bars for [start, end] (inclusive) and merge into the cache.
+    Tries moomoo first; falls back to yfinance for codes moomoo's OpenD
+    can't serve (e.g. SG market without a paid subscription). Returns
+    the number of rows merged.
+    """
+    rows = _fetch_moomoo_rows(code, start, end)
+    if not rows:
+        rows = _fetch_yfinance_rows(code, start, end)
+    if not rows:
+        # Both sources empty: mark as unfetchable so we stop hammering on
+        # every poll. Cleared on process restart.
+        _UNFETCHABLE.add(code)
+        return 0
+
     with _DB_LOCK:
         _db().executemany(
             "INSERT OR REPLACE INTO daily_prices VALUES (?, ?, ?, ?, ?, ?, ?)",
             rows,
         )
+    # If yfinance rescued a previously-blacklisted code, lift the block.
+    _UNFETCHABLE.discard(code)
     return len(rows)
 
 

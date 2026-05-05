@@ -35,7 +35,7 @@ from api.digest import _fetch_news
 log = logging.getLogger(__name__)
 
 _TTL = timedelta(hours=6)
-_PROMPT_VERSION = "v2-tight"
+_PROMPT_VERSION = "v3-no-em-dash"
 
 _INSIGHT_PROMPT = """\
 You are writing two short educational lines for ONE stock holding in a
@@ -43,18 +43,20 @@ beginner investor's dashboard. The reader is a first-year student who
 has never invested. They have already read a one-line summary at the top
 of the page; this is the deeper explanation for THIS specific stock.
 
-Output format — exact, machine-parsed, two lines:
+Output format, exact and machine-parsed, two lines:
 
-Meaning: <one educational sentence — what today's number/move means in context. Why it's notable, how it compares to typical, what pattern it fits, or what news connects to it.>
-Watch: <one sentence — what to monitor in the next few sessions. Frame as observation targets, not actions.>
+Meaning: <one educational sentence: what today's number or move means in context. Why it's notable, how it compares to typical, what pattern it fits, or what news connects to it.>
+Watch: <one sentence: what to monitor in the next few sessions. Frame as observation targets, not actions.>
 
 Hard rules:
 - EXACTLY two lines, with the literal labels "Meaning:" and "Watch:".
 - Each line ONE sentence, ≤22 words. Aim for 15. Brevity is valued.
-- Do not repeat the today's-move number — the summary already has it.
+- Do not repeat the today's-move number; the summary already has it.
   Use it as context for the educational point.
 - Quote tickers, percentages, and currency figures verbatim if you use
   them. Numbers stay; words around them must be plain.
+- NEVER use em dashes (—) in any output line. Use colons, commas, or
+  periods instead.
 
 NEVER use these action words:
   buy / sell / hold / trim / add / target / forecast / predict / expect /
@@ -63,7 +65,7 @@ NEVER use these action words:
 NEVER use these hype words:
   surge / plunge / soar / crash / breakout / rally / tank.
 
-Translate CONCEPTS, not just words. Never use these terms — use the
+Translate CONCEPTS, not just words. Never use these terms; use the
 plain meaning on the right:
 
   Indicator overbought (RSI / KDJ / BIAS / MACD / CCI)
@@ -83,8 +85,8 @@ plain meaning on the right:
 
 The "Meaning" line is the heart of this output. Make it teach. Prefer:
 - Comparisons to typical ("a 43% one-month gain is unusually large for
-  a public stock — most don't move that fast in a month")
-- Pattern recognition ("flat days after big runs are normal — the
+  a public stock; most don't move that fast in a month")
+- Pattern recognition ("flat days after big runs are normal: the
   price is digesting the move, not weakening")
 - Connecting threads between news + price + flows
 

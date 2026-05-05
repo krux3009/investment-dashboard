@@ -19,7 +19,7 @@ from api.data import prices
 log = logging.getLogger(__name__)
 
 _TTL = timedelta(hours=6)
-_PROMPT_VERSION = "v1"
+_PROMPT_VERSION = "v2-no-em-dash"
 
 _PROMPT = """\
 You are writing three short educational lines about the SHAPE of a
@@ -28,14 +28,14 @@ reader is a first-year student. They already see the numeric ratios
 (top-1, top-3, top-5 share, currency exposure, largest position);
 this is the deeper plain-English context.
 
-Output format — exact, machine-parsed, three lines:
+Output format, exact and machine-parsed, three lines:
 
-What: <one sentence — describe the shape of the book in plain words.
+What: <one sentence: describe the shape of the book in plain words.
        Name the most concentrated position and the dominant currency
        if relevant.>
-Meaning: <one sentence — what the shape means in plain terms. Pattern
+Meaning: <one sentence: what the shape means in plain terms. Pattern
           or context. Avoid jargon.>
-Watch: <one sentence — what to monitor as the shape changes over time
+Watch: <one sentence: what to monitor as the shape changes over time
         (observation target, never an action).>
 
 Hard rules:
@@ -43,6 +43,8 @@ Hard rules:
   "Watch:".
 - Each line ONE sentence, ≤22 words. Aim for 15.
 - Percentages quoted verbatim if used.
+- NEVER use em dashes (—) in any output line. Use colons, commas, or
+  periods instead.
 
 NEVER use these action words:
   buy / sell / hold / trim / add / target / forecast / predict / expect /

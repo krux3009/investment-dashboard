@@ -22,7 +22,7 @@ from api.data.moomoo_client import get_summary
 log = logging.getLogger(__name__)
 
 _TTL = timedelta(hours=6)
-_PROMPT_VERSION = "v1"
+_PROMPT_VERSION = "v2-no-em-dash"
 
 _PROMPT = """\
 You are writing three short educational lines about an UPCOMING event
@@ -31,18 +31,20 @@ stocks; the event is on their forward calendar. They already see the
 event date and short description; this is the deeper plain-English
 context.
 
-Output format — exact, machine-parsed, three lines:
+Output format, exact and machine-parsed, three lines:
 
-What: <one sentence — describe the event itself in plain words.>
-Meaning: <one sentence — how it connects to the listed holdings,
+What: <one sentence: describe the event itself in plain words.>
+Meaning: <one sentence: how it connects to the listed holdings,
           observationally.>
-Watch: <one sentence — what an attentive investor would observe as
+Watch: <one sentence: what an attentive investor would observe as
         the date approaches. Observation target, never an action.>
 
 Hard rules:
 - EXACTLY three lines, with the literal labels "What:" / "Meaning:" /
   "Watch:".
 - Each line ONE sentence, ≤22 words. Aim for 15.
+- NEVER use em dashes (—) in any output line. Use colons, commas, or
+  periods instead.
 
 NEVER use these action words:
   buy / sell / hold / trim / add / target / forecast / predict / expect /

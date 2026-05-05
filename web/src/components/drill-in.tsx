@@ -74,12 +74,7 @@ export function DrillIn({ code, direction }: Props) {
         </div>
 
         <div className="flex flex-col gap-7">
-          <div>
-            <div className="text-xs uppercase tracking-[0.06em] text-quiet mb-3">
-              What this means
-            </div>
-            <InsightBlock code={code} />
-          </div>
+          <InsightBlock code={code} />
           <NotesBlock code={code} />
           <div>
             <AnomalyBlock

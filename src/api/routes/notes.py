@@ -1,6 +1,10 @@
 """Notes CRUD routes.
 
-GET /api/notes/{code} → 200 with Note, 404 if absent.
+GET /api/notes/{code} → 200 with Note. Empty `body` indicates no note
+                        exists yet; the frontend treats that as null.
+                        Always returns 200 so a missing note doesn't
+                        spam the browser console with 404 errors on
+                        every drill-in expand.
 PUT /api/notes/{code} → 200 with persisted Note. Empty body deletes
                         and returns 204.
 DELETE /api/notes/{code} → 204, 404 if absent.
@@ -35,7 +39,7 @@ def _to_response(note: notes.Note) -> Note:
 def get_note(code: str) -> Note:
     note = notes.get_note(code)
     if note is None:
-        raise HTTPException(status_code=404, detail="no note")
+        return Note(code=code, body="", updated_at="")
     return _to_response(note)
 
 

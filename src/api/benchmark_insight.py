@@ -20,7 +20,7 @@ from api.data import prices
 log = logging.getLogger(__name__)
 
 _TTL = timedelta(hours=6)
-_PROMPT_VERSION = "v1"
+_PROMPT_VERSION = "v2-no-em-dash"
 
 _PROMPT = """\
 You are writing three short educational lines about a personal-portfolio
@@ -28,14 +28,14 @@ performance comparison for a beginner investor's dashboard. The reader
 is a first-year student. They already see the chart and the percentage
 change for each line; this is the deeper plain-English context.
 
-Output format — exact, machine-parsed, three lines:
+Output format, exact and machine-parsed, three lines:
 
-What: <one sentence — describe the relationship between the portfolio
+What: <one sentence: describe the relationship between the portfolio
        line and each benchmark line over the window. Plain everyday
        words, no jargon.>
-Meaning: <one sentence — what the relationship means in plain terms.
+Meaning: <one sentence: what the relationship means in plain terms.
           Pattern, comparison, or context. Avoid jargon.>
-Watch: <one sentence — what to monitor going forward as an observation
+Watch: <one sentence: what to monitor going forward as an observation
         target, never an action.>
 
 Hard rules:
@@ -43,7 +43,9 @@ Hard rules:
   "Watch:".
 - Each line ONE sentence, ≤22 words. Aim for 15.
 - Percentages quoted verbatim if used. The educational point is
-  qualitative — the numbers stand on their own.
+  qualitative; the numbers stand on their own.
+- NEVER use em dashes (—) in any output line. Use colons, commas, or
+  periods instead.
 
 NEVER use these action words:
   buy / sell / hold / trim / add / target / forecast / predict / expect /
@@ -54,7 +56,7 @@ NEVER use these hype words:
 
 Translate concepts: never use alpha / beta / outperform / underperform /
 benchmark-beating / track-record / risk-adjusted. Plain everyday English
-only — describe shape and direction, not finance theory.
+only; describe shape and direction, not finance theory.
 
 Tone: matter-of-fact, calm. Like a patient teacher writing one note in
 a personal ledger.
