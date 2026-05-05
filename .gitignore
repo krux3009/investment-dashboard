@@ -26,3 +26,7 @@ wheels/
 
 # Local-only session retrospectives (personal review, not shared)
 /sessions/
+
+# Playwright MCP runtime + audit screenshots
+.playwright-mcp/
+/audit-*.png
