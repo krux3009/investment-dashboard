@@ -181,6 +181,15 @@ web/
   redundant.
 - **Plans live in [plan/](./plan/).** Active and historical plans go
   there — never `~/.claude/plans/`, never the repo root.
+- **End every session with a recap in [sessions/](./sessions/).** When
+  the user signals close ("ending today", "wrapping up", "done for
+  today", "good night", "that's it for the day", etc.), write
+  `sessions/YYYY-MM-DD.md` before the session ends. Layout: frontmatter
+  (date, window, commits, range, theme) → Context → Shipped (grouped
+  by theme) → Ship state → Improvements for next session → Sharp
+  gotchas. Match `sessions/2026-05-04-phase-d-foresight.md`. ~50–120
+  lines. `sessions/` is gitignored — local-only, do not stage. One
+  file per calendar day; append if a second stretch happens same day.
 
 ## Verification
 
