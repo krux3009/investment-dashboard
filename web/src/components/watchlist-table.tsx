@@ -2,6 +2,7 @@
 
 import type { PriceHistory, Quote } from "@/lib/api";
 import { arrowFor, directionClass, fmtPct } from "@/lib/format";
+import { useLiveWatchlistMap } from "@/lib/live-store";
 import { Fragment, useState } from "react";
 import { DrillIn } from "./drill-in";
 import { Sparkline } from "./sparkline";
@@ -23,6 +24,7 @@ const marketFromCode = (code: string) =>
 
 export function WatchlistTable({ codes, sparklines, quotes = {} }: Props) {
   const [expandedCode, setExpandedCode] = useState<string | null>(null);
+  const liveMap = useLiveWatchlistMap();
 
   if (codes.length === 0) return null;
 
@@ -82,11 +84,14 @@ export function WatchlistTable({ codes, sparklines, quotes = {} }: Props) {
               change30 === null ? "quiet" : change30 > 0 ? "gain" : change30 < 0 ? "loss" : "quiet";
 
             const quote = quotes[code];
-            // Prefer the live snapshot price when available; fall back
-            // to the sparkline's last cached close so the Last column
-            // never shows "–" when daily bars exist.
-            const last = quote?.last_price ?? sparkLast;
-            const today = quote?.today_change_pct ?? null;
+            const liveQuote = liveMap.get(code);
+            // Prefer the live SSE tick when present, then the SSR
+            // snapshot, then the sparkline's last cached close so the
+            // Last column never shows "–" when daily bars exist.
+            const last =
+              liveQuote?.last_price ?? quote?.last_price ?? sparkLast;
+            const today =
+              liveQuote?.today_change_pct ?? quote?.today_change_pct ?? null;
 
             const isExpanded = expandedCode === code;
 

@@ -1,9 +1,17 @@
 // Hero block: USD-aggregated total + signed P&L + per-currency
-// breakdown on the left, allocation donut on the right. Fixes the v2
-// "S$90 SGD" papercut + the v2 hover-only-donut-labels papercut.
+// breakdown on the left, allocation donut on the right.
+//
+// Receives an SSR-fetched HoldingsResponse. During US RTH the live SSE
+// store overrides the total + P&L + (when present) the donut slices,
+// without losing the SSR-rendered per-currency caption and FX rates.
+// Changed cells get a 600ms tick-pulse class.
+
+"use client";
 
 import type { HoldingsResponse } from "@/lib/api";
 import { directionClass, fmtPct, fmtUsd, timeSince } from "@/lib/format";
+import { useLiveTotals } from "@/lib/live-store";
+import { useTickPulse } from "@/lib/use-tick-pulse";
 import { Donut } from "./donut";
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
@@ -20,6 +28,15 @@ export function Hero({ data }: Props) {
   const ccyEntries = Object.entries(data.currencies);
   const isMixed = ccyEntries.length > 1;
 
+  const liveTotals = useLiveTotals();
+  const total_market_value_usd = liveTotals?.total_market_value_usd ?? data.total_market_value_usd;
+  const total_pnl_abs_usd = liveTotals?.total_pnl_abs_usd ?? data.total_pnl_abs_usd;
+  const total_pnl_pct = liveTotals?.total_pnl_pct ?? data.total_pnl_pct;
+
+  const totalPulse = useTickPulse(total_market_value_usd);
+  const pnlAbsPulse = useTickPulse(total_pnl_abs_usd);
+  const pnlPctPulse = useTickPulse(total_pnl_pct);
+
   return (
     <section className="border-b border-rule pb-10 mb-10">
       <div className="text-xs uppercase tracking-[0.06em] text-quiet mb-3">
@@ -30,19 +47,25 @@ export function Hero({ data }: Props) {
         {/* Numbers + meta */}
         <div className="flex-1">
           <div className="flex items-baseline gap-4">
-            <h1 className="text-5xl font-light text-ink tracking-tight tabular">
-              {empty ? "–" : fmtUsd(data.total_market_value_usd, { decimals: 2 })}
+            <h1
+              className={`text-5xl font-light text-ink tracking-tight tabular ${totalPulse ? "tick-pulse-cell" : ""}`}
+            >
+              {empty ? "–" : fmtUsd(total_market_value_usd, { decimals: 2 })}
             </h1>
             {!empty && <span className="text-sm text-quiet tabular">USD</span>}
           </div>
 
           {!empty && (
             <div className="flex items-baseline gap-4 text-sm mt-1">
-              <span className={`tabular ${directionClass(data.total_pnl_abs_usd)}`}>
-                {fmtUsd(data.total_pnl_abs_usd, { decimals: 2, signed: true })}
+              <span
+                className={`tabular ${directionClass(total_pnl_abs_usd)} ${pnlAbsPulse ? "tick-pulse-cell" : ""}`}
+              >
+                {fmtUsd(total_pnl_abs_usd, { decimals: 2, signed: true })}
               </span>
-              <span className={`tabular ${directionClass(data.total_pnl_pct)}`}>
-                {fmtPct(data.total_pnl_pct)}
+              <span
+                className={`tabular ${directionClass(total_pnl_pct)} ${pnlPctPulse ? "tick-pulse-cell" : ""}`}
+              >
+                {fmtPct(total_pnl_pct)}
               </span>
               <span className="text-quiet">total return</span>
             </div>
@@ -110,7 +133,8 @@ export function Hero({ data }: Props) {
           </div>
         </div>
 
-        {/* Allocation donut */}
+        {/* Allocation donut — SSR-only. Slice weights drift slowly enough
+            that live ticking would be visual noise without value. */}
         {!empty && (
           <div className="shrink-0">
             <Donut holdings={data.holdings} size={210} />

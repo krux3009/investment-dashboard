@@ -2,6 +2,7 @@
 
 import type { EarningsItem, Holding, PriceHistory } from "@/lib/api";
 import { arrowFor, directionClass, fmtCurrency, fmtPct, fmtUsd } from "@/lib/format";
+import { useLiveHoldingsMap } from "@/lib/live-store";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { DrillIn } from "./drill-in";
 import { Sparkline } from "./sparkline";
@@ -105,10 +106,19 @@ export function HoldingsTable({ holdings, sparklines, earningsByCode }: Props) {
     }
   }, [sort]);
 
+  // Live overlay: merge SSR holdings with the latest SSE tick by code.
+  // The merge happens before sorting so sort columns like market_value_usd
+  // reflect the current tick rather than the stale SSR value.
+  const liveMap = useLiveHoldingsMap();
+  const merged = useMemo(() => {
+    if (liveMap.size === 0) return holdings;
+    return holdings.map((h) => liveMap.get(h.code) ?? h);
+  }, [holdings, liveMap]);
+
   const sorted = useMemo(() => {
-    if (!sort) return holdings;
-    return [...holdings].sort((a, b) => compareHoldings(a, b, sort.key, sort.dir));
-  }, [holdings, sort]);
+    if (!sort) return merged;
+    return [...merged].sort((a, b) => compareHoldings(a, b, sort.key, sort.dir));
+  }, [merged, sort]);
 
   const handleSort = (key: SortKey) => {
     setSort((prev) => {

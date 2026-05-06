@@ -134,8 +134,16 @@ export function useLiveHolding(code: string): Holding | null {
   return useSlice((s) => s.holdings.get(code) ?? null);
 }
 
+export function useLiveHoldingsMap(): Map<string, Holding> {
+  return useSlice((s) => s.holdings);
+}
+
 export function useLiveWatchlistQuote(code: string): LiveWatchlistQuote | null {
   return useSlice((s) => s.watchlist.get(code) ?? null);
+}
+
+export function useLiveWatchlistMap(): Map<string, LiveWatchlistQuote> {
+  return useSlice((s) => s.watchlist);
 }
 
 // Test-only — reset between dev hot-reloads.
