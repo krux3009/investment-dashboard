@@ -27,9 +27,9 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-from api import fx
 from api.data import quotes as quotes_mod
 from api.data.moomoo_client import get_summary
+from api.holdings_payload import build_holdings_response
 from api.market_hours import ET, is_us_rth, next_open
 
 log = logging.getLogger(__name__)
@@ -143,59 +143,13 @@ def _resolve_watchlist_codes() -> list[str]:
 
 def _build_tick() -> dict[str, Any]:
     summary = get_summary()
-    holdings_payload = _build_holdings_payload(summary)
+    holdings_response = build_holdings_response(summary)
     watchlist_payload = _build_watchlist_payload(_resolve_watchlist_codes())
     return {
         "server_ts": int(_time.time()),
         "market": "open",
-        "holdings": holdings_payload,
+        "holdings": holdings_response.model_dump(),
         "watchlist": watchlist_payload,
-    }
-
-
-def _build_holdings_payload(summary: Any) -> dict[str, Any]:
-    """Mirrors `routes/holdings.py:list_holdings` USD-aggregation.
-
-    Inlined here for the skeleton chunk — chunk 3 extracts to a shared
-    helper so this and the REST route call identical math.
-    """
-    holdings: list[dict[str, Any]] = []
-    total_mv_usd = 0.0
-    total_pnl_usd = 0.0
-    currencies_native: dict[str, float] = {}
-
-    for p in summary.positions:
-        mv_usd, _ = fx.convert(p.market_value, p.currency, "USD")
-        pnl_usd, _ = fx.convert(p.total_pnl_abs, p.currency, "USD")
-        holdings.append({
-            "code": p.code, "ticker": p.ticker, "name": p.name,
-            "market": p.market, "currency": p.currency,
-            "qty": p.qty, "cost_basis": p.cost_basis,
-            "current_price": p.current_price,
-            "market_value": p.market_value, "market_value_usd": mv_usd,
-            "today_change_pct": p.today_change_pct,
-            "today_change_abs": p.today_change_abs,
-            "total_pnl_pct": p.total_pnl_pct,
-            "total_pnl_abs": p.total_pnl_abs,
-            "total_pnl_abs_usd": pnl_usd,
-        })
-        total_mv_usd += mv_usd
-        total_pnl_usd += pnl_usd
-        currencies_native[p.currency] = currencies_native.get(p.currency, 0.0) + p.market_value
-
-    cost_usd = total_mv_usd - total_pnl_usd
-    total_pnl_pct = (total_pnl_usd / cost_usd) if cost_usd > 0 else 0.0
-
-    return {
-        "holdings": holdings,
-        "total_market_value_usd": total_mv_usd,
-        "total_pnl_abs_usd": total_pnl_usd,
-        "total_pnl_pct": total_pnl_pct,
-        "currencies": currencies_native,
-        "fx_rates_used": fx.rates_used_snapshot(),
-        "last_updated": summary.last_updated.isoformat(),
-        "fresh": summary.fresh,
-        "simulate_with_no_positions": summary.simulate_with_no_positions,
     }
 
 
