@@ -221,8 +221,8 @@ def get_insight(code: str, force_refresh: bool = False) -> SentimentInsight | No
     """Return the three-line sentiment insight for `code`.
 
     Returns None when there's nothing to interpret (zero mentions in the
-    7-day window). Raises `reddit_sentiment.RedditNotConfigured` when
-    creds + cache are both missing — the route translates that to 503.
+    7-day window). Raises `RuntimeError` when `ANTHROPIC_API_KEY` is
+    missing — the route translates that to 503.
     """
     if not force_refresh:
         cached = _load_cached(code)

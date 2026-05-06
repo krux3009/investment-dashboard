@@ -1,9 +1,8 @@
 """GET /api/sentiment-insight/{code}: three-line What/Meaning/Watch.
 
 Lazy-fetched behind the [learn more] toggle on the SentimentBlock
-drill-in. 503 when Anthropic / Reddit creds are missing. 200 with
-`available: false` when there's nothing to interpret (zero mentions
-in the 7-day window).
+drill-in. 503 when Anthropic key is missing. 200 with `available: false`
+when there's nothing to interpret (zero mentions in the 7-day window).
 """
 
 from __future__ import annotations
@@ -12,7 +11,7 @@ import logging
 
 from fastapi import APIRouter, HTTPException, Query
 
-from api import reddit_sentiment, sentiment_insight
+from api import sentiment_insight
 
 log = logging.getLogger(__name__)
 
@@ -23,8 +22,6 @@ router = APIRouter()
 def get_sentiment_insight(code: str, refresh: bool = Query(False)) -> dict:
     try:
         ins = sentiment_insight.get_insight(code, force_refresh=refresh)
-    except reddit_sentiment.RedditNotConfigured as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:

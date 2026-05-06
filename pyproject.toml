@@ -13,7 +13,6 @@ dependencies = [
     "fastapi>=0.115",
     "moomoo-api==10.4.6408",
     "pandas>=3.0.2",
-    "praw>=7.8.1",
     "pydantic>=2.9",
     "python-dotenv>=1.2.2",
     "uvicorn[standard]>=0.32",
