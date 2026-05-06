@@ -123,11 +123,20 @@ export async function fetchQuotes(codes: string[]): Promise<QuotesResponse> {
   return (await res.json()) as QuotesResponse;
 }
 
+export interface TickerTiles {
+  code: string;
+  ticker: string;
+  name: string;
+  fundamentals: string;
+  news: string;
+  sentiment: string;
+  technical: string;
+}
+
 export interface DigestResponse {
-  prose: string;
   generated_at: string;
-  holdings_covered: string[];
   cached: boolean;
+  holdings: TickerTiles[];
 }
 
 export type DigestResult =

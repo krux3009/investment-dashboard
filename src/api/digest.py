@@ -1,129 +1,73 @@
-"""AI daily digest. Collects per-holding signals and asks Claude to
-summarize what materially changed today.
+"""AI daily digest — per-ticker four-tile grid.
 
-Signals fed into the prompt:
-  A. Anomalies — moomoo `get_technical_unusual` + `get_financial_unusual`
-     prose (already in English) via api.data.anomalies.fetch_all.
-  B. Price moves — today's % change + 30-day delta from the cached
-     daily-bars in prices.duckdb.
-  C. News headlines — yfinance `Ticker.news` (3 most recent per holding).
+Orchestrates four analyst modules (Fundamentals · News · Sentiment ·
+Technical) per holding. Each tile is one Claude call producing one
+observation-only sentence ≤22 words. The shared analyst code lives in
+`api.analysts._base`; data prep lives in each tile module.
 
-Cached in `prices.duckdb`, table `digest_cache`, key `'current'`. 6h TTL.
-The cache uses the same single-writer DuckDB connection as prices.py per
-the CLAUDE.md guarantee.
+Borrows the role-decomposition pattern from TauricResearch/TradingAgents
+(prompt structure only — no LangGraph, no debate, no Trader synthesis,
+no action language).
 
-The model gets a structured per-holding block; the prompt is the lever
-the user tunes for voice / length / restraint.
+Cache: `digest_tiles_cache` table in `prices.duckdb`, keyed on
+`(code, prompt_version)`. 6h TTL, single-writer via `prices._DB_LOCK`.
+The old single-blob `digest_cache` table is left in place — harmless
+residue, no longer read.
+
+Concurrency: per-ticker, 4 tiles fan out via `asyncio.gather`. Across
+tickers, a `Semaphore(4)` keeps Claude QPS sane — 4 holdings × 4 tiles
+in flight at most, ≈16 concurrent Claude calls.
+
+The `_fetch_news` helper is re-exported here because the news + sentiment
+analysts import it lazily.
 """
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 import os
 import threading
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Any
 
-from api.data import anomalies, prices
+from api.analysts import fundamentals, news, sentiment, technical
+from api.analysts._base import AnalystOutput
+from api.data import prices
 from api.data.moomoo_client import get_summary
 
 log = logging.getLogger(__name__)
 
-# ── Tuning surface ──────────────────────────────────────────────────────────
-# This is the dial the user reaches for. Voice + restraint live here.
-# Trade-offs to consider when editing:
-#   • Length — currently 3-5 sentences. Shorten for glance, lengthen for
-#     weekend-study mode. The dashboard has both modes; pick one or stage two.
-#   • Order — most-important-first. The opening sentence sets the day.
-#   • Causal claims — forbidden unless a headline states the cause. Without
-#     this guard the model invents narratives ("rose on AI optimism").
-#   • Voice — observation, not advice. PRODUCT.md says "signals not commands".
-#   • Anti-patterns — no buy/sell/hold, no targets, no projections, no hype.
-#
-# Keep the prompt compact: every token here is paid on every uncached call.
-# Bumped whenever _DIGEST_PROMPT is rewritten so cached prose generated
-# under an older voice doesn't get served. The single-row digest_cache
-# table will be overwritten on the next ?refresh=true.
-_PROMPT_VERSION = "v5-no-em-dash"
-
-_DIGEST_PROMPT = """\
-You are writing today's portfolio digest for a complete beginner: a
-first-year student who has never invested before. Use plain everyday
-English. Keep it SHORT. This is a top-of-page summary; deeper
-explanation lives in each holding's detail panel.
-
-Output format, exact and machine-parsed:
-
-LEAD: <one sentence on the day at the portfolio level: the single thing the reader should take away.>
-
-<TICKER>: <one short sentence on what happened to this holding today.>
-<TICKER>: <one short sentence on what happened to this holding today.>
-...
-
-Hard rules:
-- LEAD is mandatory and always first; ≤25 words.
-- Each ticker line is ONE short sentence, ≤20 words. Aim for 12.
-- Use the exact ticker symbol from the input (MU, INTC, K71U).
-- Skip any holding with flat price today AND no news AND no anomaly.
-  Skip silently. Don't write "nothing notable". Absence is the signal.
-- Quote tickers, percentages, currency figures verbatim from the input.
-- Lead each ticker line with a concrete fact ("MU held flat today",
-  "K71U rose 1.12%"), not an indicator name.
-- Make a causal claim only if a headline in the input states the cause.
-- NEVER use em dashes (—) in any output line. Use colons, commas, or
-  periods instead.
-
-NEVER use these action words:
-  buy / sell / hold / trim / add / target / forecast / predict / expect /
-  recommend / "you should" / "you ought" / "consider [verb]" / "tomorrow".
-
-NEVER use these hype words:
-  surge / plunge / soar / crash / breakout / rally / tank.
-
-Use instead: rose / fell / moved / held steady / edged up / slowed / cooled.
-
-Translate CONCEPTS, not just words. Never use these terms; translate
-them to the everyday meaning on the right:
-
-  Indicator overbought (RSI / KDJ / BIAS / MACD / CCI)
-    → "the price has climbed fast and could slow soon"
-  Indicator oversold
-    → "the price has fallen fast and could steady soon"
-  Moving averages / MA5 / MA10 / MA20 / Bollinger Band / trend lines
-    → "the recent price trend"
-  Death cross / golden cross
-    → "the recent trend has shifted slightly down / up"
-  Bullish / bearish alignment
-    → "trending up / trending down"
-  Block-trade net inflows / outflows
-    → "big institutions have been buying / selling"
-  Decelerated by N%
-    → "but slower than before (N% slower)"
-  Short interest / short ratio
-    → "bets that the price will fall"
-  Perpetual securities / perpetual bonds
-    → "raised long-term funding"
-
-Tone: matter-of-fact, calm. Like writing one line in a personal ledger,
-not a market commentary. Every word should earn its place; this is the
-short summary, and deeper teaching happens elsewhere.
-
-Output the digest only. No preamble, no markdown, no bullet characters.
-"""
-
-# ── Cache ────────────────────────────────────────────────────────────────────
+# Bumped from v5 (single-blob digest) to v2 (analyst-tile schema).
+_PROMPT_VERSION = "v2"
 _TTL = timedelta(hours=6)
+
+# Bound across-ticker concurrency. 4 tickers × 4 tiles = 16 inflight calls
+# at most, well under typical Claude rate ceilings.
+_TICKER_SEMAPHORE = asyncio.Semaphore(4)
+
+# News fetch cache (used by analysts/news.py + analysts/sentiment.py).
 _NEWS_CACHE: dict[str, tuple[list[dict], datetime]] = {}
 _NEWS_TTL = timedelta(hours=2)
 _NEWS_LOCK = threading.Lock()
 
 
 @dataclass(frozen=True)
-class Digest:
-    prose: str
+class TickerTiles:
+    code: str
+    ticker: str
+    name: str
+    fundamentals: str
+    news: str
+    sentiment: str
+    technical: str
+
+
+@dataclass(frozen=True)
+class AnalystTiledDigest:
     generated_at: datetime
-    holdings_covered: tuple[str, ...]
+    holdings: list[TickerTiles]
     cached: bool = False
 
 
@@ -131,12 +75,6 @@ class Digest:
 
 
 def _to_yfinance_symbol(code: str) -> str | None:
-    """Convert moomoo's `MARKET.TICKER` to yfinance's symbol.
-
-    Examples: US.MU → MU, HK.00700 → 0700.HK, SG.K71U → K71U.SI.
-    Returns None for markets we can't map (yfinance has no consistent
-    coverage outside US/HK/SG/CN/JP).
-    """
     if "." not in code:
         return code
     market, ticker = code.split(".", 1)
@@ -150,22 +88,17 @@ def _to_yfinance_symbol(code: str) -> str | None:
     if market == "JP":
         return f"{ticker}.T"
     if market == "CN":
-        # Shanghai 6xxxxx → .SS, Shenzhen 0xxxxx/3xxxxx → .SZ.
         if ticker.startswith("6"):
             return f"{ticker}.SS"
         return f"{ticker}.SZ"
     return None
 
 
-# ── News fetch (yfinance) ────────────────────────────────────────────────────
+# ── News fetch (yfinance) — shared across analysts/news + analysts/sentiment
 
 
 def _fetch_news(code: str, limit: int = 3) -> list[dict]:
-    """Top N most recent headlines for a holding. yfinance returns a
-    list of dicts; we normalize to {title, publisher, ts}.
-
-    Cached per session (2h) so a digest refresh doesn't refetch news.
-    """
+    """Top N most recent headlines for a holding. Cached per session 2h."""
     with _NEWS_LOCK:
         cached = _NEWS_CACHE.get(code)
         if cached and (datetime.now() - cached[1]) < _NEWS_TTL:
@@ -185,7 +118,6 @@ def _fetch_news(code: str, limit: int = 3) -> list[dict]:
 
     out: list[dict] = []
     for item in items[:limit]:
-        # yfinance has shipped two response shapes; cover both.
         content = item.get("content") if isinstance(item, dict) else None
         if isinstance(content, dict):
             title = content.get("title") or ""
@@ -208,116 +140,6 @@ def _fetch_news(code: str, limit: int = 3) -> list[dict]:
     return out
 
 
-# ── Signal collection ───────────────────────────────────────────────────────
-
-
-def _collect_signals() -> tuple[list[dict], tuple[str, ...]]:
-    """Build a per-holding signal block. Returns (signals, tickers_covered)."""
-    summary = get_summary()
-    signals: list[dict] = []
-    tickers: list[str] = []
-
-    for p in summary.positions:
-        # Anomalies (technical + capital flow), already rewritten in plain
-        # English by anomaly_translator. Keeps the digest's voice consistent
-        # with the drill-in the reader will see if they expand a row.
-        anomaly_lines = [
-            f"  - {a.label}: {a.content.strip()}"
-            for a in anomalies.fetch_all_plain(p.code)
-            if a.has_content
-        ]
-
-        # 30-day delta from cached close series.
-        closes = prices.get_close_series(p.code, days=30)
-        delta_30d_pct: float | None = None
-        if len(closes) >= 2 and closes[0]:
-            delta_30d_pct = (closes[-1] - closes[0]) / closes[0]
-
-        # News.
-        news = _fetch_news(p.code)
-        news_lines = [
-            f"  - \"{n['title']}\" ({n['publisher']})" for n in news
-        ]
-
-        signals.append(
-            {
-                "ticker": p.ticker,
-                "code": p.code,
-                "name": p.name,
-                "currency": p.currency,
-                "current_price": p.current_price,
-                "today_pct": p.today_change_pct,
-                "delta_30d_pct": delta_30d_pct,
-                "anomaly_lines": anomaly_lines,
-                "news_lines": news_lines,
-            }
-        )
-        tickers.append(p.ticker)
-
-    return signals, tuple(tickers)
-
-
-def _format_pct(value: float | None) -> str:
-    if value is None:
-        return "n/a"
-    sign = "+" if value > 0 else ("" if value == 0 else "")
-    return f"{sign}{value * 100:.2f}%"
-
-
-def _build_user_message(signals: list[dict]) -> str:
-    """Render signals into a single user-message block for Claude."""
-    today = datetime.now().strftime("%A, %B %-d %Y")
-    lines: list[str] = [f"Date: {today}", "", "Portfolio signals:"]
-
-    for s in signals:
-        lines.append("")
-        lines.append(f"{s['ticker']} ({s['code']}, {s['name']})")
-        lines.append(
-            f"  Price: {s['currency']} {s['current_price']:.2f} · "
-            f"today {_format_pct(s['today_pct'])} · "
-            f"30-day {_format_pct(s['delta_30d_pct'])}"
-        )
-        if s["anomaly_lines"]:
-            lines.append("  Anomalies:")
-            lines.extend(s["anomaly_lines"])
-        else:
-            lines.append("  Anomalies: none")
-        if s["news_lines"]:
-            lines.append("  Headlines:")
-            lines.extend(s["news_lines"])
-        else:
-            lines.append("  Headlines: none")
-
-    return "\n".join(lines)
-
-
-# ── Claude call ─────────────────────────────────────────────────────────────
-
-
-def _call_claude(user_message: str) -> str:
-    """Send the system prompt + signal block to Claude and return prose."""
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise RuntimeError(
-            "ANTHROPIC_API_KEY not set — add it to .env to enable /api/digest."
-        )
-
-    from anthropic import Anthropic
-
-    client = Anthropic(api_key=api_key)
-    model = os.environ.get("ANTHROPIC_DIGEST_MODEL", "claude-sonnet-4-6")
-
-    response = client.messages.create(
-        model=model,
-        max_tokens=512,
-        system=_DIGEST_PROMPT,
-        messages=[{"role": "user", "content": user_message}],
-    )
-
-    parts = [block.text for block in response.content if block.type == "text"]
-    return "\n".join(parts).strip()
-
-
 # ── DuckDB cache (single-writer, shared with prices.py) ─────────────────────
 
 
@@ -325,75 +147,144 @@ def _ensure_cache_table() -> None:
     with prices._DB_LOCK:
         prices._db().execute(
             """
-            CREATE TABLE IF NOT EXISTS digest_cache (
-                cache_key VARCHAR PRIMARY KEY,
-                prose VARCHAR,
-                holdings_covered VARCHAR,
-                generated_at TIMESTAMP
+            CREATE TABLE IF NOT EXISTS digest_tiles_cache (
+                code VARCHAR NOT NULL,
+                prompt_version VARCHAR NOT NULL,
+                fundamentals VARCHAR,
+                news VARCHAR,
+                sentiment VARCHAR,
+                technical VARCHAR,
+                generated_at TIMESTAMP,
+                PRIMARY KEY (code, prompt_version)
             )
             """
         )
 
 
-def _load_cached() -> Digest | None:
+def _load_cached_tiles(code: str) -> tuple[str, str, str, str, datetime] | None:
     _ensure_cache_table()
     with prices._DB_LOCK:
         row = prices._db().execute(
-            "SELECT prose, holdings_covered, generated_at "
-            "FROM digest_cache WHERE cache_key = 'current'"
+            "SELECT fundamentals, news, sentiment, technical, generated_at "
+            "FROM digest_tiles_cache "
+            "WHERE code = ? AND prompt_version = ?",
+            [code, _PROMPT_VERSION],
         ).fetchone()
     if not row:
         return None
-    prose, covered_csv, generated_at = row
+    fundamentals, news_, sentiment_, technical_, generated_at = row
     if datetime.now() - generated_at > _TTL:
         return None
-    return Digest(
-        prose=prose,
-        generated_at=generated_at,
-        holdings_covered=tuple(covered_csv.split(",")) if covered_csv else (),
-        cached=True,
-    )
+    return fundamentals, news_, sentiment_, technical_, generated_at
 
 
-def _save_cache(digest: Digest) -> None:
+def _save_cached_tiles(tiles: TickerTiles, generated_at: datetime) -> None:
     _ensure_cache_table()
     with prices._DB_LOCK:
         prices._db().execute(
-            "INSERT OR REPLACE INTO digest_cache VALUES (?, ?, ?, ?)",
+            "INSERT OR REPLACE INTO digest_tiles_cache VALUES (?, ?, ?, ?, ?, ?, ?)",
             [
-                "current",
-                digest.prose,
-                ",".join(digest.holdings_covered),
-                digest.generated_at,
+                tiles.code,
+                _PROMPT_VERSION,
+                tiles.fundamentals,
+                tiles.news,
+                tiles.sentiment,
+                tiles.technical,
+                generated_at,
             ],
         )
+
+
+# ── Per-ticker orchestration ────────────────────────────────────────────────
+
+
+async def _build_tiles_one(code: str, ticker: str, name: str, currency: str) -> TickerTiles:
+    """Cache-first, then 4-tile fan-out. All four analysts run concurrently."""
+    cached = _load_cached_tiles(code)
+    if cached is not None:
+        f, n, s, t, _gen_at = cached
+        return TickerTiles(
+            code=code, ticker=ticker, name=name,
+            fundamentals=f, news=n, sentiment=s, technical=t,
+        )
+
+    async with _TICKER_SEMAPHORE:
+        # Each analyst's get_take is sync (Claude SDK is sync). Wrap in
+        # to_thread so the four calls actually run concurrently rather
+        # than serializing on the event loop.
+        results: list[AnalystOutput] = await asyncio.gather(
+            asyncio.to_thread(fundamentals.get_take, code, ticker, name, currency),
+            asyncio.to_thread(news.get_take, code, ticker, name),
+            asyncio.to_thread(sentiment.get_take, code, ticker, name),
+            asyncio.to_thread(technical.get_take, code, ticker, name),
+        )
+
+    tiles = TickerTiles(
+        code=code,
+        ticker=ticker,
+        name=name,
+        fundamentals=results[0].sentence,
+        news=results[1].sentence,
+        sentiment=results[2].sentence,
+        technical=results[3].sentence,
+    )
+    _save_cached_tiles(tiles, datetime.now())
+    return tiles
 
 
 # ── Public API ──────────────────────────────────────────────────────────────
 
 
-def get_digest(force_refresh: bool = False) -> Digest:
-    """Return the current digest, hitting the 6h cache unless force_refresh."""
-    if not force_refresh:
-        cached = _load_cached()
-        if cached is not None:
-            return cached
-
-    signals, tickers = _collect_signals()
-    if not signals:
-        # Empty book — return a quiet sentence rather than calling Claude.
-        return Digest(
-            prose="No open positions today.",
+async def get_digest_async(force_refresh: bool = False) -> AnalystTiledDigest:
+    """Return per-ticker tile grid. If `force_refresh`, bypass the 6h cache."""
+    summary = get_summary()
+    if not summary.positions:
+        return AnalystTiledDigest(
             generated_at=datetime.now(),
-            holdings_covered=(),
+            holdings=[],
         )
 
-    user_message = _build_user_message(signals)
-    prose = _call_claude(user_message)
-    digest = Digest(
-        prose=prose,
-        generated_at=datetime.now(),
-        holdings_covered=tickers,
+    if force_refresh:
+        # Drop cache rows for current holdings so the next save overwrites.
+        codes = [p.code for p in summary.positions]
+        _ensure_cache_table()
+        with prices._DB_LOCK:
+            prices._db().execute(
+                "DELETE FROM digest_tiles_cache WHERE prompt_version = ? AND code IN ("
+                + ",".join("?" for _ in codes)
+                + ")",
+                [_PROMPT_VERSION, *codes],
+            )
+
+    # Fan out across holdings; each call is independent.
+    tiles_list = await asyncio.gather(
+        *(
+            _build_tiles_one(p.code, p.ticker, p.name, p.currency)
+            for p in summary.positions
+        )
     )
-    _save_cache(digest)
-    return digest
+
+    # Determine cached: every ticker's cache hit ⇒ overall cached
+    all_cached = not force_refresh and all(
+        _load_cached_tiles(t.code) is not None for t in tiles_list
+    )
+    return AnalystTiledDigest(
+        generated_at=datetime.now(),
+        holdings=list(tiles_list),
+        cached=all_cached,
+    )
+
+
+def get_digest(force_refresh: bool = False) -> AnalystTiledDigest:
+    """Sync wrapper for the route handler. Spins an event loop if needed."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    if loop is not None:
+        # Already inside an event loop (shouldn't happen in our sync route,
+        # but guard anyway). Fall through to a new loop in a thread.
+        return asyncio.run_coroutine_threadsafe(
+            get_digest_async(force_refresh), loop
+        ).result()
+    return asyncio.run(get_digest_async(force_refresh))

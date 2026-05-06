@@ -113,7 +113,7 @@ export function Hero({ data }: Props) {
             </div>
           )}
 
-          <div className="text-xs text-whisper mt-3">
+          <div className="text-xs text-whisper mt-3" suppressHydrationWarning>
             {empty ? (
               data.simulate_with_no_positions ? (
                 <>

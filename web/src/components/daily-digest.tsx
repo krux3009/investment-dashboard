@@ -1,12 +1,12 @@
 "use client";
 
-// AI daily digest. Always-on at the top of the home page since the
-// route split made the surface uncluttered enough to render
-// expanded by default. /api/digest is server-cached for 6h.
-// 503 from the API (missing ANTHROPIC_API_KEY) renders a quiet hint.
+// Per-ticker four-tile digest grid. Each holding owns one row; that row
+// renders four observation-only sentences across Fundamentals, News,
+// Sentiment, Technical. /api/digest is server-cached for 6h. 503 from
+// missing ANTHROPIC_API_KEY renders a quiet hint.
 
 import { useEffect, useState } from "react";
-import { fetchDigest, type DigestResponse } from "@/lib/api";
+import { fetchDigest, type DigestResponse, type TickerTiles } from "@/lib/api";
 import { timeSince } from "@/lib/format";
 
 type State =
@@ -15,66 +15,12 @@ type State =
   | { kind: "unavailable"; detail: string }
   | { kind: "error"; detail: string };
 
-interface ParsedRow {
-  ticker: string;
-  text: string;
-}
-
-interface ParsedDigest {
-  lead: string;
-  rows: ParsedRow[];
-}
-
-function parseDigest(prose: string): ParsedDigest {
-  const lines = prose
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean);
-
-  let lead = "";
-  const rows: ParsedRow[] = [];
-
-  let pendingTicker: string | null = null;
-  const tickerHeaderRe = /^([A-Z0-9.]{1,12})$/;
-  const sectionRe = /^(today|meaning|watch)\s*:\s*(.+)$/i;
-  const tickerColonRe = /^([A-Z0-9.]{1,12})\s*:\s*(.+)$/;
-
-  for (const line of lines) {
-    const leadMatch = /^LEAD\s*:\s*(.+)$/i.exec(line);
-    if (leadMatch) {
-      lead = leadMatch[1].trim();
-      pendingTicker = null;
-      continue;
-    }
-
-    const colonMatch = tickerColonRe.exec(line);
-    if (colonMatch) {
-      rows.push({ ticker: colonMatch[1], text: colonMatch[2].trim() });
-      pendingTicker = null;
-      continue;
-    }
-
-    const headerMatch = tickerHeaderRe.exec(line);
-    if (headerMatch) {
-      pendingTicker = headerMatch[1];
-      continue;
-    }
-    const sectionMatch = sectionRe.exec(line);
-    if (sectionMatch && pendingTicker) {
-      const label = sectionMatch[1].toLowerCase();
-      if (label === "today") {
-        rows.push({ ticker: pendingTicker, text: sectionMatch[2].trim() });
-        pendingTicker = null;
-      }
-      continue;
-    }
-  }
-
-  if (!lead && rows.length === 0) {
-    return { lead: prose.trim(), rows: [] };
-  }
-  return { lead, rows };
-}
+const TILE_LABELS: Array<{ key: keyof TickerTiles; label: string }> = [
+  { key: "fundamentals", label: "Fundamentals" },
+  { key: "news", label: "News" },
+  { key: "sentiment", label: "Sentiment" },
+  { key: "technical", label: "Technical" },
+];
 
 function formatGeneratedAt(iso: string): string {
   const d = new Date(iso);
@@ -83,6 +29,40 @@ function formatGeneratedAt(iso: string): string {
     month: "long",
     day: "numeric",
   });
+}
+
+function TileSkeleton() {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="h-3 w-20 rounded bg-rule/40 animate-pulse" />
+      <div className="h-4 w-full rounded bg-rule/40 animate-pulse" />
+      <div className="h-4 w-5/6 rounded bg-rule/40 animate-pulse" />
+    </div>
+  );
+}
+
+function Tile({
+  label,
+  sentence,
+}: {
+  label: string;
+  sentence: string;
+}) {
+  const isQuiet = /^Quiet on .* this week\.?$/i.test(sentence);
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="font-mono text-[10px] uppercase tracking-[0.1em] text-quiet">
+        {label}
+      </div>
+      <p
+        className={`text-[13px] leading-[1.55] ${
+          isQuiet ? "text-whisper italic" : "text-ink"
+        }`}
+      >
+        {sentence}
+      </p>
+    </div>
+  );
 }
 
 export function DailyDigest() {
@@ -106,19 +86,27 @@ export function DailyDigest() {
 
   return (
     <section className="border-b border-rule pb-10 mb-10">
-      <div className="text-xs uppercase tracking-[0.06em] text-quiet mb-4">
+      <div className="text-xs uppercase tracking-[0.06em] text-quiet mb-1">
         Daily digest
+      </div>
+      <div className="text-xs text-whisper mb-6">
+        Four dimensions per holding · observation only
       </div>
 
       {state.kind === "loading" && (
-        <div
-          role="status"
-          aria-label="Drafting digest…"
-          className="space-y-3 max-w-[68ch]"
-        >
-          <div className="h-4 w-3/4 rounded bg-rule/40 animate-pulse" />
-          <div className="h-4 w-2/3 rounded bg-rule/40 animate-pulse" />
-          <div className="h-4 w-1/2 rounded bg-rule/40 animate-pulse" />
+        <div role="status" aria-label="Drafting digest…" className="space-y-8">
+          {[0, 1, 2].map((i) => (
+            <div
+              key={i}
+              className="grid grid-cols-1 md:grid-cols-[6rem_1fr_1fr_1fr_1fr] gap-4 md:gap-6"
+            >
+              <div className="h-5 w-20 rounded bg-rule/40 animate-pulse" />
+              <TileSkeleton />
+              <TileSkeleton />
+              <TileSkeleton />
+              <TileSkeleton />
+            </div>
+          ))}
         </div>
       )}
 
@@ -130,7 +118,7 @@ export function DailyDigest() {
             </div>
             <div className="flex items-center gap-3 text-xs text-quiet">
               <span className="tracking-wide">
-                {state.data.holdings_covered.join(" · ")}
+                {state.data.holdings.map((h) => h.ticker).join(" · ")}
               </span>
               <span aria-hidden className="text-rule">|</span>
               <span>
@@ -148,39 +136,43 @@ export function DailyDigest() {
             </div>
           </div>
 
-          {(() => {
-            const parsed = parseDigest(state.data.prose);
-            return (
-              <div className="max-w-[68ch]">
-                {parsed.lead && (
-                  <p className="text-[17px] text-ink leading-[1.55] mb-7">
-                    {parsed.lead}
-                  </p>
-                )}
-                {parsed.rows.length > 0 && (
-                  <dl className="flex flex-col gap-4">
-                    {parsed.rows.map((r) => (
-                      <div
-                        key={r.ticker}
-                        className="grid grid-cols-[5rem_1fr] gap-x-5 items-baseline"
-                      >
-                        <dt className="font-mono text-xs uppercase tracking-[0.08em] text-quiet">
-                          {r.ticker}
-                        </dt>
-                        <dd className="text-[14px] text-ink leading-[1.7]">
-                          {r.text}
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
-                )}
-                <p className="mt-7 text-xs text-whisper italic">
-                  Expand a holding on the portfolio page for a deeper read
-                  of what its numbers mean and what to watch.
-                </p>
-              </div>
-            );
-          })()}
+          {state.data.holdings.length === 0 && (
+            <p className="text-sm text-whisper italic">
+              No open positions today.
+            </p>
+          )}
+
+          {state.data.holdings.length > 0 && (
+            <div className="flex flex-col gap-8">
+              {state.data.holdings.map((h) => (
+                <div
+                  key={h.code}
+                  className="grid grid-cols-1 md:grid-cols-[6rem_1fr_1fr_1fr_1fr] gap-4 md:gap-6 md:items-start"
+                >
+                  <div className="md:pt-0.5">
+                    <div className="font-mono text-sm uppercase tracking-[0.06em] text-ink">
+                      {h.ticker}
+                    </div>
+                    <div className="text-[11px] text-whisper mt-0.5 truncate">
+                      {h.name}
+                    </div>
+                  </div>
+                  {TILE_LABELS.map((t) => (
+                    <Tile
+                      key={t.key}
+                      label={t.label}
+                      sentence={h[t.key]}
+                    />
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <p className="mt-8 text-xs text-whisper italic">
+            Expand a holding on the portfolio page for a deeper read of what
+            its numbers mean and what to watch.
+          </p>
         </>
       )}
 
