@@ -34,6 +34,11 @@
   --gain: oklch(48% 0.10 145);             /* muted forest */
   --loss: oklch(48% 0.13 25);              /* muted sienna */
 
+  /* Tick-pulse highlight — intentionally desaturated. Used for the
+     600ms cell flash when a live SSE update lands. Not a direction
+     signal, so we keep it accent-family and ignore gain/loss colors. */
+  --accent-tint: oklch(92% 0.025 28);
+
   /* Sequential graphite for charts (largest = darkest) */
   --slice-1: oklch(28% 0.008 60);
   --slice-2: oklch(38% 0.008 60);
@@ -61,6 +66,8 @@
 
   --gain: oklch(62% 0.11 145);
   --loss: oklch(62% 0.13 25);
+
+  --accent-tint: oklch(30% 0.04 28);
 
   --slice-1: oklch(85% 0.008 70);
   --slice-2: oklch(75% 0.008 65);
@@ -118,6 +125,21 @@ body {
 /* Quiet hover for stateful rows: 2-3% darken, no shadow, no shift. */
 .row-hover:hover {
   background-color: var(--surface-hover);
+}
+
+/* Tick-pulse: 600ms warm-graphite tint fade when a numeric cell takes
+ * a fresh SSE value. No green/red, no scale, no row shift — principle-#2
+ * (calm under volatility) holds. The negative margin cancels the horizontal
+ * padding so the pulse halo extends past the text without nudging layout. */
+@keyframes tick-pulse {
+  from { background-color: var(--accent-tint); }
+  to   { background-color: transparent; }
+}
+.tick-pulse-cell {
+  animation: tick-pulse 600ms ease-out;
+  border-radius: 3px;
+  padding: 0 4px;
+  margin: 0 -4px;
 }
 
 /* Reduced motion respected by default. */

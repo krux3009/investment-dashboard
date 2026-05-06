@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
+import { LiveIndicator } from "@/components/live-indicator";
+import { LivePricesProvider } from "@/components/live-prices-provider";
 import { ThemeProvider } from "@/components/theme-provider";
 import { NavBar } from "@/components/nav-bar";
 
@@ -39,10 +41,13 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <main className="max-w-6xl mx-auto px-8 py-12">
-            <NavBar />
-            {children}
-          </main>
+          <LivePricesProvider>
+            <main className="max-w-6xl mx-auto px-8 py-12">
+              <NavBar />
+              {children}
+              <LiveIndicator />
+            </main>
+          </LivePricesProvider>
         </ThemeProvider>
       </body>
     </html>
