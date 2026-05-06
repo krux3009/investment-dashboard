@@ -20,7 +20,7 @@ Personal investment dashboard sitting on top of moomoo OpenD (the local brokerag
 
 See [moomoo-opend-setup.md](./moomoo-opend-setup.md) for the data-layer foundation.
 
-## Status: Phase D + foresight + D5 SSE shipped (2026-05-06)
+## Status: Phase D + foresight + D5 SSE + Reddit sentiment shipped (2026-05-06)
 
 End-to-end on **FastAPI + Next.js + Tailwind 4 + Recharts + Anthropic SDK** with USD home currency. Three routes: `/` home (daily glance), `/portfolio` (weekend study), `/watchlist`. Phase D D1+D2+D3 layered position notes, portfolio-vs-benchmark performance, and concentration shape; D5 (2026-05-06) added a Server-Sent-Events live-tick stream so hero / holdings / watchlist update silently every 20s during US RTH without a page reload. The home page's tomorrow's-preview block was retired in favour of a 7/30-day foresight section combining earnings + macro releases (FOMC/CPI/NFP/PPI) + Claude-curated company events. Mobile responsive (D4) remains parked at `plan/v3-phase-d.md` (deferred 2026-05-06).
 
@@ -74,10 +74,12 @@ Three routes, layered for the two reading modes from PRODUCT.md.
    persisted), 30-day SVG sparklines, calendar mark next to tickers
    reporting in ≤14 days, click-to-expand drill-in. Drill-in shows:
    90-day price chart, "What this means" (per-stock Meaning + Watch),
-   freeform position notes (debounced auto-save to DuckDB), then
-   plain-English Technical + Capital-flow anomaly prose. The
-   earnings-strip section was retired — its [learn more] depth
-   moved into the unified foresight insight on home.
+   freeform position notes (debounced auto-save to DuckDB), Reddit
+   discussion · past 7 days (counts + single-ink stacked bar + top-3
+   posts + lazy [learn more] What/Meaning/Watch), then plain-English
+   Technical + Capital-flow anomaly prose. The earnings-strip section
+   was retired — its [learn more] depth moved into the unified
+   foresight insight on home.
 3. **Concentration shape.** Top-1/3/5 USD share + holdings count,
    stacked-bar SVG by descending position weight, currency exposure
    stacked bar, single-name max line. [learn more] toggle expands
@@ -168,11 +170,14 @@ src/api/
 ├── earnings_insight.py      ← per-report What / Meaning / Watch (C.2)
 ├── preview.py               ← futures + Asia close fetcher (C.3)
 ├── preview_insight.py       ← per-symbol What / Meaning / Watch (C.3)
+├── reddit_sentiment.py      ← praw + VADER + aggregator (v3)
+├── sentiment_insight.py     ← per-stock What/Meaning/Watch (v3)
 ├── data/                    ← live moomoo data layer
 │   ├── positions.py         ← Position dataclass + formatters
 │   ├── moomoo_client.py     ← OpenSecTradeContext wrapper, dedupe-by-code
 │   ├── prices.py            ← DuckDB-cached daily bars (data/prices.duckdb)
-│   └── anomalies.py         ← OpenQuoteContext.get_*_unusual + fetch_all_plain
+│   ├── anomalies.py         ← OpenQuoteContext.get_*_unusual + fetch_all_plain
+│   └── reddit_cache.py      ← DuckDB-cached Reddit mentions (24h TTL) (v3)
 └── routes/
     ├── holdings.py          ← /api/holdings        (USD-aggregated)
     ├── prices.py            ← /api/prices/{code}   (N-day close series)
@@ -184,6 +189,8 @@ src/api/
     ├── earnings_insight.py  ← /api/earnings-insight/{code}
     ├── preview.py           ← /api/preview
     ├── preview_insight.py   ← /api/preview-insight/{symbol}
+    ├── reddit.py            ← /api/reddit/{code} (v3)
+    ├── sentiment_insight.py ← /api/sentiment-insight/{code} (v3)
     └── stream.py            ← /api/stream/prices (SSE live ticks) (D5)
 
 web/
@@ -192,7 +199,8 @@ web/
 │                          Sparkline, PriceChart, DrillIn, AnomalyBlock,
 │                          ThemeProvider, ThemeToggle, DailyDigest,
 │                          InsightBlock, EarningsStrip, PreviewBlock,
-│                          LivePricesProvider, LiveIndicator (D5)
+│                          LivePricesProvider, LiveIndicator (D5),
+│                          SentimentBlock (v3)
 └── src/lib/             ← api client, utils (cn), formatters,
                            live-store + use-live-prices + use-tick-pulse (D5)
 ```
@@ -243,6 +251,10 @@ web/
   one `event: tick` every 20s during US RTH, otherwise SSE
   keepalive comments every 15s; emits `event: market_status` on
   RTH transitions.
+- `curl -s localhost:8000/api/reddit/US.NVDA | jq '.total_mentions'` →
+  non-negative integer when Reddit creds present; 503 with
+  `"Reddit not configured…"` when missing. See `reddit-setup.md`
+  for cred setup.
 - `localhost:3000` renders hero + digest + earnings strip + holdings
   (with calendar marks) + watchlist + tomorrow's preview; sort +
   expand work; theme toggle cycles cleanly. Footer LiveIndicator
