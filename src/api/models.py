@@ -153,3 +153,19 @@ class SentimentInsightResponse(BaseModel):
     watch: str
     generated_at: str                  # ISO
     cached: bool
+
+
+class TickerTiles(BaseModel):
+    code: str
+    ticker: str
+    name: str
+    fundamentals: str
+    news: str
+    sentiment: str
+    technical: str
+
+
+class AnalystTiledDigestResponse(BaseModel):
+    generated_at: str                  # ISO
+    holdings: list[TickerTiles]
+    cached: bool
