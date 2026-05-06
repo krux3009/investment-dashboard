@@ -13,9 +13,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from api.realtime import broadcaster
 from api.routes import (
     anomalies,
     benchmark,
@@ -31,10 +34,21 @@ from api.routes import (
     notes,
     prices,
     quotes,
+    stream,
     watchlist,
 )
 
-app = FastAPI(title="investment-dashboard API", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await broadcaster.start()
+    try:
+        yield
+    finally:
+        await broadcaster.stop()
+
+
+app = FastAPI(title="investment-dashboard API", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -58,6 +72,7 @@ app.include_router(concentration.router, prefix="/api")
 app.include_router(concentration_insight.router, prefix="/api")
 app.include_router(foresight.router, prefix="/api")
 app.include_router(foresight_insight.router, prefix="/api")
+app.include_router(stream.router, prefix="/api")
 
 
 @app.get("/api/health")
