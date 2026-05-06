@@ -20,9 +20,9 @@ Personal investment dashboard sitting on top of moomoo OpenD (the local brokerag
 
 See [moomoo-opend-setup.md](./moomoo-opend-setup.md) for the data-layer foundation.
 
-## Status: Phase D + foresight + three-route split shipped (2026-05-04)
+## Status: Phase D + foresight + D5 SSE shipped (2026-05-06)
 
-End-to-end on **FastAPI + Next.js + Tailwind 4 + Recharts + Anthropic SDK** with USD home currency. Three routes: `/` home (daily glance), `/portfolio` (weekend study), `/watchlist`. Phase D D1+D2+D3 layered position notes, portfolio-vs-benchmark performance, and concentration shape. The home page's tomorrow's-preview block was retired in favour of a 7/30-day foresight section combining earnings + macro releases (FOMC/CPI/NFP/PPI) + Claude-curated company events. Mobile responsive (D4) and real-time push (D5) remain parked at `plan/v3-phase-d.md`.
+End-to-end on **FastAPI + Next.js + Tailwind 4 + Recharts + Anthropic SDK** with USD home currency. Three routes: `/` home (daily glance), `/portfolio` (weekend study), `/watchlist`. Phase D D1+D2+D3 layered position notes, portfolio-vs-benchmark performance, and concentration shape; D5 (2026-05-06) added a Server-Sent-Events live-tick stream so hero / holdings / watchlist update silently every 20s during US RTH without a page reload. The home page's tomorrow's-preview block was retired in favour of a 7/30-day foresight section combining earnings + macro releases (FOMC/CPI/NFP/PPI) + Claude-curated company events. Mobile responsive (D4) remains parked at `plan/v3-phase-d.md` (deferred 2026-05-06).
 
 **Stack:** `uv` + Python 3.14 + FastAPI 0.136 + Pydantic 2.13 + DuckDB
 1.5 + yfinance 1.3 + moomoo-api 10.4.6408 + anthropic 0.97 on the
@@ -94,6 +94,38 @@ Theme cycles `system → light → dark → system` via next-themes.
 warm-graphite tokens defined as CSS variables in `web/src/app/globals.css`,
 mirroring the v2 oklch palette in both modes.
 
+### Live tick stream (D5)
+
+Every route gets a single SSE connection to `/api/stream/prices`
+mounted via `<LivePricesProvider>` in `web/src/app/layout.tsx`.
+During US Regular Trading Hours the broadcaster pushes one `tick`
+event every 20s — full holdings + watchlist payload — plus a
+`market_status` event on RTH transitions and SSE keepalive
+comments every 15s. Outside RTH no moomoo calls happen; the
+connection stays open with keepalives only.
+
+The frontend `live-store.ts` (dep-free `useSyncExternalStore`)
+exposes `useLiveTotals`, `useLiveHoldingsMap`,
+`useLiveWatchlistMap`, `useLiveMarket`, `useLiveConnected`. Hero
+plus the holdings + watchlist tables overlay live values onto
+their SSR initial. Cells that change get a 600ms `tick-pulse-cell`
+animation that fades a desaturated `--accent-tint` back to
+transparent — no green/red flash, no row shift, principle-#2
+calm-under-volatility holds. `prefers-reduced-motion` disables
+the animation; values still swap silently.
+
+A footer `<LiveIndicator />` shows the stream state on every
+route: `Live · last tick HH:MM:SS SGT` during RTH,
+`Market closed · next open …` outside, `Connecting…` /
+`Reconnecting…` during transport hiccups.
+
+The realtime broadcaster is one asyncio task started in the
+FastAPI lifespan; per-client `asyncio.Queue` fan-out so N
+browser tabs cost a single moomoo snapshot per tick. NYSE
+holiday list lives in `src/api/market_hours.py` (2026-2027
+hardcoded; bump annually or swap to `pandas_market_calendars`
+for a longer horizon).
+
 ## Advisor pattern
 
 Surfaces that include Claude-generated commentary share a common
@@ -123,9 +155,12 @@ that feeds foresight.
 
 ```
 src/api/
-├── main.py                  ← FastAPI app + uvicorn cli
+├── main.py                  ← FastAPI app + uvicorn cli + lifespan (broadcaster)
 ├── models.py                ← Pydantic Holding / HoldingsResponse
 ├── fx.py                    ← yfinance + 1h in-process cache
+├── holdings_payload.py      ← shared USD-aggregation builder (REST + SSE)
+├── market_hours.py          ← is_us_rth / next_open + NYSE holiday list (D5)
+├── realtime.py              ← SSE Broadcaster (20s tick during RTH) (D5)
 ├── digest.py                ← daily LEAD + ticker summaries (Phase C.1)
 ├── insight.py               ← per-stock Meaning + Watch (Phase C.1)
 ├── anomaly_translator.py    ← moomoo prose → plain English (Phase C.1)
@@ -148,15 +183,18 @@ src/api/
     ├── earnings.py          ← /api/earnings
     ├── earnings_insight.py  ← /api/earnings-insight/{code}
     ├── preview.py           ← /api/preview
-    └── preview_insight.py   ← /api/preview-insight/{symbol}
+    ├── preview_insight.py   ← /api/preview-insight/{symbol}
+    └── stream.py            ← /api/stream/prices (SSE live ticks) (D5)
 
 web/
 ├── src/app/             ← Next.js App Router
 ├── src/components/      ← Hero, HoldingsTable, WatchlistTable, Donut,
 │                          Sparkline, PriceChart, DrillIn, AnomalyBlock,
 │                          ThemeProvider, ThemeToggle, DailyDigest,
-│                          InsightBlock, EarningsStrip, PreviewBlock
-└── src/lib/             ← api client, utils (cn), formatters
+│                          InsightBlock, EarningsStrip, PreviewBlock,
+│                          LivePricesProvider, LiveIndicator (D5)
+└── src/lib/             ← api client, utils (cn), formatters,
+                           live-store + use-live-prices + use-tick-pulse (D5)
 ```
 
 ## Conventions to remember
@@ -201,6 +239,12 @@ web/
   upcoming reports for held positions (4 today; K71U has past data).
 - `curl -s localhost:8000/api/preview | jq` → futures + Asia close
   rows with `in_window` flag.
+- `curl -sN localhost:8000/api/stream/prices` opens an SSE stream:
+  one `event: tick` every 20s during US RTH, otherwise SSE
+  keepalive comments every 15s; emits `event: market_status` on
+  RTH transitions.
 - `localhost:3000` renders hero + digest + earnings strip + holdings
   (with calendar marks) + watchlist + tomorrow's preview; sort +
-  expand work; theme toggle cycles cleanly.
+  expand work; theme toggle cycles cleanly. Footer LiveIndicator
+  shows `Live · last tick HH:MM:SS SGT` during RTH and
+  `Market closed · next open …` outside.
