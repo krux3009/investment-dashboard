@@ -1,6 +1,10 @@
 # The Quiet Ledger
 
+![status](https://img.shields.io/badge/status-work--in--progress-orange) ![purpose](https://img.shields.io/badge/purpose-personal-blue) ![license](https://img.shields.io/badge/license-no%20warranty-lightgrey) ![not-financial-advice](https://img.shields.io/badge/not-financial%20advice-red)
+
 Personal investment dashboard on top of moomoo OpenD.
+
+> ⚠️ **This is a personal project, work-in-progress, no warranty.** It is not investment advice, not a financial product, and not audited. Numbers shown are educational framing only — buy / sell / hold / target / forecast language is deliberately stripped from every advisor surface. Run it against your own moomoo account at your own risk. The author takes no responsibility for any decisions made using this code.
 
 > Strategic context: [PRODUCT.md](./PRODUCT.md) · Visual system: [DESIGN.md](./DESIGN.md) · Project context: [CLAUDE.md](./CLAUDE.md)
 
