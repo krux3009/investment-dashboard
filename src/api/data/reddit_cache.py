@@ -143,11 +143,17 @@ def put_batch(mentions: list[Mention]) -> int:
 
 
 def latest_fetched_at(code: str) -> datetime | None:
-    """Most recent `fetched_at` for `code`. Drives the 24h refetch gate."""
+    """Most recent `fetched_at` for `code`. Drives the 24h refetch gate.
+
+    Uses ORDER BY ... LIMIT 1 instead of MAX() because DuckDB 1.5.2
+    raises an internal "vector of size 0" error on MAX() over an
+    empty filtered set in certain connection states.
+    """
     _ensure_table()
     with prices._DB_LOCK:
         row = prices._db().execute(
-            "SELECT MAX(fetched_at) FROM reddit_mentions WHERE code = ?",
+            "SELECT fetched_at FROM reddit_mentions WHERE code = ? "
+            "ORDER BY fetched_at DESC LIMIT 1",
             [code],
         ).fetchone()
     return row[0] if row and row[0] else None

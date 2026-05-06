@@ -1,37 +1,38 @@
 """Reddit-discussion ingestor + VADER classifier + aggregator.
 
-Pulls posts mentioning a ticker via praw across a curated set of finance
-subreddits, classifies each via VADER (rule-based, not LLM), and folds
-the result into a `SentimentSummary` the drill-in panel can render.
+Fetches posts mentioning a ticker via Reddit's **public JSON endpoints**
+(no auth, no API key — just append `.json` to any subreddit URL).
+Reddit's November 2025 Responsible Builder Policy gates new OAuth keys
+behind a manual review queue, but the public read-only JSON endpoints
+remain unauthenticated; ~60 req/min for User-Agent-identifying clients.
 
-A 24h DuckDB cache (`data/reddit_cache.py`) sits between this module and
-the live Reddit API: a second hit for the same `code` within 24h serves
-without praw traffic. Posts age out of the 7-day rolling window via
-`created_utc`, not the cache row's `fetched_at`, so old cached posts
-disappear cleanly even between fetches.
+Each post's title + first 500 chars of body get classified via VADER
+(rule-based, not LLM) into positive / neutral / negative buckets.
+
+A 24h DuckDB cache (`data/reddit_cache.py`) sits between this module
+and live Reddit: a second hit for the same `code` within 24h serves
+from cache. Posts age out of the 7-day rolling window via `created_utc`,
+not `fetched_at`, so old cached posts disappear cleanly between fetches.
 
 Educational framing only. This module does NOT generate prose; it
-prepares structured data. The optional `What/Meaning/Watch` advisor lives
+prepares structured data. The optional What/Meaning/Watch advisor lives
 in `sentiment_insight.py` and reads from `aggregate()`.
-
-Returns 503-shaped surfaces when `REDDIT_CLIENT_ID` is unset — the
-`fetch_mentions` caller can then translate the `RedditNotConfigured`
-exception to an HTTP 503 in the route.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import os
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING
 
 from api.data import reddit_cache
 from api.data.reddit_cache import Classification, Mention
-
-if TYPE_CHECKING:
-    import praw
 
 log = logging.getLogger(__name__)
 
@@ -42,18 +43,23 @@ _CACHE_TTL = timedelta(hours=24)
 _GLOBAL_SUBS = ("stocks", "investing", "wallstreetbets", "SecurityAnalysis")
 
 # Per-ticker subreddits are tried in priority order. Most don't exist;
-# praw raises Redirect / NotFound which we swallow silently. The point
-# is to surface ticker-native discussion (r/NVDA_Stock, r/TSLA) when it
-# does exist without forcing a hardcoded map.
+# Reddit returns an empty Listing or 404 which we swallow silently.
 _TICKER_SUB_TEMPLATES = ("{ticker}", "{ticker}_Stock", "{ticker}stocks")
 
 # VADER thresholds per plan; keep symmetric.
 _POSITIVE_THRESHOLD = 0.05
 _NEGATIVE_THRESHOLD = -0.05
 
+# Default User-Agent. Reddit asks UAs identify the app + operator, but
+# any descriptive UA works for unauth read-only access. Override via
+# REDDIT_USER_AGENT env var when running.
+_DEFAULT_USER_AGENT = "investment-dashboard/0.1 (long-horizon personal dashboard)"
 
-class RedditNotConfigured(RuntimeError):
-    """Raised when REDDIT_CLIENT_ID / SECRET / USER_AGENT are missing."""
+# Conservative inter-request delay to keep us well under Reddit's
+# unauth ~60 req/min ceiling. Sequential, not concurrent — the cache
+# absorbs cost on second-and-beyond opens.
+_REQUEST_DELAY_SECONDS = 1.1
+_REQUEST_TIMEOUT_SECONDS = 10
 
 
 # ── Models ──────────────────────────────────────────────────────────────────
@@ -70,23 +76,52 @@ class SentimentSummary:
     as_of: datetime
 
 
-# ── praw client ─────────────────────────────────────────────────────────────
+# ── HTTP fetch (public JSON, no auth) ───────────────────────────────────────
 
 
-def _init_reddit() -> "praw.Reddit | None":
-    client_id = os.environ.get("REDDIT_CLIENT_ID")
-    client_secret = os.environ.get("REDDIT_CLIENT_SECRET")
-    user_agent = os.environ.get("REDDIT_USER_AGENT")
-    if not (client_id and client_secret and user_agent):
-        return None
-    import praw
+def _user_agent() -> str:
+    return os.environ.get("REDDIT_USER_AGENT") or _DEFAULT_USER_AGENT
 
-    return praw.Reddit(
-        client_id=client_id,
-        client_secret=client_secret,
-        user_agent=user_agent,
-        check_for_async=False,
+
+def _search_url(subreddit: str, ticker: str) -> str:
+    qs = urllib.parse.urlencode(
+        {
+            "q": f'"{ticker}"',
+            "restrict_sr": "1",
+            "sort": "new",
+            "t": "week",
+            "limit": 25,
+        }
     )
+    return f"https://www.reddit.com/r/{subreddit}/search.json?{qs}"
+
+
+def _http_get_json(url: str) -> dict | None:
+    """GET + JSON parse. Returns None on any HTTP / parse error.
+
+    We swallow rather than raise: subreddit doesn't exist (404),
+    quarantined (403), private (403), rate-limited (429), or transient
+    network issue all mean "skip this sub, the others cover the floor".
+    The route's outer 500 handler catches truly catastrophic failures.
+    """
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": _user_agent(), "Accept": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=_REQUEST_TIMEOUT_SECONDS) as resp:
+            body = resp.read()
+    except urllib.error.HTTPError as exc:
+        log.debug("reddit GET %s -> HTTP %s", url, exc.code)
+        return None
+    except (urllib.error.URLError, TimeoutError) as exc:
+        log.debug("reddit GET %s -> network error: %s", url, exc)
+        return None
+    try:
+        return json.loads(body)
+    except json.JSONDecodeError as exc:
+        log.warning("reddit GET %s returned non-JSON: %s", url, exc)
+        return None
 
 
 # ── VADER classifier ────────────────────────────────────────────────────────
@@ -126,26 +161,31 @@ def _candidate_subs(ticker: str) -> list[str]:
     return out
 
 
-def _post_to_mention(
+def _post_data_to_mention(
     code: str,
-    post,  # praw.models.Submission
     sub_name: str,
+    post_data: dict,
     fetched_at: datetime,
-) -> Mention:
-    title = post.title or ""
-    body = (post.selftext or "")[:500]
+) -> Mention | None:
+    post_id = post_data.get("id")
+    if not post_id:
+        return None
+    title = post_data.get("title") or ""
+    body = (post_data.get("selftext") or "")[:500]
     text = f"{title} {body}".strip()
+    permalink = post_data.get("permalink") or ""
+    created_utc = post_data.get("created_utc") or 0
     return Mention(
         code=code,
-        subreddit=sub_name,
-        post_id=post.id,
+        subreddit=post_data.get("subreddit") or sub_name,
+        post_id=post_id,
         title=title,
         body=body,
-        url=f"https://reddit.com{post.permalink}",
-        score=int(getattr(post, "score", 0) or 0),
-        num_comments=int(getattr(post, "num_comments", 0) or 0),
+        url=f"https://reddit.com{permalink}" if permalink else "",
+        score=int(post_data.get("score") or 0),
+        num_comments=int(post_data.get("num_comments") or 0),
         classification=classify(text),
-        created_at=datetime.fromtimestamp(getattr(post, "created_utc", 0)),
+        created_at=datetime.fromtimestamp(created_utc) if created_utc else datetime.now(),
         fetched_at=fetched_at,
     )
 
@@ -155,59 +195,48 @@ def fetch_mentions(code: str, ticker: str, days: int = 7) -> list[Mention]:
 
     Cache-first: if any row for `code` was fetched within the 24h TTL,
     return cached rows filtered to the rolling window. Otherwise hit
-    praw across the global + per-ticker subreddit set, persist, and
-    return.
+    Reddit's public JSON across the global + per-ticker subreddit set,
+    persist, and return.
 
-    Raises `RedditNotConfigured` when `REDDIT_CLIENT_ID` is missing AND
-    no cache exists. With cache, returns stale-but-classified rows so
-    the panel keeps working when creds are pulled mid-session.
+    No exception is raised on missing creds — the public JSON endpoint
+    needs none. Network / rate-limit failures fall through to whatever
+    cache exists; if cache is empty too, returns [].
     """
     last_fetched = reddit_cache.latest_fetched_at(code)
     if last_fetched and (datetime.now() - last_fetched) < _CACHE_TTL:
         return reddit_cache.get_recent(code, days=days)
 
-    reddit = _init_reddit()
-    if reddit is None:
-        if last_fetched is not None:
-            return reddit_cache.get_recent(code, days=days)
-        raise RedditNotConfigured(
-            "Reddit not configured — set REDDIT_CLIENT_ID / "
-            "REDDIT_CLIENT_SECRET / REDDIT_USER_AGENT in .env."
-        )
-
     fetched_at = datetime.now()
     cutoff = fetched_at - timedelta(days=days)
     seen: dict[str, Mention] = {}
 
-    for sub_name in _candidate_subs(ticker):
-        try:
-            subreddit = reddit.subreddit(sub_name)
-            results = subreddit.search(
-                f'"{ticker}"',
-                sort="new",
-                time_filter="week",
-                limit=25,
-            )
-            for post in results:
-                created_utc = getattr(post, "created_utc", 0)
-                if not created_utc:
-                    continue
-                if datetime.fromtimestamp(created_utc) < cutoff:
-                    continue
-                if post.id in seen:
-                    continue
-                seen[post.id] = _post_to_mention(
-                    code, post, sub_name, fetched_at
-                )
-        except Exception as exc:
-            # Subreddit doesn't exist (404), is private (403), is
-            # quarantined, rate-limited, etc. Quiet skip — the global
-            # subs cover the floor.
-            log.debug("reddit search %s for %s skipped: %s", sub_name, ticker, exc)
+    for i, sub_name in enumerate(_candidate_subs(ticker)):
+        if i > 0:
+            time.sleep(_REQUEST_DELAY_SECONDS)
+        payload = _http_get_json(_search_url(sub_name, ticker))
+        if not payload:
             continue
+        children = payload.get("data", {}).get("children", []) or []
+        for child in children:
+            post_data = child.get("data") or {}
+            if post_data.get("kind") and post_data.get("kind") != "t3":
+                continue
+            created_utc = post_data.get("created_utc") or 0
+            if not created_utc:
+                continue
+            if datetime.fromtimestamp(created_utc) < cutoff:
+                continue
+            mention = _post_data_to_mention(code, sub_name, post_data, fetched_at)
+            if mention is None or mention.post_id in seen:
+                continue
+            seen[mention.post_id] = mention
 
     mentions = list(seen.values())
     reddit_cache.put_batch(mentions)
+    if not mentions and last_fetched is not None:
+        # Network failed across every sub — fall back to whatever stale
+        # cache we have rather than render empty.
+        return reddit_cache.get_recent(code, days=days)
     return mentions
 
 

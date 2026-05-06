@@ -26,7 +26,6 @@ interface Props {
 type FetchState =
   | { kind: "loading" }
   | { kind: "ready"; data: RedditResponse }
-  | { kind: "unavailable"; detail: string }
   | { kind: "error"; detail: string };
 
 type InsightState =
@@ -212,8 +211,6 @@ export function SentimentBlock({ code }: Props) {
       if (cancelled) return;
       if (result.ok) {
         setState({ kind: "ready", data: result.data });
-      } else if (result.status === 503) {
-        setState({ kind: "unavailable", detail: result.detail });
       } else {
         setState({ kind: "error", detail: result.detail });
       }
@@ -228,17 +225,6 @@ export function SentimentBlock({ code }: Props) {
       <div>
         <Header />
         <div className="text-sm text-quiet italic">loading discussion…</div>
-      </div>
-    );
-  }
-
-  if (state.kind === "unavailable") {
-    return (
-      <div>
-        <Header />
-        <div className="text-sm text-whisper italic">
-          Reddit not configured · see <span className="font-mono">reddit-setup.md</span>.
-        </div>
       </div>
     );
   }

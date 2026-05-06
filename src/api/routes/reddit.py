@@ -1,8 +1,8 @@
 """GET /api/reddit/{code}: Reddit-discussion snapshot for one ticker.
 
 Returns counts by sentiment bucket, a weighted score in [-1, +1], and
-up to three representative posts (top score per bucket). 503 when
-Reddit creds are missing AND no cache exists. 200 with `total_mentions: 0`
+up to three representative posts (top score per bucket). Hits Reddit's
+public JSON endpoints (no auth needed). 200 with `total_mentions: 0`
 when posts genuinely aren't there.
 """
 
@@ -24,8 +24,6 @@ def get_reddit(code: str, days: int = Query(7, ge=1, le=14)) -> dict:
     ticker = code.split(".", 1)[-1]
     try:
         mentions = reddit_sentiment.fetch_mentions(code, ticker, days=days)
-    except reddit_sentiment.RedditNotConfigured as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:
         log.exception("reddit fetch failed for %s", code)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
