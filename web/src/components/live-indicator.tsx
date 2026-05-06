@@ -51,7 +51,7 @@ export function LiveIndicator() {
     : "bg-loss/60";
 
   const label = (() => {
-    if (!connected) return "Reconnecting…";
+    if (!connected) return lastTickAt === null ? "Connecting…" : "Reconnecting…";
     if (market === "open" && lastTickAt) {
       const tickDate = new Date(lastTickAt * 1000);
       return `Live · last tick ${SGT_FMT.format(tickDate)} SGT`;
