@@ -7,6 +7,7 @@ import { AnomalyBlock } from "./anomaly-block";
 import { InsightBlock } from "./insight-block";
 import { NotesBlock } from "./notes-block";
 import { PriceChart } from "./price-chart";
+import { SentimentBlock } from "./sentiment-block";
 
 interface Props {
   code: string;
@@ -78,6 +79,7 @@ export function DrillIn({ code, direction }: Props) {
         <div className="flex flex-col gap-7">
           <InsightBlock code={code} />
           <NotesBlock code={code} />
+          <SentimentBlock code={code} />
           <div>
             <AnomalyBlock
               items={anomalyItems}

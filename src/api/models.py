@@ -121,3 +121,35 @@ class Quote(BaseModel):
 
 class QuotesResponse(BaseModel):
     quotes: dict[str, Quote]
+
+
+SentimentBucket = Literal["positive", "neutral", "negative"]
+
+
+class RedditMentionOut(BaseModel):
+    subreddit: str
+    post_id: str
+    title: str
+    url: str
+    score: int
+    num_comments: int
+    classification: SentimentBucket
+
+
+class RedditResponse(BaseModel):
+    code: str
+    days: int
+    total_mentions: int
+    buckets: dict[str, int]            # {"positive": N, "neutral": N, "negative": N}
+    weighted_score: float              # in [-1, +1]
+    top_mentions: list[RedditMentionOut]
+    as_of: str                         # ISO
+
+
+class SentimentInsightResponse(BaseModel):
+    code: str
+    what: str
+    meaning: str
+    watch: str
+    generated_at: str                  # ISO
+    cached: bool

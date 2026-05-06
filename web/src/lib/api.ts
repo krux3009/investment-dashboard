@@ -460,3 +460,82 @@ export async function fetchForesightInsight(
   }
   return { ok: true, data: (await res.json()) as ForesightInsightResponse };
 }
+
+export type SentimentBucket = "positive" | "neutral" | "negative";
+
+export interface RedditMention {
+  subreddit: string;
+  post_id: string;
+  title: string;
+  url: string;
+  score: number;
+  num_comments: number;
+  classification: SentimentBucket;
+}
+
+export interface RedditResponse {
+  code: string;
+  days: number;
+  total_mentions: number;
+  buckets: Record<SentimentBucket, number>;
+  weighted_score: number;
+  top_mentions: RedditMention[];
+  as_of: string;
+}
+
+export type RedditResult =
+  | { ok: true; data: RedditResponse }
+  | { ok: false; status: number; detail: string };
+
+export async function fetchReddit(code: string, days = 7): Promise<RedditResult> {
+  const url = `${API_BASE}/api/reddit/${encodeURIComponent(code)}?days=${days}`;
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) {
+    let detail = `${res.status}`;
+    try {
+      const body = await res.json();
+      detail = body.detail ?? detail;
+    } catch {
+      detail = await res.text();
+    }
+    return { ok: false, status: res.status, detail };
+  }
+  return { ok: true, data: (await res.json()) as RedditResponse };
+}
+
+export interface SentimentInsightResponse {
+  code: string;
+  what: string;
+  meaning: string;
+  watch: string;
+  generated_at: string;
+  cached: boolean;
+  available?: boolean;
+}
+
+export type SentimentInsightResult =
+  | { ok: true; data: SentimentInsightResponse | null }
+  | { ok: false; status: number; detail: string };
+
+export async function fetchSentimentInsight(
+  code: string,
+  refresh = false,
+): Promise<SentimentInsightResult> {
+  const url = `${API_BASE}/api/sentiment-insight/${encodeURIComponent(code)}${
+    refresh ? "?refresh=true" : ""
+  }`;
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) {
+    let detail = `${res.status}`;
+    try {
+      const body = await res.json();
+      detail = body.detail ?? detail;
+    } catch {
+      detail = await res.text();
+    }
+    return { ok: false, status: res.status, detail };
+  }
+  const data = (await res.json()) as SentimentInsightResponse;
+  if (data.available === false) return { ok: true, data: null };
+  return { ok: true, data };
+}
