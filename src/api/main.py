@@ -13,11 +13,23 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+import asyncio
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+# uvicorn's default config leaves the root logger at WARNING, which
+# silences `log.info` from `api.*` modules (warm-cache progress,
+# realtime broadcaster lifecycle, etc.). Configure root → INFO so
+# those messages surface alongside uvicorn's own access logs.
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s: %(message)s",
+)
+
+from api import digest as digest_module
 from api.realtime import broadcaster
 from api.routes import (
     anomalies,
@@ -44,9 +56,19 @@ from api.routes import (
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await broadcaster.start()
+    # Fire-and-forget digest cache warm: hides the cold-start ~50s
+    # cost of 5×4 Claude calls behind startup. yield happens whether
+    # or not warm completes — Claude availability must not block boot.
+    warm_task = asyncio.create_task(digest_module.warm_cache())
     try:
         yield
     finally:
+        if not warm_task.done():
+            warm_task.cancel()
+            try:
+                await warm_task
+            except asyncio.CancelledError:
+                pass
         await broadcaster.stop()
 
 

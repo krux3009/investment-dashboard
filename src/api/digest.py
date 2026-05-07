@@ -293,6 +293,37 @@ async def get_digest_async(force_refresh: bool = False) -> AnalystTiledDigest:
     )
 
 
+async def warm_cache() -> None:
+    """Pre-warm the digest tile cache at FastAPI startup.
+
+    Cache-first: only fires Claude calls for tiles missing from
+    `digest_tiles_cache` (or expired by the 6h TTL). Subsequent
+    `/api/digest` requests then hit the cache and respond in
+    milliseconds instead of the cold-start ~50s of 5×4 Claude calls.
+
+    Safe to crash/no-op: missing ANTHROPIC_API_KEY, no positions
+    (e.g. moomoo not yet connected), or any other failure logs and
+    returns — the lifespan must not block on Claude availability.
+    """
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        log.info("digest cache warm: skipped (ANTHROPIC_API_KEY not set)")
+        return
+    started = datetime.now()
+    try:
+        d = await get_digest_async(force_refresh=False)
+    except Exception:
+        log.exception("digest cache warm failed")
+        return
+    elapsed = (datetime.now() - started).total_seconds()
+    state = "all cached" if d.cached else "fresh tiles built"
+    log.info(
+        "digest cache warm: %d holdings, %s, %.1fs",
+        len(d.holdings),
+        state,
+        elapsed,
+    )
+
+
 def get_digest(force_refresh: bool = False) -> AnalystTiledDigest:
     """Sync wrapper for the route handler. Spins an event loop if needed."""
     try:
