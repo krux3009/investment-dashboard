@@ -32,6 +32,13 @@ FORBIDDEN_BASE: tuple[str, ...] = (
     "predict", "expect", "recommend", "surge", "plunge", "soar",
     "crash", "breakout", "rally", "tank", "should", "ought",
     "bullish", "bearish",
+    # Magnitude qualifiers (v3): describe ≠ characterize.
+    "notable", "notably", "significant", "significantly",
+    "remarkable", "remarkably", "impressive", "impressively",
+    "strong", "weak", "robust", "solid", "sharp", "stark",
+    "dramatic", "dramatically", "modest", "outsized", "massive",
+    # Highlight verbs (v3).
+    "registers", "boasts", "showcases", "demonstrates", "highlights",
 )
 
 
@@ -69,6 +76,10 @@ You are the {role} analyst on a long-horizon investor's reading desk for
 for this stock. Plain English, ≤22 words. Frame as observation only.
 
 Forbidden words (anywhere in your output): {forbidden_csv}.
+
+Report numbers as numbers. Do not characterize their magnitude.
+Bad: "registers a notable 45% gain"
+Good: "30-day change is +45%"
 
 NEVER use em dashes (—). Use colons, commas, or periods.
 
