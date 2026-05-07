@@ -39,8 +39,9 @@ from api.data.moomoo_client import get_summary
 
 log = logging.getLogger(__name__)
 
-# Bumped from v5 (single-blob digest) to v2 (analyst-tile schema).
-_PROMPT_VERSION = "v2"
+# v2 → v3 (2026-05-07): tightened FORBIDDEN_BASE with magnitude qualifiers
+# + added "report numbers, don't characterize" example pair to template.
+_PROMPT_VERSION = "v3"
 _TTL = timedelta(hours=6)
 
 # Bound across-ticker concurrency. 4 tickers × 4 tiles = 16 inflight calls
