@@ -63,6 +63,15 @@ class TickerTiles:
     news: str
     sentiment: str
     technical: str
+    fundamentals_quiet: bool = False
+    news_quiet: bool = False
+    sentiment_quiet: bool = False
+    technical_quiet: bool = False
+
+
+def _is_quiet_sentence(sentence: str) -> bool:
+    # Mirrors `analysts._base._quiet()` — only path that yields this prefix.
+    return sentence.startswith("Quiet on ")
 
 
 @dataclass(frozen=True)
@@ -207,6 +216,10 @@ async def _build_tiles_one(code: str, ticker: str, name: str, currency: str) -> 
         return TickerTiles(
             code=code, ticker=ticker, name=name,
             fundamentals=f, news=n, sentiment=s, technical=t,
+            fundamentals_quiet=_is_quiet_sentence(f),
+            news_quiet=_is_quiet_sentence(n),
+            sentiment_quiet=_is_quiet_sentence(s),
+            technical_quiet=_is_quiet_sentence(t),
         )
 
     async with _TICKER_SEMAPHORE:
@@ -228,6 +241,10 @@ async def _build_tiles_one(code: str, ticker: str, name: str, currency: str) -> 
         news=results[1].sentence,
         sentiment=results[2].sentence,
         technical=results[3].sentence,
+        fundamentals_quiet=results[0].is_quiet,
+        news_quiet=results[1].is_quiet,
+        sentiment_quiet=results[2].is_quiet,
+        technical_quiet=results[3].is_quiet,
     )
     _save_cached_tiles(tiles, datetime.now())
     return tiles

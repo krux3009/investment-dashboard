@@ -41,6 +41,10 @@ async def get_digest(refresh: bool = Query(False)) -> dict:
                 "news": t.news,
                 "sentiment": t.sentiment,
                 "technical": t.technical,
+                "fundamentals_quiet": t.fundamentals_quiet,
+                "news_quiet": t.news_quiet,
+                "sentiment_quiet": t.sentiment_quiet,
+                "technical_quiet": t.technical_quiet,
             }
             for t in d.holdings
         ],

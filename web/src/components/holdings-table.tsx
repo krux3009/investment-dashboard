@@ -1,8 +1,9 @@
 "use client";
 
-import type { EarningsItem, Holding, PriceHistory } from "@/lib/api";
+import type { EarningsItem, Holding, PriceHistory, PricePoint } from "@/lib/api";
 import { arrowFor, directionClass, fmtCurrency, fmtPct, fmtUsd } from "@/lib/format";
 import { useLiveHoldingsMap } from "@/lib/live-store";
+import { useTickPulse } from "@/lib/use-tick-pulse";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { DrillIn } from "./drill-in";
 import { Sparkline } from "./sparkline";
@@ -74,6 +75,184 @@ function SortableHeader({ label, sortKey, sort, onSort, className }: SortableHea
       {label}
       {indicator && <span className="ml-1 text-quiet">{indicator}</span>}
     </button>
+  );
+}
+
+interface HoldingRowProps {
+  h: Holding;
+  sparkData: PricePoint[];
+  sparkDirection: "gain" | "loss" | "quiet";
+  isExpanded: boolean;
+  onToggle: (code: string) => void;
+  earningsItem: EarningsItem | undefined;
+}
+
+// Per-row pulse: when any field that the SSE tick mutates changes, the
+// whole row tints once via .tick-pulse-cell on each <td>. Static fields
+// (ticker, qty) are excluded so a no-op tick with identical prices does
+// not pulse. <tr> backgrounds paint unreliably across browsers, so the
+// existing per-cell CSS class is reused, gated on a single per-row bool.
+function HoldingRow({
+  h,
+  sparkData,
+  sparkDirection,
+  isExpanded,
+  onToggle,
+  earningsItem,
+}: HoldingRowProps) {
+  const pulseHash = `${h.current_price}|${h.today_change_pct}|${h.market_value_usd}|${h.total_pnl_pct}`;
+  const pulsing = useTickPulse(pulseHash);
+  const pulseCls = pulsing ? "tick-pulse-cell" : "";
+  const isUsd = h.currency === "USD";
+
+  return (
+    <Fragment>
+      <tr
+        className={`border-t border-rule cursor-pointer transition-colors ${
+          isExpanded ? "bg-surface-expanded" : "hover:bg-surface-hover"
+        }`}
+        onClick={() => onToggle(h.code)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onToggle(h.code);
+          }
+        }}
+        tabIndex={0}
+        role="button"
+        aria-expanded={isExpanded}
+      >
+        <td className="py-4 pr-4">
+          <div className="flex flex-col gap-0.5">
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-base font-medium text-ink">{h.ticker}</span>
+              {(() => {
+                const e = earningsItem;
+                if (!e || e.days_until > EARNINGS_SOON_DAYS) return null;
+                const dateLabel = new Intl.DateTimeFormat("en-US", {
+                  month: "long",
+                  day: "numeric",
+                }).format(new Date(e.date));
+                const daysLabel =
+                  e.days_until === 0
+                    ? "today"
+                    : `in ${e.days_until} day${e.days_until === 1 ? "" : "s"}`;
+                return (
+                  <span
+                    title={`Earnings ${dateLabel} · ${daysLabel}`}
+                    aria-label={`Earnings ${dateLabel} (${daysLabel})`}
+                    className="text-quiet inline-flex items-center cursor-help"
+                  >
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden
+                    >
+                      <rect x="2.5" y="3.5" width="11" height="10" rx="1" />
+                      <line x1="2.5" y1="6.5" x2="13.5" y2="6.5" />
+                      <line x1="5.5" y1="2" x2="5.5" y2="4.5" />
+                      <line x1="10.5" y1="2" x2="10.5" y2="4.5" />
+                    </svg>
+                  </span>
+                );
+              })()}
+            </div>
+            <span className="text-xs text-quiet">
+              {h.name}{" "}
+              <span className="text-whisper">
+                · {h.market} · {h.currency}
+              </span>
+            </span>
+          </div>
+        </td>
+
+        <td className="py-4 px-4 text-right tabular text-ink">
+          <div className={pulseCls}>{h.qty.toLocaleString()}</div>
+        </td>
+
+        <td className="py-4 px-4 text-right tabular text-ink">
+          <div className={pulseCls}>
+            {fmtCurrency(h.current_price, h.currency, { decimals: 2 })}
+          </div>
+        </td>
+
+        <td className={`py-4 px-4 text-right tabular ${directionClass(h.today_change_pct)}`}>
+          {(() => {
+            const noData =
+              (h.today_change_pct === 0 || h.today_change_pct === null) &&
+              (h.today_change_abs === 0 || h.today_change_abs === null);
+            if (noData) {
+              return <span className="text-whisper">—</span>;
+            }
+            return (
+              <div className={pulseCls}>
+                <div className="flex items-baseline justify-end gap-1.5">
+                  <span aria-hidden>{arrowFor(h.today_change_pct)}</span>
+                  <span>{fmtPct(h.today_change_pct, 2)}</span>
+                </div>
+                {h.today_change_abs !== null && (
+                  <div className="text-xs text-whisper">
+                    {fmtCurrency(h.today_change_abs, h.currency, { decimals: 2, signed: true })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </td>
+
+        <td className="py-4 px-4 text-right">
+          <div className="flex justify-end">
+            <Sparkline points={sparkData} direction={sparkDirection} />
+          </div>
+        </td>
+
+        <td className="py-4 px-4 text-right tabular">
+          <div className={pulseCls}>
+            <div className="text-ink">{fmtUsd(h.market_value_usd, { decimals: 2 })}</div>
+            {!isUsd && (
+              <div className="text-xs text-whisper">
+                {fmtCurrency(h.market_value, h.currency, { decimals: 2 })}
+              </div>
+            )}
+          </div>
+        </td>
+
+        <td className={`py-4 pl-4 text-right tabular ${directionClass(h.total_pnl_pct)}`}>
+          <div className={pulseCls}>
+            <div className="flex items-baseline justify-end gap-1.5">
+              <span aria-hidden>{arrowFor(h.total_pnl_pct)}</span>
+              <span>{fmtPct(h.total_pnl_pct, 2)}</span>
+            </div>
+            <div className="text-xs text-whisper">
+              {fmtUsd(h.total_pnl_abs_usd, { decimals: 2, signed: true })}
+            </div>
+          </div>
+        </td>
+      </tr>
+
+      {isExpanded && (
+        <tr>
+          <td colSpan={7} className="p-0">
+            <DrillIn
+              code={h.code}
+              direction={
+                h.total_pnl_pct > 0
+                  ? "gain"
+                  : h.total_pnl_pct < 0
+                  ? "loss"
+                  : "quiet"
+              }
+            />
+          </td>
+        </tr>
+      )}
+    </Fragment>
   );
 }
 
@@ -177,161 +356,16 @@ export function HoldingsTable({ holdings, sparklines, earningsByCode }: Props) {
                   ? "loss"
                   : "quiet"
                 : "quiet";
-            const isExpanded = expandedCode === h.code;
-            const isUsd = h.currency === "USD";
-
             return (
-              <Fragment key={h.code}>
-                <tr
-                  className={`border-t border-rule cursor-pointer transition-colors ${
-                    isExpanded ? "bg-surface-expanded" : "hover:bg-surface-hover"
-                  }`}
-                  onClick={() => handleRowToggle(h.code)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      handleRowToggle(h.code);
-                    }
-                  }}
-                  tabIndex={0}
-                  role="button"
-                  aria-expanded={isExpanded}
-                >
-                  <td className="py-4 pr-4">
-                    <div className="flex flex-col gap-0.5">
-                      <div className="flex items-baseline gap-1.5">
-                        <span className="text-base font-medium text-ink">{h.ticker}</span>
-                        {(() => {
-                          const e = earningsByCode[h.code];
-                          if (!e || e.days_until > EARNINGS_SOON_DAYS) return null;
-                          const dateLabel = new Intl.DateTimeFormat("en-US", {
-                            month: "long",
-                            day: "numeric",
-                          }).format(new Date(e.date));
-                          const daysLabel =
-                            e.days_until === 0
-                              ? "today"
-                              : `in ${e.days_until} day${e.days_until === 1 ? "" : "s"}`;
-                          // Inline calendar SVG, currentColor for theme
-                          // tracking. 12px, paired with the ticker via
-                          // a tooltip (date + days-until) on hover.
-                          return (
-                            <span
-                              title={`Earnings ${dateLabel} · ${daysLabel}`}
-                              aria-label={`Earnings ${dateLabel} (${daysLabel})`}
-                              className="text-quiet inline-flex items-center cursor-help"
-                            >
-                              <svg
-                                width="12"
-                                height="12"
-                                viewBox="0 0 16 16"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="1.4"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                aria-hidden
-                              >
-                                <rect x="2.5" y="3.5" width="11" height="10" rx="1" />
-                                <line x1="2.5" y1="6.5" x2="13.5" y2="6.5" />
-                                <line x1="5.5" y1="2" x2="5.5" y2="4.5" />
-                                <line x1="10.5" y1="2" x2="10.5" y2="4.5" />
-                              </svg>
-                            </span>
-                          );
-                        })()}
-                      </div>
-                      <span className="text-xs text-quiet">
-                        {h.name}{" "}
-                        <span className="text-whisper">
-                          · {h.market} · {h.currency}
-                        </span>
-                      </span>
-                    </div>
-                  </td>
-
-                  <td className="py-4 px-4 text-right tabular text-ink">
-                    {h.qty.toLocaleString()}
-                  </td>
-
-                  <td className="py-4 px-4 text-right tabular text-ink">
-                    {fmtCurrency(h.current_price, h.currency, { decimals: 2 })}
-                  </td>
-
-                  <td className={`py-4 px-4 text-right tabular ${directionClass(h.today_change_pct)}`}>
-                    {(() => {
-                      // Both literal-zero pct AND zero abs is the
-                      // off-hours / market-closed footprint (moomoo's
-                      // position-side today_pl_val returns 0 outside
-                      // RTH, quote overlay null-fell-through). Render a
-                      // single em-dash placeholder rather than a
-                      // misleading "0.0% / $0" that reads as "no
-                      // movement today".
-                      const noData =
-                        (h.today_change_pct === 0 || h.today_change_pct === null) &&
-                        (h.today_change_abs === 0 || h.today_change_abs === null);
-                      if (noData) {
-                        return <span className="text-whisper">—</span>;
-                      }
-                      return (
-                        <>
-                          <div className="flex items-baseline justify-end gap-1.5">
-                            <span aria-hidden>{arrowFor(h.today_change_pct)}</span>
-                            <span>{fmtPct(h.today_change_pct, 2)}</span>
-                          </div>
-                          {h.today_change_abs !== null && (
-                            <div className="text-xs text-whisper">
-                              {fmtCurrency(h.today_change_abs, h.currency, { decimals: 2, signed: true })}
-                            </div>
-                          )}
-                        </>
-                      );
-                    })()}
-                  </td>
-
-                  <td className="py-4 px-4 text-right">
-                    <div className="flex justify-end">
-                      <Sparkline points={sparkData} direction={sparkDirection} />
-                    </div>
-                  </td>
-
-                  <td className="py-4 px-4 text-right tabular">
-                    <div className="text-ink">{fmtUsd(h.market_value_usd, { decimals: 2 })}</div>
-                    {!isUsd && (
-                      <div className="text-xs text-whisper">
-                        {fmtCurrency(h.market_value, h.currency, { decimals: 2 })}
-                      </div>
-                    )}
-                  </td>
-
-                  <td className={`py-4 pl-4 text-right tabular ${directionClass(h.total_pnl_pct)}`}>
-                    <div className="flex items-baseline justify-end gap-1.5">
-                      <span aria-hidden>{arrowFor(h.total_pnl_pct)}</span>
-                      <span>{fmtPct(h.total_pnl_pct, 2)}</span>
-                    </div>
-                    <div className="text-xs text-whisper">
-                      {fmtUsd(h.total_pnl_abs_usd, { decimals: 2, signed: true })}
-                    </div>
-                  </td>
-                </tr>
-
-                {isExpanded && (
-                  <tr>
-                    <td colSpan={7} className="p-0">
-                      <DrillIn
-                        code={h.code}
-                        direction={
-                          h.total_pnl_pct > 0
-                            ? "gain"
-                            : h.total_pnl_pct < 0
-                            ? "loss"
-                            : "quiet"
-                        }
-                      />
-                    </td>
-                  </tr>
-                )}
-              </Fragment>
+              <HoldingRow
+                key={h.code}
+                h={h}
+                sparkData={sparkData}
+                sparkDirection={sparkDirection}
+                isExpanded={expandedCode === h.code}
+                onToggle={handleRowToggle}
+                earningsItem={earningsByCode[h.code]}
+              />
             );
           })}
         </tbody>
