@@ -1,8 +1,9 @@
 "use client";
 
-import type { PriceHistory, Quote } from "@/lib/api";
+import type { PriceHistory, PricePoint, Quote } from "@/lib/api";
 import { arrowFor, directionClass, fmtPct } from "@/lib/format";
-import { useLiveWatchlistMap } from "@/lib/live-store";
+import { useLiveWatchlistMap, type LiveWatchlistQuote } from "@/lib/live-store";
+import { useTickPulse } from "@/lib/use-tick-pulse";
 import { Fragment, useState } from "react";
 import { DrillIn } from "./drill-in";
 import { Sparkline } from "./sparkline";
@@ -21,6 +22,118 @@ const tickerFromCode = (code: string) =>
   code.includes(".") ? code.split(".")[1] : code;
 const marketFromCode = (code: string) =>
   code.includes(".") ? code.split(".")[0] : "?";
+
+interface WatchlistRowProps {
+  code: string;
+  points: PricePoint[];
+  quote: Quote | undefined;
+  liveQuote: LiveWatchlistQuote | undefined;
+  isExpanded: boolean;
+  onToggle: (code: string) => void;
+}
+
+// Per-row pulse: hashes the live-tick fields the SSE stream mutates
+// (last_price + today_change_pct). Same approach as HoldingsTable —
+// .tick-pulse-cell on each <td>'s inner wrapper, gated by one bool.
+function WatchlistRow({
+  code,
+  points,
+  quote,
+  liveQuote,
+  isExpanded,
+  onToggle,
+}: WatchlistRowProps) {
+  const ticker = tickerFromCode(code);
+  const market = marketFromCode(code);
+  const has = points.length >= 2;
+  const sparkLast = has ? points[points.length - 1].close : null;
+  const first = has ? points[0].close : null;
+  const change30 =
+    has && first && first !== 0 ? (sparkLast! - first) / first : null;
+  const direction: "gain" | "loss" | "quiet" =
+    change30 === null ? "quiet" : change30 > 0 ? "gain" : change30 < 0 ? "loss" : "quiet";
+
+  const last =
+    liveQuote?.last_price ?? quote?.last_price ?? sparkLast;
+  const today =
+    liveQuote?.today_change_pct ?? quote?.today_change_pct ?? null;
+
+  const pulseHash = `${last ?? ""}|${today ?? ""}`;
+  const pulsing = useTickPulse(pulseHash);
+  const pulseCls = pulsing ? "tick-pulse-cell" : "";
+
+  return (
+    <Fragment>
+      <tr
+        className={`border-t border-rule cursor-pointer transition-colors ${
+          isExpanded ? "bg-surface-expanded" : "hover:bg-surface-hover"
+        }`}
+        onClick={() => onToggle(code)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onToggle(code);
+          }
+        }}
+        tabIndex={0}
+        role="button"
+        aria-expanded={isExpanded}
+      >
+        <td className="py-3 pr-4">
+          <div className="flex items-baseline gap-2">
+            <span className="text-base font-medium text-ink">{ticker}</span>
+            <span className="text-xs text-whisper uppercase tracking-wider">
+              {market}
+            </span>
+          </div>
+        </td>
+
+        <td className="py-3 px-4 text-right tabular text-ink">
+          <div className={pulseCls}>
+            {last === null
+              ? "–"
+              : `$${last.toLocaleString("en-US", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}`}
+          </div>
+        </td>
+
+        <td className={`py-3 px-4 text-right tabular ${directionClass(today)}`}>
+          {today === null || today === 0 ? (
+            <span className="text-whisper">—</span>
+          ) : (
+            <div className={`flex items-baseline justify-end gap-1.5 ${pulseCls}`}>
+              <span aria-hidden>{arrowFor(today)}</span>
+              <span>{fmtPct(today, 2)}</span>
+            </div>
+          )}
+        </td>
+
+        <td className={`py-3 px-4 text-right tabular ${directionClass(change30)}`}>
+          <div className="flex items-baseline justify-end gap-1.5">
+            <span aria-hidden>{arrowFor(change30)}</span>
+            <span>{fmtPct(change30, 1)}</span>
+          </div>
+        </td>
+
+        <td className="py-3 pl-4">
+          <div className="flex justify-end">
+            <Sparkline points={points} direction={direction} />
+          </div>
+        </td>
+      </tr>
+
+      {isExpanded && (
+        <tr>
+          <td colSpan={5} className="p-0">
+            <DrillIn code={code} direction={direction} />
+          </td>
+        </tr>
+      )}
+    </Fragment>
+  );
+}
 
 export function WatchlistTable({ codes, sparklines, quotes = {} }: Props) {
   const [expandedCode, setExpandedCode] = useState<string | null>(null);
@@ -71,100 +184,17 @@ export function WatchlistTable({ codes, sparklines, quotes = {} }: Props) {
           </tr>
         </thead>
         <tbody>
-          {codes.map((code) => {
-            const ticker = tickerFromCode(code);
-            const market = marketFromCode(code);
-            const points = sparklines[code]?.points ?? [];
-            const has = points.length >= 2;
-            const sparkLast = has ? points[points.length - 1].close : null;
-            const first = has ? points[0].close : null;
-            const change30 =
-              has && first && first !== 0 ? (sparkLast! - first) / first : null;
-            const direction: "gain" | "loss" | "quiet" =
-              change30 === null ? "quiet" : change30 > 0 ? "gain" : change30 < 0 ? "loss" : "quiet";
-
-            const quote = quotes[code];
-            const liveQuote = liveMap.get(code);
-            // Prefer the live SSE tick when present, then the SSR
-            // snapshot, then the sparkline's last cached close so the
-            // Last column never shows "–" when daily bars exist.
-            const last =
-              liveQuote?.last_price ?? quote?.last_price ?? sparkLast;
-            const today =
-              liveQuote?.today_change_pct ?? quote?.today_change_pct ?? null;
-
-            const isExpanded = expandedCode === code;
-
-            return (
-              <Fragment key={code}>
-                <tr
-                  className={`border-t border-rule cursor-pointer transition-colors ${
-                    isExpanded ? "bg-surface-expanded" : "hover:bg-surface-hover"
-                  }`}
-                  onClick={() => toggle(code)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      toggle(code);
-                    }
-                  }}
-                  tabIndex={0}
-                  role="button"
-                  aria-expanded={isExpanded}
-                >
-                  <td className="py-3 pr-4">
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-base font-medium text-ink">{ticker}</span>
-                      <span className="text-xs text-whisper uppercase tracking-wider">
-                        {market}
-                      </span>
-                    </div>
-                  </td>
-
-                  <td className="py-3 px-4 text-right tabular text-ink">
-                    {last === null
-                      ? "–"
-                      : `$${last.toLocaleString("en-US", {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}`}
-                  </td>
-
-                  <td className={`py-3 px-4 text-right tabular ${directionClass(today)}`}>
-                    {today === null || today === 0 ? (
-                      <span className="text-whisper">—</span>
-                    ) : (
-                      <div className="flex items-baseline justify-end gap-1.5">
-                        <span aria-hidden>{arrowFor(today)}</span>
-                        <span>{fmtPct(today, 2)}</span>
-                      </div>
-                    )}
-                  </td>
-
-                  <td className={`py-3 px-4 text-right tabular ${directionClass(change30)}`}>
-                    <div className="flex items-baseline justify-end gap-1.5">
-                      <span aria-hidden>{arrowFor(change30)}</span>
-                      <span>{fmtPct(change30, 1)}</span>
-                    </div>
-                  </td>
-
-                  <td className="py-3 pl-4">
-                    <div className="flex justify-end">
-                      <Sparkline points={points} direction={direction} />
-                    </div>
-                  </td>
-                </tr>
-
-                {isExpanded && (
-                  <tr>
-                    <td colSpan={5} className="p-0">
-                      <DrillIn code={code} direction={direction} />
-                    </td>
-                  </tr>
-                )}
-              </Fragment>
-            );
-          })}
+          {codes.map((code) => (
+            <WatchlistRow
+              key={code}
+              code={code}
+              points={sparklines[code]?.points ?? []}
+              quote={quotes[code]}
+              liveQuote={liveMap.get(code)}
+              isExpanded={expandedCode === code}
+              onToggle={toggle}
+            />
+          ))}
         </tbody>
       </table>
     </section>

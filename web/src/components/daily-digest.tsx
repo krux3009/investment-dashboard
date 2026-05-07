@@ -15,12 +15,25 @@ type State =
   | { kind: "unavailable"; detail: string }
   | { kind: "error"; detail: string };
 
-const TILE_LABELS: Array<{ key: keyof TickerTiles; label: string }> = [
-  { key: "fundamentals", label: "Fundamentals" },
-  { key: "news", label: "News" },
-  { key: "sentiment", label: "Sentiment" },
-  { key: "technical", label: "Technical" },
+type SentenceKey = "fundamentals" | "news" | "sentiment" | "technical";
+type QuietKey = "fundamentals_quiet" | "news_quiet" | "sentiment_quiet" | "technical_quiet";
+
+const TILE_LABELS: Array<{
+  key: SentenceKey;
+  quietKey: QuietKey;
+  label: string;
+  initial: string;
+}> = [
+  { key: "fundamentals", quietKey: "fundamentals_quiet", label: "Fundamentals", initial: "F" },
+  { key: "news", quietKey: "news_quiet", label: "News", initial: "N" },
+  { key: "sentiment", quietKey: "sentiment_quiet", label: "Sentiment", initial: "S" },
+  { key: "technical", quietKey: "technical_quiet", label: "Technical", initial: "T" },
 ];
+
+// When ≥ this many of the 4 tiles are quiet, the row collapses into a
+// single italic line `quiet across F/S/T` next to whichever tile still
+// has signal. Reduces visual noise on slow days without hiding signal.
+const QUIET_COLLAPSE_THRESHOLD = 3;
 
 function formatGeneratedAt(iso: string): string {
   const d = new Date(iso);
@@ -44,11 +57,12 @@ function TileSkeleton() {
 function Tile({
   label,
   sentence,
+  isQuiet,
 }: {
   label: string;
   sentence: string;
+  isQuiet: boolean;
 }) {
-  const isQuiet = /^Quiet on .* this week\.?$/i.test(sentence);
   return (
     <div className="flex flex-col gap-1.5">
       <div className="font-mono text-[10px] uppercase tracking-[0.1em] text-quiet">
@@ -144,28 +158,73 @@ export function DailyDigest() {
 
           {state.data.holdings.length > 0 && (
             <div className="flex flex-col gap-8">
-              {state.data.holdings.map((h) => (
-                <div
-                  key={h.code}
-                  className="grid grid-cols-1 md:grid-cols-[6rem_1fr_1fr_1fr_1fr] gap-4 md:gap-6 md:items-start"
-                >
-                  <div className="md:pt-0.5">
-                    <div className="font-mono text-sm uppercase tracking-[0.06em] text-ink">
-                      {h.ticker}
+              {state.data.holdings.map((h) => {
+                const quietCount = TILE_LABELS.reduce(
+                  (n, t) => n + (h[t.quietKey] ? 1 : 0),
+                  0,
+                );
+                const collapsed = quietCount >= QUIET_COLLAPSE_THRESHOLD;
+
+                if (collapsed) {
+                  const quietInitials = TILE_LABELS.filter((t) => h[t.quietKey])
+                    .map((t) => t.initial)
+                    .join("/");
+                  const activeTiles = TILE_LABELS.filter((t) => !h[t.quietKey]);
+                  return (
+                    <div
+                      key={h.code}
+                      className="grid grid-cols-1 md:grid-cols-[6rem_1fr] gap-4 md:gap-6 md:items-start"
+                    >
+                      <div className="md:pt-0.5">
+                        <div className="font-mono text-sm uppercase tracking-[0.06em] text-ink">
+                          {h.ticker}
+                        </div>
+                        <div className="text-[11px] text-whisper mt-0.5 truncate">
+                          {h.name}
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:gap-8">
+                        <span className="text-[13px] leading-[1.55] text-whisper italic md:pt-0">
+                          quiet across {quietInitials}
+                        </span>
+                        {activeTiles.map((t) => (
+                          <div key={t.key} className="md:max-w-md">
+                            <Tile
+                              label={t.label}
+                              sentence={h[t.key]}
+                              isQuiet={false}
+                            />
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <div className="text-[11px] text-whisper mt-0.5 truncate">
-                      {h.name}
+                  );
+                }
+
+                return (
+                  <div
+                    key={h.code}
+                    className="grid grid-cols-1 md:grid-cols-[6rem_1fr_1fr_1fr_1fr] gap-4 md:gap-6 md:items-start"
+                  >
+                    <div className="md:pt-0.5">
+                      <div className="font-mono text-sm uppercase tracking-[0.06em] text-ink">
+                        {h.ticker}
+                      </div>
+                      <div className="text-[11px] text-whisper mt-0.5 truncate">
+                        {h.name}
+                      </div>
                     </div>
+                    {TILE_LABELS.map((t) => (
+                      <Tile
+                        key={t.key}
+                        label={t.label}
+                        sentence={h[t.key]}
+                        isQuiet={h[t.quietKey]}
+                      />
+                    ))}
                   </div>
-                  {TILE_LABELS.map((t) => (
-                    <Tile
-                      key={t.key}
-                      label={t.label}
-                      sentence={h[t.key]}
-                    />
-                  ))}
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 

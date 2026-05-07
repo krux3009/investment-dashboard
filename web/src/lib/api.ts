@@ -131,6 +131,10 @@ export interface TickerTiles {
   news: string;
   sentiment: string;
   technical: string;
+  fundamentals_quiet: boolean;
+  news_quiet: boolean;
+  sentiment_quiet: boolean;
+  technical_quiet: boolean;
 }
 
 export interface DigestResponse {
