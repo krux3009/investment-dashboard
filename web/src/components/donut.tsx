@@ -120,8 +120,9 @@ export function Donut({ holdings, size = 200 }: Props) {
         // ticker → percentage mapping.
         if (s.fraction < 0.05) return null;
         const mid = (s.startAngle + s.endAngle) / 2;
-        const x = cx + labelR * Math.sin(mid);
-        const y = cy - labelR * Math.cos(mid);
+        // Round to 4dp so SSR float-to-string matches client React stringification.
+        const x = +(cx + labelR * Math.sin(mid)).toFixed(4);
+        const y = +(cy - labelR * Math.cos(mid)).toFixed(4);
         const anchor = x > cx + 1 ? "start" : x < cx - 1 ? "end" : "middle";
         return (
           <text

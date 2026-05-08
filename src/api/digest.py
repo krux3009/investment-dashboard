@@ -274,6 +274,12 @@ async def get_digest_async(force_refresh: bool = False) -> AnalystTiledDigest:
                 [_PROMPT_VERSION, *codes],
             )
 
+    # Snapshot cache state BEFORE fan-out so `cached` reflects whether work
+    # was done, not the post-write state (every ticker is "cached" after save).
+    pre_cached = not force_refresh and all(
+        _load_cached_tiles(p.code) is not None for p in summary.positions
+    )
+
     # Fan out across holdings; each call is independent.
     tiles_list = await asyncio.gather(
         *(
@@ -282,14 +288,10 @@ async def get_digest_async(force_refresh: bool = False) -> AnalystTiledDigest:
         )
     )
 
-    # Determine cached: every ticker's cache hit ⇒ overall cached
-    all_cached = not force_refresh and all(
-        _load_cached_tiles(t.code) is not None for t in tiles_list
-    )
     return AnalystTiledDigest(
         generated_at=datetime.now(),
         holdings=list(tiles_list),
-        cached=all_cached,
+        cached=pre_cached,
     )
 
 
