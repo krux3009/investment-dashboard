@@ -51,6 +51,7 @@ class Broadcaster:
         self._stop = asyncio.Event()
         self._last_market_open: bool | None = None
         self._last_tick_payload: str | None = None
+        self._last_market_status: str | None = None
 
     async def start(self) -> None:
         if self._task is not None and not self._task.done():
@@ -72,6 +73,14 @@ class Broadcaster:
     def subscribe(self) -> Subscriber:
         sub = Subscriber()
         self._subs.add(sub)
+        # Replay current market state first so new clients land on
+        # "Live"/"Market closed · next open …" instead of falling through
+        # to the "Idle" catch-all before the next RTH transition.
+        if self._last_market_status is not None:
+            try:
+                sub.queue.put_nowait(self._last_market_status)
+            except asyncio.QueueFull:
+                pass
         if self._last_tick_payload is not None:
             try:
                 sub.queue.put_nowait(self._last_tick_payload)
@@ -89,11 +98,17 @@ class Broadcaster:
             now_et = datetime.now(tz=ET)
             market_open = is_us_rth(now_et)
 
-            if self._last_market_open is not None and market_open != self._last_market_open:
+            # First iteration (`_last_market_open is None`) also broadcasts so
+            # late subscribers can replay the initial state — without this,
+            # out-of-RTH server starts emitted no market_status at all and
+            # clients fell through to the "Idle" catch-all.
+            if market_open != self._last_market_open:
                 payload: dict[str, Any] = {"market": "open" if market_open else "closed"}
                 if not market_open:
                     payload["next_open_iso"] = next_open(now_et).isoformat()
-                await self._broadcast(_format_event("market_status", payload))
+                msg = _format_event("market_status", payload)
+                self._last_market_status = msg
+                await self._broadcast(msg)
             self._last_market_open = market_open
 
             mono = _time.monotonic()
