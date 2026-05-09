@@ -39,6 +39,11 @@ FORBIDDEN_BASE: tuple[str, ...] = (
     "dramatic", "dramatically", "modest", "outsized", "massive",
     # Highlight verbs (v3).
     "registers", "boasts", "showcases", "demonstrates", "highlights",
+    # Indicator-behavior + activity stems (v4): describe the data, don't
+    # narrate the indicator. Substring match catches inflections — e.g.
+    # "decelerat" covers deceleration / decelerate / decelerating /
+    # decelerated; "mover" covers movers / mover.
+    "momentum", "decelerat", "mover",
 )
 
 
