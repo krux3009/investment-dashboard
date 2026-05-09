@@ -41,7 +41,9 @@ log = logging.getLogger(__name__)
 
 # v2 → v3 (2026-05-07): tightened FORBIDDEN_BASE with magnitude qualifiers
 # + added "report numbers, don't characterize" example pair to template.
-_PROMPT_VERSION = "v3"
+# v3 → v4 (2026-05-09): banned indicator-behavior tokens (momentum,
+# decelerat, mover) — leaked through v3 in MU/INTC technical, ANET news.
+_PROMPT_VERSION = "v4"
 _TTL = timedelta(hours=6)
 
 # Bound across-ticker concurrency. 4 tickers × 4 tiles = 16 inflight calls
