@@ -31,9 +31,11 @@ function lastPoint(points: SeriesPoint[], minPct: number, range: number) {
   const innerH = H - PAD_Y * 2;
   const stepX = innerW / (points.length - 1);
   const i = points.length - 1;
+  const x = PAD_X + stepX * i;
+  const y = PAD_Y + innerH - ((points[i].pct - minPct) / range) * innerH;
   return {
-    x: PAD_X + stepX * i,
-    y: PAD_Y + innerH - ((points[i].pct - minPct) / range) * innerH,
+    x: +x.toFixed(4),
+    y: +y.toFixed(4),
     pct: points[i].pct,
   };
 }
@@ -59,7 +61,7 @@ export function BenchmarkChart({ data }: Props) {
 
   const innerW = W - PAD_X - PAD_RIGHT;
   const innerH = H - PAD_Y * 2;
-  const zeroY = PAD_Y + innerH - ((0 - minPct) / range) * innerH;
+  const zeroY = +(PAD_Y + innerH - ((0 - minPct) / range) * innerH).toFixed(4);
 
   const portfolioLast = lastPoint(data.portfolio, minPct, range);
 
