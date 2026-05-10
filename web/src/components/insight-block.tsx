@@ -9,6 +9,7 @@
 import { useEffect, useState } from "react";
 import { fetchInsight, type InsightResponse } from "@/lib/api";
 import { useT } from "@/lib/i18n/use-t";
+import { useLocale } from "@/lib/i18n/locale-provider";
 
 interface Props {
   code: string;
@@ -31,6 +32,7 @@ function Header({ label }: { label: string }) {
 
 export function InsightBlock({ code }: Props) {
   const t = useT();
+  const { locale } = useLocale();
   const [state, setState] = useState<State>({ kind: "loading" });
   const headerLabel = t("insight.heading");
 
@@ -38,7 +40,7 @@ export function InsightBlock({ code }: Props) {
     let cancelled = false;
     setState({ kind: "loading" });
     (async () => {
-      const result = await fetchInsight(code, false);
+      const result = await fetchInsight(code, false, locale);
       if (cancelled) return;
       if (result.ok) {
         if (result.data === null) setState({ kind: "absent" });
@@ -52,7 +54,7 @@ export function InsightBlock({ code }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [code]);
+  }, [code, locale]);
 
   // Watchlist rows that aren't held positions: render nothing rather than
   // a red error. The drill-in still shows the price chart + technicals.

@@ -2,13 +2,13 @@
 
 Each analyst module imports `call_analyst` and provides:
   • role label ("Fundamentals" | "News" | "Sentiment" | "Technical")
-  • role-specific bans extending FORBIDDEN_BASE
+  • role-specific bans extending FORBIDDEN_BASE — keyed per locale
   • a context dict of structured signals (no prose) for that dimension
 
 The shared call enforces:
-  • ≤22 word sentence, observation framing
+  • ≤22 word sentence (or ≤55 char Chinese), observation framing
   • Forbidden-words post-validation with one retry
-  • Quiet fallback string when context is empty
+  • Quiet fallback string when context is empty (locale-aware)
 
 The same Claude SDK call shape as `api.insight._call_claude`. Reuses
 `ANTHROPIC_DIGEST_MODEL` env var.
@@ -21,6 +21,8 @@ import logging
 import os
 import re
 from dataclasses import dataclass
+
+from api.i18n import Locale
 
 log = logging.getLogger(__name__)
 
@@ -47,17 +49,57 @@ FORBIDDEN_BASE: tuple[str, ...] = (
 )
 
 
+# Chinese mirror. Same observation-only register; substring match still
+# applies (CJK substrings are stable). v1 — review pass intended.
+FORBIDDEN_BASE_ZH: tuple[str, ...] = (
+    # Action language
+    "买入", "买进", "卖出", "卖空", "持有", "加仓", "减仓", "建仓", "清仓",
+    "目标价", "预测", "预计", "推荐", "建议",
+    "应该", "理应",
+    "看多", "看涨", "看空", "看跌",
+    # Hype
+    "大涨", "暴涨", "飙升", "大跌", "暴跌", "崩盘",
+    "突破点", "反弹",
+    # Magnitude qualifiers
+    "显著", "重大", "出色", "强劲", "疲软", "稳健", "急剧",
+    "戏剧性",
+    # Indicator-behavior (v4 mirror)
+    "动能", "势头",
+)
+
+
+_ROLE_ZH: dict[str, str] = {
+    "Fundamentals": "基本面",
+    "News": "新闻",
+    "Sentiment": "情绪",
+    "Technical": "技术",
+}
+
+
+# Phrase a sentence must contain to be counted as a quiet placeholder
+# when re-inflating from cache. Chosen so neither phrase shows up in
+# normal observation prose.
+_QUIET_MARKER_EN = "Quiet on "
+_QUIET_MARKER_ZH = "无重要信号"
+
+
+def is_quiet_sentence(sentence: str) -> bool:
+    return _QUIET_MARKER_EN in sentence or _QUIET_MARKER_ZH in sentence
+
+
 @dataclass(frozen=True)
 class AnalystOutput:
-    sentence: str          # ≤22 words, no forbidden words
-    is_quiet: bool         # true when context is empty → "Quiet on X this week"
+    sentence: str          # ≤22 words EN / ≤55 chars CN, no forbidden words
+    is_quiet: bool         # true when context empty → locale-aware quiet line
 
 
-def _quiet(role: str) -> AnalystOutput:
-    return AnalystOutput(
-        sentence=f"Quiet on {role.lower()} this week.",
-        is_quiet=True,
-    )
+def _quiet(role: str, locale: Locale = "en") -> AnalystOutput:
+    if locale == "zh":
+        zh = _ROLE_ZH.get(role, role)
+        sentence = f"本周{zh}方面无重要信号。"
+    else:
+        sentence = f"Quiet on {role.lower()} this week."
+    return AnalystOutput(sentence=sentence, is_quiet=True)
 
 
 def _word_count(text: str) -> int:
@@ -75,7 +117,7 @@ def _has_forbidden(text: str, bans: tuple[str, ...]) -> str | None:
     return None
 
 
-_PROMPT_TEMPLATE = """\
+_PROMPT_TEMPLATE_EN = """\
 You are the {role} analyst on a long-horizon investor's reading desk for
 {ticker} ({name}). Write ONE sentence about today's {role_lower} signals
 for this stock. Plain English, ≤22 words. Frame as observation only.
@@ -93,6 +135,33 @@ If the context below is empty or all-null, output exactly:
 
 Output: just the sentence. No preamble, no quotes, no markdown.
 
+Respond in English.
+
+Context:
+{context_json}
+"""
+
+
+_PROMPT_TEMPLATE_ZH = """\
+你是一位长线投资者阅读台上的{role_zh}分析师，标的为 {ticker}（{name}）。
+请用一句简体中文记录今日该股票的{role_zh}方面信号。≤55 个汉字。
+观察口吻，不带行动建议。
+
+禁用词（输出中任意位置都不得出现）：{forbidden_csv}。
+
+数字按原数字写出，不要修饰其幅度。
+反例："登记了显著的 45% 涨幅"
+正例："30 天涨幅为 +45%"
+
+切勿使用破折号（—）。可使用冒号、逗号、句号或顿号。
+
+若下方 context 为空或全部为 null，请原样输出：
+"本周{role_zh}方面无重要信号。"
+
+输出仅为一句话，无前导说明、无引号、无 markdown。
+
+请使用简体中文回答。日期保留原英文（如 "May 8"）即可，无需翻译。
+
 Context:
 {context_json}
 """
@@ -103,18 +172,23 @@ def call_analyst(
     ticker: str,
     name: str,
     context: dict,
-    role_specific_bans: tuple[str, ...],
+    role_specific_bans: dict[Locale, tuple[str, ...]] | tuple[str, ...],
     *,
     is_context_empty: bool,
+    locale: Locale = "en",
 ) -> AnalystOutput:
     """Single Claude call. Returns AnalystOutput.
 
-    On empty context: short-circuits with the quiet fallback (no Claude
-    call, no spend). On forbidden-word violation: one retry with a
-    stricter system prompt; if still failing, falls back to quiet.
+    On empty context: short-circuits with the locale-aware quiet
+    fallback (no Claude call, no spend). On forbidden-word violation:
+    one retry with a stricter system prompt; if still failing, falls
+    back to quiet.
+
+    `role_specific_bans` accepts either a `tuple[str, ...]` (legacy
+    en-only) or a `dict[Locale, tuple[str, ...]]` (locale-aware).
     """
     if is_context_empty:
-        return _quiet(role)
+        return _quiet(role, locale)
 
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
@@ -122,33 +196,64 @@ def call_analyst(
             "ANTHROPIC_API_KEY not set — add it to .env to enable /api/digest."
         )
 
-    bans = FORBIDDEN_BASE + role_specific_bans
-    prompt = _PROMPT_TEMPLATE.format(
-        role=role,
-        role_lower=role.lower(),
-        ticker=ticker,
-        name=name,
-        forbidden_csv=", ".join(bans),
-        context_json=json.dumps(context, indent=2, default=str),
-    )
+    if isinstance(role_specific_bans, dict):
+        role_bans = role_specific_bans.get(locale, ())
+    else:
+        role_bans = role_specific_bans  # legacy en-only path
 
-    sentence = _claude_one_shot(prompt, max_tokens=120)
+    if locale == "zh":
+        bans = FORBIDDEN_BASE_ZH + role_bans
+        template = _PROMPT_TEMPLATE_ZH
+        prompt_kwargs = {
+            "role_zh": _ROLE_ZH.get(role, role),
+            "ticker": ticker,
+            "name": name,
+            "forbidden_csv": "、".join(bans),
+            "context_json": json.dumps(context, indent=2, default=str, ensure_ascii=False),
+        }
+    else:
+        bans = FORBIDDEN_BASE + role_bans
+        template = _PROMPT_TEMPLATE_EN
+        prompt_kwargs = {
+            "role": role,
+            "role_lower": role.lower(),
+            "ticker": ticker,
+            "name": name,
+            "forbidden_csv": ", ".join(bans),
+            "context_json": json.dumps(context, indent=2, default=str),
+        }
+
+    prompt = template.format(**prompt_kwargs)
+    sentence = _claude_one_shot(prompt, max_tokens=180)
     bad = _has_forbidden(sentence, bans)
     if bad is not None:
-        log.info("analyst %s/%s: forbidden word %r in first draft, retrying", role, ticker, bad)
-        retry_prompt = (
-            prompt
-            + "\n\nIMPORTANT: your previous draft used the forbidden word "
+        log.info(
+            "analyst %s/%s/%s: forbidden word %r in first draft, retrying",
+            role, ticker, locale, bad,
+        )
+        retry_suffix_en = (
+            "\n\nIMPORTANT: your previous draft used the forbidden word "
             f'"{bad}". Rewrite without it. Plain observational language only.'
         )
-        sentence = _claude_one_shot(retry_prompt, max_tokens=120)
+        retry_suffix_zh = (
+            "\n\n重要：先前的草稿包含禁用词 "
+            f'"{bad}"，请重写并完全避免它。仅使用观察口吻。'
+        )
+        retry_prompt = prompt + (retry_suffix_zh if locale == "zh" else retry_suffix_en)
+        sentence = _claude_one_shot(retry_prompt, max_tokens=180)
         bad = _has_forbidden(sentence, bans)
         if bad is not None:
-            log.warning("analyst %s/%s: forbidden word %r persisted after retry; quieting", role, ticker, bad)
-            return _quiet(role)
+            log.warning(
+                "analyst %s/%s/%s: forbidden word %r persisted after retry; quieting",
+                role, ticker, locale, bad,
+            )
+            return _quiet(role, locale)
 
-    if _word_count(sentence) > 28:
-        log.info("analyst %s/%s: sentence over budget (%d words), keeping", role, ticker, _word_count(sentence))
+    if locale == "en" and _word_count(sentence) > 28:
+        log.info(
+            "analyst %s/%s: sentence over budget (%d words), keeping",
+            role, ticker, _word_count(sentence),
+        )
 
     return AnalystOutput(sentence=sentence, is_quiet=False)
 

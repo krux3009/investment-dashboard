@@ -12,6 +12,7 @@ import {
 import { useT } from "@/lib/i18n/use-t";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import type { StringKey } from "@/lib/i18n/strings";
+import type { Locale } from "@/lib/i18n/locale-provider";
 
 interface Props {
   initial: ForesightResponse;
@@ -139,6 +140,7 @@ function EventRow({ event, days, expanded, onToggle, insight }: RowProps) {
 
 export function ForesightBlock({ initial }: Props) {
   const t = useT();
+  const { locale } = useLocale();
   const [data, setData] = useState<ForesightResponse>(initial);
   const [days, setDays] = useState<number>(initial.days);
   const [loading, setLoading] = useState(false);
@@ -181,7 +183,7 @@ export function ForesightBlock({ initial }: Props) {
 
   async function load(eventId: string) {
     setInsightById((s) => ({ ...s, [eventId]: { kind: "loading" } }));
-    const result = await fetchForesightInsight(eventId, days);
+    const result = await fetchForesightInsight(eventId, days, false, locale);
     setInsightById((s) => ({
       ...s,
       [eventId]: result.ok
@@ -191,6 +193,12 @@ export function ForesightBlock({ initial }: Props) {
           : { kind: "error", detail: result.detail },
     }));
   }
+
+  // When locale flips, invalidate any cached per-event insights so the
+  // next expansion fetches fresh CN/EN prose.
+  useEffect(() => {
+    setInsightById({});
+  }, [locale]);
 
   return (
     <section className="mb-12">

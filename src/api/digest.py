@@ -33,9 +33,10 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from api.analysts import fundamentals, news, sentiment, technical
-from api.analysts._base import AnalystOutput
+from api.analysts._base import AnalystOutput, is_quiet_sentence
 from api.data import prices
 from api.data.moomoo_client import get_summary
+from api.i18n import DEFAULT_LOCALE, Locale, prompt_version_with_locale
 
 log = logging.getLogger(__name__)
 
@@ -43,7 +44,10 @@ log = logging.getLogger(__name__)
 # + added "report numbers, don't characterize" example pair to template.
 # v3 → v4 (2026-05-09): banned indicator-behavior tokens (momentum,
 # decelerat, mover) — leaked through v3 in MU/INTC technical, ANET news.
-_PROMPT_VERSION = "v4"
+# v4 → v5 (2026-05-10): locale-aware prompts (en + zh), CN forbidden
+# list, locale-suffixed cache keys ("v5-en" / "v5-zh"). Existing v4
+# rows become orphaned; rebuild on next request.
+_PROMPT_VERSION = "v5"
 _TTL = timedelta(hours=6)
 
 # Bound across-ticker concurrency. 4 tickers × 4 tiles = 16 inflight calls
@@ -72,8 +76,9 @@ class TickerTiles:
 
 
 def _is_quiet_sentence(sentence: str) -> bool:
-    # Mirrors `analysts._base._quiet()` — only path that yields this prefix.
-    return sentence.startswith("Quiet on ")
+    # Re-export the shared locale-aware detector. Cached prose may be in
+    # either locale; both quiet-marker prefixes are recognised.
+    return is_quiet_sentence(sentence)
 
 
 @dataclass(frozen=True)
@@ -173,14 +178,17 @@ def _ensure_cache_table() -> None:
         )
 
 
-def _load_cached_tiles(code: str) -> tuple[str, str, str, str, datetime] | None:
+def _load_cached_tiles(
+    code: str, locale: Locale = DEFAULT_LOCALE
+) -> tuple[str, str, str, str, datetime] | None:
     _ensure_cache_table()
+    pv = prompt_version_with_locale(_PROMPT_VERSION, locale)
     with prices._DB_LOCK:
         row = prices._db().execute(
             "SELECT fundamentals, news, sentiment, technical, generated_at "
             "FROM digest_tiles_cache "
             "WHERE code = ? AND prompt_version = ?",
-            [code, _PROMPT_VERSION],
+            [code, pv],
         ).fetchone()
     if not row:
         return None
@@ -190,14 +198,17 @@ def _load_cached_tiles(code: str) -> tuple[str, str, str, str, datetime] | None:
     return fundamentals, news_, sentiment_, technical_, generated_at
 
 
-def _save_cached_tiles(tiles: TickerTiles, generated_at: datetime) -> None:
+def _save_cached_tiles(
+    tiles: TickerTiles, generated_at: datetime, locale: Locale = DEFAULT_LOCALE
+) -> None:
     _ensure_cache_table()
+    pv = prompt_version_with_locale(_PROMPT_VERSION, locale)
     with prices._DB_LOCK:
         prices._db().execute(
             "INSERT OR REPLACE INTO digest_tiles_cache VALUES (?, ?, ?, ?, ?, ?, ?)",
             [
                 tiles.code,
-                _PROMPT_VERSION,
+                pv,
                 tiles.fundamentals,
                 tiles.news,
                 tiles.sentiment,
@@ -210,9 +221,11 @@ def _save_cached_tiles(tiles: TickerTiles, generated_at: datetime) -> None:
 # ── Per-ticker orchestration ────────────────────────────────────────────────
 
 
-async def _build_tiles_one(code: str, ticker: str, name: str, currency: str) -> TickerTiles:
+async def _build_tiles_one(
+    code: str, ticker: str, name: str, currency: str, locale: Locale = DEFAULT_LOCALE
+) -> TickerTiles:
     """Cache-first, then 4-tile fan-out. All four analysts run concurrently."""
-    cached = _load_cached_tiles(code)
+    cached = _load_cached_tiles(code, locale)
     if cached is not None:
         f, n, s, t, _gen_at = cached
         return TickerTiles(
@@ -229,10 +242,10 @@ async def _build_tiles_one(code: str, ticker: str, name: str, currency: str) -> 
         # to_thread so the four calls actually run concurrently rather
         # than serializing on the event loop.
         results: list[AnalystOutput] = await asyncio.gather(
-            asyncio.to_thread(fundamentals.get_take, code, ticker, name, currency),
-            asyncio.to_thread(news.get_take, code, ticker, name),
-            asyncio.to_thread(sentiment.get_take, code, ticker, name),
-            asyncio.to_thread(technical.get_take, code, ticker, name),
+            asyncio.to_thread(fundamentals.get_take, code, ticker, name, currency, locale),
+            asyncio.to_thread(news.get_take, code, ticker, name, locale),
+            asyncio.to_thread(sentiment.get_take, code, ticker, name, locale),
+            asyncio.to_thread(technical.get_take, code, ticker, name, locale),
         )
 
     tiles = TickerTiles(
@@ -248,14 +261,16 @@ async def _build_tiles_one(code: str, ticker: str, name: str, currency: str) -> 
         sentiment_quiet=results[2].is_quiet,
         technical_quiet=results[3].is_quiet,
     )
-    _save_cached_tiles(tiles, datetime.now())
+    _save_cached_tiles(tiles, datetime.now(), locale)
     return tiles
 
 
 # ── Public API ──────────────────────────────────────────────────────────────
 
 
-async def get_digest_async(force_refresh: bool = False) -> AnalystTiledDigest:
+async def get_digest_async(
+    force_refresh: bool = False, locale: Locale = DEFAULT_LOCALE
+) -> AnalystTiledDigest:
     """Return per-ticker tile grid. If `force_refresh`, bypass the 6h cache."""
     summary = get_summary()
     if not summary.positions:
@@ -264,6 +279,7 @@ async def get_digest_async(force_refresh: bool = False) -> AnalystTiledDigest:
             holdings=[],
         )
 
+    pv = prompt_version_with_locale(_PROMPT_VERSION, locale)
     if force_refresh:
         # Drop cache rows for current holdings so the next save overwrites.
         codes = [p.code for p in summary.positions]
@@ -273,19 +289,19 @@ async def get_digest_async(force_refresh: bool = False) -> AnalystTiledDigest:
                 "DELETE FROM digest_tiles_cache WHERE prompt_version = ? AND code IN ("
                 + ",".join("?" for _ in codes)
                 + ")",
-                [_PROMPT_VERSION, *codes],
+                [pv, *codes],
             )
 
     # Snapshot cache state BEFORE fan-out so `cached` reflects whether work
     # was done, not the post-write state (every ticker is "cached" after save).
     pre_cached = not force_refresh and all(
-        _load_cached_tiles(p.code) is not None for p in summary.positions
+        _load_cached_tiles(p.code, locale) is not None for p in summary.positions
     )
 
     # Fan out across holdings; each call is independent.
     tiles_list = await asyncio.gather(
         *(
-            _build_tiles_one(p.code, p.ticker, p.name, p.currency)
+            _build_tiles_one(p.code, p.ticker, p.name, p.currency, locale)
             for p in summary.positions
         )
     )
@@ -353,7 +369,9 @@ async def warm_cache() -> None:
     )
 
 
-def get_digest(force_refresh: bool = False) -> AnalystTiledDigest:
+def get_digest(
+    force_refresh: bool = False, locale: Locale = DEFAULT_LOCALE
+) -> AnalystTiledDigest:
     """Sync wrapper for the route handler. Spins an event loop if needed."""
     try:
         loop = asyncio.get_running_loop()
@@ -363,6 +381,6 @@ def get_digest(force_refresh: bool = False) -> AnalystTiledDigest:
         # Already inside an event loop (shouldn't happen in our sync route,
         # but guard anyway). Fall through to a new loop in a thread.
         return asyncio.run_coroutine_threadsafe(
-            get_digest_async(force_refresh), loop
+            get_digest_async(force_refresh, locale), loop
         ).result()
-    return asyncio.run(get_digest_async(force_refresh))
+    return asyncio.run(get_digest_async(force_refresh, locale))

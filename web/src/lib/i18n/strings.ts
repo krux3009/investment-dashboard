@@ -168,6 +168,8 @@ export const STRINGS = {
     "anomaly.load_failed": "could not load anomalies: {detail}",
     "anomaly.none": "no anomalies in the last {n} days.",
     "anomaly.none_in_kind": "none in the last {n} days.",
+    "anomaly.kind.technical": "Technical",
+    "anomaly.kind.capital": "Capital flow",
   },
 
   zh: {
@@ -325,6 +327,8 @@ export const STRINGS = {
     "anomaly.load_failed": "异动加载失败：{detail}",
     "anomaly.none": "近 {n} 天内无异动。",
     "anomaly.none_in_kind": "近 {n} 天内无相关异动。",
+    "anomaly.kind.technical": "技术",
+    "anomaly.kind.capital": "资金流",
   },
 } as const satisfies Record<Locale, Record<string, string>>;
 

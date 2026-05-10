@@ -7,6 +7,7 @@ import logging
 from fastapi import APIRouter, HTTPException, Query
 
 from api import foresight_insight
+from api.i18n import parse_locale
 
 log = logging.getLogger(__name__)
 
@@ -18,9 +19,13 @@ def get_foresight_insight(
     event_id: str,
     days: int = Query(30, ge=1, le=90),
     refresh: bool = Query(False),
+    locale: str = Query("en"),
 ) -> dict:
+    loc = parse_locale(locale)
     try:
-        ins = foresight_insight.get_insight(event_id, days=days, force_refresh=refresh)
+        ins = foresight_insight.get_insight(
+            event_id, days=days, force_refresh=refresh, locale=loc
+        )
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:

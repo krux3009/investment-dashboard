@@ -13,11 +13,13 @@ from datetime import date
 
 from api.analysts._base import AnalystOutput, call_analyst
 from api.data import anomalies
+from api.i18n import Locale
 
 ROLE = "Fundamentals"
-ROLE_BANS: tuple[str, ...] = (
-    "cheap", "expensive", "undervalued", "overvalued", "fairly valued",
-)
+ROLE_BANS: dict[Locale, tuple[str, ...]] = {
+    "en": ("cheap", "expensive", "undervalued", "overvalued", "fairly valued"),
+    "zh": ("便宜", "昂贵", "低估", "高估", "估值合理"),
+}
 
 
 def _build_context(code: str, ticker: str, currency: str) -> dict:
@@ -45,7 +47,13 @@ def _build_context(code: str, ticker: str, currency: str) -> dict:
     }
 
 
-def get_take(code: str, ticker: str, name: str, currency: str) -> AnalystOutput:
+def get_take(
+    code: str,
+    ticker: str,
+    name: str,
+    currency: str,
+    locale: Locale = "en",
+) -> AnalystOutput:
     context = _build_context(code, ticker, currency)
     is_empty = not context["capital_flow_signals"] and context["next_earnings"] == "none on calendar"
     return call_analyst(
@@ -55,4 +63,5 @@ def get_take(code: str, ticker: str, name: str, currency: str) -> AnalystOutput:
         context=context,
         role_specific_bans=ROLE_BANS,
         is_context_empty=is_empty,
+        locale=locale,
     )

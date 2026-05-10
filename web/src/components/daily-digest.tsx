@@ -90,7 +90,7 @@ export function DailyDigest() {
 
   async function load(refresh = false) {
     setState({ kind: "loading" });
-    const result = await fetchDigest(refresh);
+    const result = await fetchDigest(refresh, locale);
     if (result.ok) {
       setState({ kind: "ready", data: result.data });
     } else if (result.status === 503) {
@@ -102,7 +102,8 @@ export function DailyDigest() {
 
   useEffect(() => {
     void load(false);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locale]);
 
   return (
     <section className="border-b border-rule pb-10 mb-10">

@@ -7,6 +7,7 @@ import {
   type ConcentrationResponse,
 } from "@/lib/api";
 import { useT } from "@/lib/i18n/use-t";
+import { useLocale } from "@/lib/i18n/locale-provider";
 
 interface Props {
   initial: ConcentrationResponse;
@@ -78,6 +79,7 @@ function StackedBar({
 
 export function ConcentrationBlock({ initial }: Props) {
   const t = useT();
+  const { locale } = useLocale();
   const [expanded, setExpanded] = useState(false);
   const [insight, setInsight] = useState<InsightState>({ kind: "idle" });
 
@@ -86,7 +88,7 @@ export function ConcentrationBlock({ initial }: Props) {
     let cancelled = false;
     setInsight({ kind: "loading" });
     (async () => {
-      const result = await fetchConcentrationInsight();
+      const result = await fetchConcentrationInsight(false, locale);
       if (cancelled) return;
       if (result.ok) {
         setInsight({ kind: "ready", data: result.data });
@@ -99,7 +101,7 @@ export function ConcentrationBlock({ initial }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [expanded]);
+  }, [expanded, locale]);
 
   if (initial.count === 0) return null;
 

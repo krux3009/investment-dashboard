@@ -7,6 +7,7 @@ import logging
 from fastapi import APIRouter, HTTPException, Query
 
 from api import benchmark, benchmark_insight
+from api.i18n import parse_locale
 
 log = logging.getLogger(__name__)
 
@@ -18,10 +19,14 @@ def get_benchmark_insight(
     days: int = Query(90, ge=7, le=730),
     symbols: str | None = Query(None),
     refresh: bool = Query(False),
+    locale: str = Query("en"),
 ) -> dict:
+    loc = parse_locale(locale)
     syms = benchmark.parse_symbols(symbols)
     try:
-        ins = benchmark_insight.get_insight(days=days, symbols=syms, force_refresh=refresh)
+        ins = benchmark_insight.get_insight(
+            days=days, symbols=syms, force_refresh=refresh, locale=loc
+        )
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:

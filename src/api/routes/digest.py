@@ -12,6 +12,7 @@ import logging
 from fastapi import APIRouter, HTTPException, Query
 
 from api import digest
+from api.i18n import parse_locale
 
 log = logging.getLogger(__name__)
 
@@ -19,9 +20,13 @@ router = APIRouter()
 
 
 @router.get("/digest")
-async def get_digest(refresh: bool = Query(False)) -> dict:
+async def get_digest(
+    refresh: bool = Query(False),
+    locale: str = Query("en"),
+) -> dict:
+    loc = parse_locale(locale)
     try:
-        d = await digest.get_digest_async(force_refresh=refresh)
+        d = await digest.get_digest_async(force_refresh=refresh, locale=loc)
     except RuntimeError as exc:
         # Most likely: ANTHROPIC_API_KEY missing.
         raise HTTPException(status_code=503, detail=str(exc)) from exc

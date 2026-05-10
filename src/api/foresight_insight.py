@@ -18,11 +18,24 @@ from datetime import datetime, timedelta
 from api import foresight
 from api.data import prices
 from api.data.moomoo_client import get_summary
+from api.i18n import DEFAULT_LOCALE, Locale, prompt_version_with_locale
 
 log = logging.getLogger(__name__)
 
 _TTL = timedelta(hours=6)
-_PROMPT_VERSION = "v2-no-em-dash"
+# v2-no-em-dash → v3-no-em-dash (2026-05-10): locale-aware prompts.
+_PROMPT_VERSION = "v3-no-em-dash"
+
+_LANG_INSTRUCTION: dict[Locale, str] = {
+    "en": "\n\nRespond in English.\n",
+    "zh": (
+        "\n\n请使用简体中文回答。所有结构化标签（'What:' / 'Meaning:' / 'Watch:'）保持英文以便解析。"
+        "采用零售投资者的朴素中文。禁用以下中文词汇："
+        "买入、卖出、持有、加仓、减仓、目标价、预测、推荐、应该、看多、看空、"
+        "飙升、暴跌、突破、反弹、跑赢、跑输、催化剂、"
+        "可能上涨、可能下跌、预期上涨、预期下跌。\n"
+    ),
+}
 
 _PROMPT = """\
 You are writing three short educational lines about an UPCOMING event
@@ -94,13 +107,16 @@ def _ensure_table() -> None:
         )
 
 
-def _load_cached(event_id: str) -> tuple[str, str, str, datetime] | None:
+def _load_cached(
+    event_id: str, locale: Locale = DEFAULT_LOCALE
+) -> tuple[str, str, str, datetime] | None:
     _ensure_table()
+    pv = prompt_version_with_locale(_PROMPT_VERSION, locale)
     with prices._DB_LOCK:
         row = prices._db().execute(
             "SELECT what, meaning, watch, generated_at FROM foresight_insight_cache "
             "WHERE event_id = ? AND prompt_version = ?",
-            [event_id, _PROMPT_VERSION],
+            [event_id, pv],
         ).fetchone()
     if not row:
         return None
@@ -110,12 +126,20 @@ def _load_cached(event_id: str) -> tuple[str, str, str, datetime] | None:
     return what, meaning, watch, generated_at
 
 
-def _save_cache(event_id: str, what: str, meaning: str, watch: str, generated_at: datetime) -> None:
+def _save_cache(
+    event_id: str,
+    what: str,
+    meaning: str,
+    watch: str,
+    generated_at: datetime,
+    locale: Locale = DEFAULT_LOCALE,
+) -> None:
     _ensure_table()
+    pv = prompt_version_with_locale(_PROMPT_VERSION, locale)
     with prices._DB_LOCK:
         prices._db().execute(
             "INSERT OR REPLACE INTO foresight_insight_cache VALUES (?, ?, ?, ?, ?, ?)",
-            [event_id, _PROMPT_VERSION, what, meaning, watch, generated_at],
+            [event_id, pv, what, meaning, watch, generated_at],
         )
 
 
@@ -132,7 +156,9 @@ def _build_user_message(ev: foresight.ForesightEvent, holdings: list[str]) -> st
     return "\n".join(lines)
 
 
-def _call_claude(user_message: str) -> tuple[str, str, str]:
+def _call_claude(
+    user_message: str, locale: Locale = DEFAULT_LOCALE
+) -> tuple[str, str, str]:
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         raise RuntimeError(
@@ -144,10 +170,12 @@ def _call_claude(user_message: str) -> tuple[str, str, str]:
     client = Anthropic(api_key=api_key)
     model = os.environ.get("ANTHROPIC_DIGEST_MODEL", "claude-sonnet-4-6")
 
+    system_prompt = _PROMPT + _LANG_INSTRUCTION[locale]
+
     response = client.messages.create(
         model=model,
-        max_tokens=320,
-        system=_PROMPT,
+        max_tokens=400,
+        system=system_prompt,
         messages=[{"role": "user", "content": user_message}],
     )
     body = "\n".join(b.text for b in response.content if b.type == "text").strip()
@@ -167,9 +195,14 @@ def _call_claude(user_message: str) -> tuple[str, str, str]:
     return what, meaning, watch
 
 
-def get_insight(event_id: str, days: int = 30, force_refresh: bool = False) -> ForesightInsight | None:
+def get_insight(
+    event_id: str,
+    days: int = 30,
+    force_refresh: bool = False,
+    locale: Locale = DEFAULT_LOCALE,
+) -> ForesightInsight | None:
     if not force_refresh:
-        cached = _load_cached(event_id)
+        cached = _load_cached(event_id, locale)
         if cached is not None:
             what, meaning, watch, gen_at = cached
             return ForesightInsight(
@@ -184,9 +217,9 @@ def get_insight(event_id: str, days: int = 30, force_refresh: bool = False) -> F
     summary = get_summary()
     holdings = [p.ticker for p in summary.positions]
 
-    what, meaning, watch = _call_claude(_build_user_message(ev, holdings))
+    what, meaning, watch = _call_claude(_build_user_message(ev, holdings), locale)
     now = datetime.now()
-    _save_cache(event_id, what, meaning, watch, now)
+    _save_cache(event_id, what, meaning, watch, now, locale)
     return ForesightInsight(
         event_id=event_id, what=what, meaning=meaning, watch=watch, generated_at=now,
     )

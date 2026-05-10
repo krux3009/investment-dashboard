@@ -19,6 +19,7 @@ import {
   type SentimentInsightResponse,
 } from "@/lib/api";
 import { useT } from "@/lib/i18n/use-t";
+import { useLocale } from "@/lib/i18n/locale-provider";
 import type { StringKey } from "@/lib/i18n/strings";
 
 interface Props {
@@ -124,8 +125,14 @@ function MentionRow({ m }: { m: RedditMention }) {
 
 function LearnMore({ code }: { code: string }) {
   const t = useT();
+  const { locale } = useLocale();
   const [expanded, setExpanded] = useState(false);
   const [state, setState] = useState<InsightState>({ kind: "idle" });
+
+  // Reset insight state on locale switch so the next expand re-fetches.
+  useEffect(() => {
+    setState({ kind: "idle" });
+  }, [locale]);
 
   useEffect(() => {
     if (!expanded) return;
@@ -133,7 +140,7 @@ function LearnMore({ code }: { code: string }) {
     let cancelled = false;
     setState({ kind: "loading" });
     (async () => {
-      const result = await fetchSentimentInsight(code, false);
+      const result = await fetchSentimentInsight(code, false, locale);
       if (cancelled) return;
       if (result.ok) {
         if (result.data === null) setState({ kind: "absent" });
@@ -150,7 +157,7 @@ function LearnMore({ code }: { code: string }) {
     // Effect deps deliberately exclude state — re-running on every
     // setState would loop. See feedback_lazy_fetch_deps.md.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expanded, code]);
+  }, [expanded, code, locale]);
 
   return (
     <div className="mt-4">
