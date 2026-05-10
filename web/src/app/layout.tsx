@@ -5,6 +5,7 @@ import { LiveIndicator } from "@/components/live-indicator";
 import { LivePricesProvider } from "@/components/live-prices-provider";
 import { ThemeProvider } from "@/components/theme-provider";
 import { NavBar } from "@/components/nav-bar";
+import { LocaleProvider } from "@/lib/i18n/locale-provider";
 
 const plexSans = IBM_Plex_Sans({
   variable: "--font-plex-sans",
@@ -35,20 +36,22 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="min-h-full bg-surface text-ink">
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="light"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <LivePricesProvider>
-            <main className="max-w-6xl mx-auto px-8 py-12">
-              <NavBar />
-              {children}
-              <LiveIndicator />
-            </main>
-          </LivePricesProvider>
-        </ThemeProvider>
+        <LocaleProvider>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="light"
+            enableSystem
+            disableTransitionOnChange
+          >
+            <LivePricesProvider>
+              <main className="max-w-6xl mx-auto px-8 py-12">
+                <NavBar />
+                {children}
+                <LiveIndicator />
+              </main>
+            </LivePricesProvider>
+          </ThemeProvider>
+        </LocaleProvider>
       </body>
     </html>
   );
