@@ -30,3 +30,6 @@ wheels/
 # Playwright MCP runtime + audit screenshots
 .playwright-mcp/
 /audit-*.png
+
+# Claude Code local-only settings (machine-specific Bash allowlist)
+.claude/settings.local.json

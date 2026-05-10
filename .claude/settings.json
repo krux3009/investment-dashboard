@@ -1,0 +1,27 @@
+{
+  "enabledPlugins": {
+    "code-simplifier@claude-plugins-official": true
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=$(jq -r '.tool_input.file_path // empty'); case \"$f\" in *'/.env'|'.env') echo 'Refused: .env is git-ignored secrets file (MOOMOO_TRADE_PWD, ANTHROPIC_API_KEY, REDDIT creds). Edit .env.example instead.' >&2; exit 2;; esac; exit 0"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cmd=$(jq -r '.tool_input.command // empty'); echo \"$cmd\" | grep -qE '\\.duckdb([^a-zA-Z0-9_/.-]|$)' && echo 'Warning: *.duckdb files are single-writer (FastAPI process only). External writes risk corruption if uvicorn is running. See CLAUDE.md.' >&2 && exit 1; exit 0"
+          }
+        ]
+      }
+    ]
+  }
+}
