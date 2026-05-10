@@ -8,6 +8,7 @@ import { InsightBlock } from "./insight-block";
 import { NotesBlock } from "./notes-block";
 import { PriceChart } from "./price-chart";
 import { SentimentBlock } from "./sentiment-block";
+import { useT } from "@/lib/i18n/use-t";
 
 interface Props {
   code: string;
@@ -19,6 +20,7 @@ interface Props {
 // Lazy-loaded drill-in content — fetched on first expand, cached per
 // code via component state. Symmetric for holdings + watchlist rows.
 export function DrillIn({ code, direction }: Props) {
+  const t = useT();
   const [points, setPoints] = useState<PricePoint[] | null>(null);
   const [pricesError, setPricesError] = useState<string | null>(null);
   const [anomalyItems, setAnomalyItems] = useState<AnomalyItem[]>([]);
@@ -61,15 +63,15 @@ export function DrillIn({ code, direction }: Props) {
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-8">
         <div>
           <div className="text-xs uppercase tracking-[0.06em] text-quiet mb-2">
-            Last 90 days
+            {t("drillin.heading")}
           </div>
           {pricesError ? (
             <div className="text-sm text-loss">
-              could not load price history: {pricesError}
+              {t("drillin.price_load_failed", { detail: pricesError })}
             </div>
           ) : points === null ? (
             <div className="text-sm text-quiet italic h-[220px] flex items-center">
-              loading chart…
+              {t("drillin.loading_chart")}
             </div>
           ) : (
             <PriceChart points={points} direction={direction} />

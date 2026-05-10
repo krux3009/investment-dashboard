@@ -7,6 +7,8 @@ import { useTickPulse } from "@/lib/use-tick-pulse";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { DrillIn } from "./drill-in";
 import { Sparkline } from "./sparkline";
+import { useT } from "@/lib/i18n/use-t";
+import { useLocale } from "@/lib/i18n/locale-provider";
 
 const EARNINGS_SOON_DAYS = 14;
 
@@ -100,6 +102,8 @@ function HoldingRow({
   onToggle,
   earningsItem,
 }: HoldingRowProps) {
+  const t = useT();
+  const { locale } = useLocale();
   const pulseHash = `${h.current_price}|${h.today_change_pct}|${h.market_value_usd}|${h.total_pnl_pct}`;
   const pulsing = useTickPulse(pulseHash);
   const pulseCls = pulsing ? "tick-pulse-cell" : "";
@@ -129,18 +133,29 @@ function HoldingRow({
               {(() => {
                 const e = earningsItem;
                 if (!e || e.days_until > EARNINGS_SOON_DAYS) return null;
-                const dateLabel = new Intl.DateTimeFormat("en-US", {
-                  month: "long",
-                  day: "numeric",
-                }).format(new Date(e.date));
+                const dateLabel = new Intl.DateTimeFormat(
+                  locale === "zh" ? "zh-CN" : "en-US",
+                  { month: "long", day: "numeric" },
+                ).format(new Date(e.date));
                 const daysLabel =
                   e.days_until === 0
-                    ? "today"
-                    : `in ${e.days_until} day${e.days_until === 1 ? "" : "s"}`;
+                    ? t("holdings.earnings.today")
+                    : t(
+                        e.days_until === 1
+                          ? "holdings.earnings.in_day"
+                          : "holdings.earnings.in_days",
+                        { n: e.days_until },
+                      );
                 return (
                   <span
-                    title={`Earnings ${dateLabel} · ${daysLabel}`}
-                    aria-label={`Earnings ${dateLabel} (${daysLabel})`}
+                    title={t("holdings.earnings.title", {
+                      date: dateLabel,
+                      label: daysLabel,
+                    })}
+                    aria-label={t("holdings.earnings.aria", {
+                      date: dateLabel,
+                      label: daysLabel,
+                    })}
                     className="text-quiet inline-flex items-center cursor-help"
                   >
                     <svg
@@ -267,6 +282,7 @@ interface Props {
 }
 
 export function HoldingsTable({ holdings, sparklines, earningsByCode }: Props) {
+  const t = useT();
   const [sort, setSort] = useState<SortState | null>(null);
   const [expandedCode, setExpandedCode] = useState<string | null>(null);
 
@@ -316,32 +332,32 @@ export function HoldingsTable({ holdings, sparklines, earningsByCode }: Props) {
   return (
     <section>
       <div className="text-xs uppercase tracking-[0.06em] text-quiet mb-3">
-        Holdings
+        {t("holdings.heading")}
       </div>
 
       <table className="w-full">
         <thead>
           <tr className="border-b border-rule">
             <th className="text-left pb-3 pr-4">
-              <SortableHeader label="Position" sortKey="ticker" sort={sort} onSort={handleSort} />
+              <SortableHeader label={t("holdings.col.position")} sortKey="ticker" sort={sort} onSort={handleSort} />
             </th>
             <th className="text-right pb-3 px-4">
-              <SortableHeader label="Qty" sortKey="qty" sort={sort} onSort={handleSort} className="text-right" />
+              <SortableHeader label={t("holdings.col.qty")} sortKey="qty" sort={sort} onSort={handleSort} className="text-right" />
             </th>
             <th className="text-right pb-3 px-4">
-              <SortableHeader label="Price" sortKey="current_price" sort={sort} onSort={handleSort} className="text-right" />
+              <SortableHeader label={t("holdings.col.price")} sortKey="current_price" sort={sort} onSort={handleSort} className="text-right" />
             </th>
             <th className="text-right pb-3 px-4">
-              <SortableHeader label="Today" sortKey="today_change_pct" sort={sort} onSort={handleSort} className="text-right" />
+              <SortableHeader label={t("holdings.col.today")} sortKey="today_change_pct" sort={sort} onSort={handleSort} className="text-right" />
             </th>
             <th className="text-right pb-3 px-4">
-              <span className="text-xs uppercase tracking-[0.04em] font-medium text-whisper">30d</span>
+              <span className="text-xs uppercase tracking-[0.04em] font-medium text-whisper">{t("holdings.col.30d")}</span>
             </th>
             <th className="text-right pb-3 px-4">
-              <SortableHeader label="Value (USD)" sortKey="market_value_usd" sort={sort} onSort={handleSort} className="text-right" />
+              <SortableHeader label={t("holdings.col.value_usd")} sortKey="market_value_usd" sort={sort} onSort={handleSort} className="text-right" />
             </th>
             <th className="text-right pb-3 pl-4">
-              <SortableHeader label="Total return" sortKey="total_pnl_pct" sort={sort} onSort={handleSort} className="text-right" />
+              <SortableHeader label={t("holdings.col.total_return")} sortKey="total_pnl_pct" sort={sort} onSort={handleSort} className="text-right" />
             </th>
           </tr>
         </thead>

@@ -6,6 +6,7 @@ import {
   type ConcentrationInsightResponse,
   type ConcentrationResponse,
 } from "@/lib/api";
+import { useT } from "@/lib/i18n/use-t";
 
 interface Props {
   initial: ConcentrationResponse;
@@ -76,6 +77,7 @@ function StackedBar({
 }
 
 export function ConcentrationBlock({ initial }: Props) {
+  const t = useT();
   const [expanded, setExpanded] = useState(false);
   const [insight, setInsight] = useState<InsightState>({ kind: "idle" });
 
@@ -119,38 +121,38 @@ export function ConcentrationBlock({ initial }: Props) {
     <section className="my-12">
       <div className="flex items-baseline justify-between mb-3">
         <h2 className="text-xs uppercase tracking-[0.06em] text-quiet">
-          Shape of the book
+          {t("concentration.heading")}
         </h2>
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
           className="text-xs text-quiet hover:text-ink"
         >
-          {expanded ? "[hide]" : "[learn more]"}
+          {expanded ? t("common.hide") : t("common.learn_more")}
         </button>
       </div>
 
       <div className="flex gap-6 text-xs tabular text-quiet mb-4">
         <span>
-          Top 1 ·{" "}
+          {t("concentration.top_n", { n: 1 })} ·{" "}
           <span className="text-ink">{(initial.top1_pct * 100).toFixed(1)}%</span>
         </span>
         <span>
-          Top 3 ·{" "}
+          {t("concentration.top_n", { n: 3 })} ·{" "}
           <span className="text-ink">{(initial.top3_pct * 100).toFixed(1)}%</span>
         </span>
         <span>
-          Top 5 ·{" "}
+          {t("concentration.top_n", { n: 5 })} ·{" "}
           <span className="text-ink">{(initial.top5_pct * 100).toFixed(1)}%</span>
         </span>
         <span>
-          Holdings · <span className="text-ink">{initial.count}</span>
+          {t("concentration.holdings")} · <span className="text-ink">{initial.count}</span>
         </span>
       </div>
 
       <StackedBar
         segments={segments}
-        ariaLabel="Position weights stacked by descending share"
+        ariaLabel={t("concentration.aria.position_weights")}
       />
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs tabular text-quiet mt-2">
         {segments.map((s) => (
@@ -163,11 +165,11 @@ export function ConcentrationBlock({ initial }: Props) {
 
       <div className="mt-5">
         <div className="text-xs uppercase tracking-[0.06em] text-quiet mb-2">
-          Currency exposure
+          {t("concentration.currency_exposure")}
         </div>
         <StackedBar
           segments={ccySegments}
-          ariaLabel="Currency exposure as USD share"
+          ariaLabel={t("concentration.aria.currency_exposure")}
         />
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs tabular text-quiet mt-2">
           {ccySegments.map((s) => (
@@ -181,7 +183,7 @@ export function ConcentrationBlock({ initial }: Props) {
 
       {initial.single_name_max && (
         <div className="text-xs text-quiet mt-4 tabular">
-          Largest position ·{" "}
+          {t("concentration.largest_position")} ·{" "}
           <span className="text-ink">{initial.single_name_max.ticker}</span> ·{" "}
           <span className="text-ink">
             {(initial.single_name_max.pct * 100).toFixed(1)}%
@@ -192,7 +194,7 @@ export function ConcentrationBlock({ initial }: Props) {
       {expanded && (
         <div className="mt-4 bg-surface-raised border border-rule rounded-sm px-4 py-3">
           {insight.kind === "loading" && (
-            <div role="status" aria-label="Drafting commentary…" className="flex flex-col gap-3">
+            <div role="status" aria-label={t("common.drafting_commentary")} className="flex flex-col gap-3">
               {[0, 1, 2].map((i) => (
                 <div key={i} className="grid grid-cols-[5rem_1fr] gap-x-3 items-center">
                   <div className="h-3 w-16 rounded bg-rule/40 animate-pulse" />
@@ -205,25 +207,27 @@ export function ConcentrationBlock({ initial }: Props) {
             <div className="text-sm text-whisper italic">{insight.detail}</div>
           )}
           {insight.kind === "error" && (
-            <div className="text-sm text-loss">commentary unavailable: {insight.detail}</div>
+            <div className="text-sm text-loss">
+              {t("common.commentary_unavailable", { detail: insight.detail })}
+            </div>
           )}
           {insight.kind === "ready" && (
             <dl className="flex flex-col gap-3 text-sm leading-[1.65]">
               {insight.data.what && (
                 <div className="grid grid-cols-[5rem_1fr] gap-x-3 items-baseline">
-                  <dt className="text-xs uppercase tracking-wide text-quiet">What</dt>
+                  <dt className="text-xs uppercase tracking-wide text-quiet">{t("common.what")}</dt>
                   <dd className="text-ink">{insight.data.what}</dd>
                 </div>
               )}
               {insight.data.meaning && (
                 <div className="grid grid-cols-[5rem_1fr] gap-x-3 items-baseline">
-                  <dt className="text-xs uppercase tracking-wide text-quiet">Meaning</dt>
+                  <dt className="text-xs uppercase tracking-wide text-quiet">{t("common.meaning")}</dt>
                   <dd className="text-ink">{insight.data.meaning}</dd>
                 </div>
               )}
               {insight.data.watch && (
                 <div className="grid grid-cols-[5rem_1fr] gap-x-3 items-baseline">
-                  <dt className="text-xs uppercase tracking-wide text-quiet">Watch</dt>
+                  <dt className="text-xs uppercase tracking-wide text-quiet">{t("common.watch")}</dt>
                   <dd className="text-ink">{insight.data.watch}</dd>
                 </div>
               )}

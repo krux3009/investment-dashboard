@@ -8,6 +8,7 @@
 
 import { useEffect, useState } from "react";
 import { fetchInsight, type InsightResponse } from "@/lib/api";
+import { useT } from "@/lib/i18n/use-t";
 
 interface Props {
   code: string;
@@ -20,16 +21,18 @@ type State =
   | { kind: "unavailable"; detail: string }
   | { kind: "error"; detail: string };
 
-function Header() {
+function Header({ label }: { label: string }) {
   return (
     <div className="text-xs uppercase tracking-[0.06em] text-quiet mb-3">
-      What this means
+      {label}
     </div>
   );
 }
 
 export function InsightBlock({ code }: Props) {
+  const t = useT();
   const [state, setState] = useState<State>({ kind: "loading" });
+  const headerLabel = t("insight.heading");
 
   useEffect(() => {
     let cancelled = false;
@@ -58,10 +61,10 @@ export function InsightBlock({ code }: Props) {
   if (state.kind === "loading") {
     return (
       <div>
-        <Header />
+        <Header label={headerLabel} />
         <dl
           role="status"
-          aria-label="Drafting insight…"
+          aria-label={t("insight.drafting")}
           className="flex flex-col gap-3"
         >
           {[0, 1].map((i) => (
@@ -81,7 +84,7 @@ export function InsightBlock({ code }: Props) {
   if (state.kind === "unavailable") {
     return (
       <div>
-        <Header />
+        <Header label={headerLabel} />
         <div className="text-sm text-whisper italic">{state.detail}</div>
       </div>
     );
@@ -90,9 +93,9 @@ export function InsightBlock({ code }: Props) {
   if (state.kind === "error") {
     return (
       <div>
-        <Header />
+        <Header label={headerLabel} />
         <div className="text-sm text-loss">
-          insight unavailable: {state.detail}
+          {t("common.insight_unavailable", { detail: state.detail })}
         </div>
       </div>
     );
@@ -102,12 +105,12 @@ export function InsightBlock({ code }: Props) {
   if (!meaning && !watch) return null;
   return (
     <div>
-      <Header />
+      <Header label={headerLabel} />
       <dl className="flex flex-col gap-3 text-sm leading-[1.65]">
         {meaning && (
           <div className="grid grid-cols-[5rem_1fr] gap-x-3 items-baseline">
             <dt className="text-xs uppercase tracking-wide text-quiet">
-              Meaning
+              {t("common.meaning")}
             </dt>
             <dd className="text-ink">{meaning}</dd>
           </div>
@@ -115,7 +118,7 @@ export function InsightBlock({ code }: Props) {
         {watch && (
           <div className="grid grid-cols-[5rem_1fr] gap-x-3 items-baseline">
             <dt className="text-xs uppercase tracking-wide text-quiet">
-              Watch
+              {t("common.watch")}
             </dt>
             <dd className="text-ink">{watch}</dd>
           </div>

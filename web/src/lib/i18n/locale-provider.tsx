@@ -43,6 +43,14 @@ export function LocaleProvider({ children, defaultLocale = "en" }: ProviderProps
     setMounted(true);
   }, []);
 
+  useEffect(() => {
+    // Mirror the active locale onto the <html lang> attribute so screen
+    // readers, browser translation hints, and CSS lang(...) selectors
+    // see the right value. The attribute is suppressHydrationWarning'd
+    // in the layout so initial SSR/client mismatch is benign.
+    document.documentElement.lang = locale === "zh" ? "zh-Hans" : "en";
+  }, [locale]);
+
   const setLocale = useCallback((next: Locale) => {
     setLocaleState(next);
     try {
