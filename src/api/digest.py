@@ -297,6 +297,9 @@ async def get_digest_async(force_refresh: bool = False) -> AnalystTiledDigest:
     )
 
 
+_WARM_RETRY_DELAYS = (2.0, 4.0, 8.0, 16.0)
+
+
 async def warm_cache() -> None:
     """Pre-warm the digest tile cache at FastAPI startup.
 
@@ -308,23 +311,45 @@ async def warm_cache() -> None:
     Safe to crash/no-op: missing ANTHROPIC_API_KEY, no positions
     (e.g. moomoo not yet connected), or any other failure logs and
     returns — the lifespan must not block on Claude availability.
+
+    Empty positions are treated as "OpenD still settling" (common after
+    macOS resume from sleep): moomoo_client returns `[]` indistinguishably
+    for both not-ready and legitimate-empty-book. User holds positions
+    persistently, so retry up to ~30s before giving up.
     """
     if not os.environ.get("ANTHROPIC_API_KEY"):
         log.info("digest cache warm: skipped (ANTHROPIC_API_KEY not set)")
         return
     started = datetime.now()
-    try:
-        d = await get_digest_async(force_refresh=False)
-    except Exception:
-        log.exception("digest cache warm failed")
-        return
-    elapsed = (datetime.now() - started).total_seconds()
-    state = "all cached" if d.cached else "fresh tiles built"
-    log.info(
-        "digest cache warm: %d holdings, %s, %.1fs",
-        len(d.holdings),
-        state,
-        elapsed,
+    max_attempts = len(_WARM_RETRY_DELAYS) + 1
+    for attempt in range(1, max_attempts + 1):
+        try:
+            d = await get_digest_async(force_refresh=False)
+        except Exception:
+            log.exception("digest cache warm failed")
+            return
+        if d.holdings:
+            elapsed = (datetime.now() - started).total_seconds()
+            state = "all cached" if d.cached else "fresh tiles built"
+            log.info(
+                "digest cache warm: %d holdings, %s, %.1fs",
+                len(d.holdings),
+                state,
+                elapsed,
+            )
+            return
+        if attempt <= len(_WARM_RETRY_DELAYS):
+            delay = _WARM_RETRY_DELAYS[attempt - 1]
+            log.info(
+                "digest cache warm: empty positions, retrying in %.0fs (attempt %d/%d)",
+                delay,
+                attempt,
+                max_attempts,
+            )
+            await asyncio.sleep(delay)
+    log.warning(
+        "digest cache warm: gave up after %d attempts (OpenD likely down)",
+        max_attempts,
     )
 
 
