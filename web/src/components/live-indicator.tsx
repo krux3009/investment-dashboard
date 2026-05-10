@@ -8,6 +8,7 @@
 
 import { useEffect, useState } from "react";
 import { useLiveConnected, useLiveMarket } from "@/lib/live-store";
+import { useT } from "@/lib/i18n/use-t";
 
 const SGT_FMT = new Intl.DateTimeFormat("en-SG", {
   hour: "2-digit",
@@ -33,6 +34,7 @@ const SGT_DATE = new Intl.DateTimeFormat("en-SG", {
 
 
 export function LiveIndicator() {
+  const t = useT();
   const connected = useLiveConnected();
   const { market, lastTickAt, nextOpenIso } = useLiveMarket();
 
@@ -40,8 +42,8 @@ export function LiveIndicator() {
   // even when ticks are not arriving (out of RTH).
   const [, forceRefresh] = useState(0);
   useEffect(() => {
-    const t = window.setInterval(() => forceRefresh((n) => n + 1), 5000);
-    return () => window.clearInterval(t);
+    const tick = window.setInterval(() => forceRefresh((n) => n + 1), 5000);
+    return () => window.clearInterval(tick);
   }, []);
 
   const dotClass = connected
@@ -51,10 +53,12 @@ export function LiveIndicator() {
     : "bg-loss/60";
 
   const label = (() => {
-    if (!connected) return lastTickAt === null ? "Connecting…" : "Reconnecting…";
+    if (!connected) {
+      return lastTickAt === null ? t("live.connecting") : t("live.reconnecting");
+    }
     if (market === "open" && lastTickAt) {
       const tickDate = new Date(lastTickAt * 1000);
-      return `Live · last tick ${SGT_FMT.format(tickDate)} SGT`;
+      return t("live.live_tick", { time: SGT_FMT.format(tickDate) });
     }
     if (market === "closed" && nextOpenIso) {
       const next = new Date(nextOpenIso);
@@ -62,10 +66,10 @@ export function LiveIndicator() {
       const when = sameDay
         ? `${SGT_HHMM.format(next)} SGT`
         : `${SGT_DATE.format(next)} · ${SGT_HHMM.format(next)} SGT`;
-      return `Market closed · next open ${when}`;
+      return t("live.market_closed", { when });
     }
-    if (market === "open") return "Live";
-    return "Idle";
+    if (market === "open") return t("live.live");
+    return t("live.idle");
   })();
 
   return (

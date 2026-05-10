@@ -9,10 +9,13 @@
 "use client";
 
 import type { HoldingsResponse } from "@/lib/api";
-import { directionClass, fmtPct, fmtUsd, timeSince } from "@/lib/format";
+import { directionClass, fmtPct, fmtUsd } from "@/lib/format";
 import { useLiveTotals } from "@/lib/live-store";
 import { useTickPulse } from "@/lib/use-tick-pulse";
 import { Donut } from "./donut";
+import { useT } from "@/lib/i18n/use-t";
+import { useLocale } from "@/lib/i18n/locale-provider";
+import { useTimeSince } from "@/lib/i18n/use-relative-time";
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
   USD: "$", HKD: "HK$", CNH: "¥", JPY: "¥",
@@ -24,6 +27,9 @@ interface Props {
 }
 
 export function Hero({ data }: Props) {
+  const t = useT();
+  const { locale } = useLocale();
+  const timeSince = useTimeSince();
   const empty = data.holdings.length === 0;
   const ccyEntries = Object.entries(data.currencies);
   const isMixed = ccyEntries.length > 1;
@@ -40,7 +46,7 @@ export function Hero({ data }: Props) {
   return (
     <section className="border-b border-rule pb-10 mb-10">
       <div className="text-xs uppercase tracking-[0.06em] text-quiet mb-3">
-        Portfolio
+        {t("hero.portfolio")}
       </div>
 
       <div className="flex items-start justify-between gap-12 flex-col md:flex-row">
@@ -52,7 +58,7 @@ export function Hero({ data }: Props) {
             >
               {empty ? "–" : fmtUsd(total_market_value_usd, { decimals: 2 })}
             </h1>
-            {!empty && <span className="text-sm text-quiet tabular">USD</span>}
+            {!empty && <span className="text-sm text-quiet tabular">{t("hero.usd")}</span>}
           </div>
 
           {!empty && (
@@ -67,7 +73,7 @@ export function Hero({ data }: Props) {
               >
                 {fmtPct(total_pnl_pct)}
               </span>
-              <span className="text-quiet">total return</span>
+              <span className="text-quiet">{t("hero.total_return")}</span>
             </div>
           )}
 
@@ -116,18 +122,27 @@ export function Hero({ data }: Props) {
           <div className="text-xs text-whisper mt-3" suppressHydrationWarning>
             {empty ? (
               data.simulate_with_no_positions ? (
-                <>
-                  Querying SIMULATE. Set{" "}
-                  <code className="font-mono">MOOMOO_TRD_ENV=REAL</code> in{" "}
-                  <code className="font-mono">.env</code> to view your live book.
-                </>
+                locale === "zh" ? (
+                  <>
+                    正在查询模拟环境。在{" "}
+                    <code className="font-mono">.env</code> 中设置{" "}
+                    <code className="font-mono">MOOMOO_TRD_ENV=REAL</code>{" "}
+                    以查看您的真实账本。
+                  </>
+                ) : (
+                  <>
+                    Querying SIMULATE. Set{" "}
+                    <code className="font-mono">MOOMOO_TRD_ENV=REAL</code> in{" "}
+                    <code className="font-mono">.env</code> to view your live book.
+                  </>
+                )
               ) : (
-                "No positions returned by the API."
+                t("hero.no_positions")
               )
             ) : (
               <>
-                {data.fresh ? "Fresh" : "Stale"} · updated{" "}
-                {timeSince(data.last_updated)}
+                {data.fresh ? t("hero.fresh") : t("hero.stale")} ·{" "}
+                {t("hero.updated")} {timeSince(data.last_updated)}
               </>
             )}
           </div>

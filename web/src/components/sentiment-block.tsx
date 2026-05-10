@@ -18,6 +18,8 @@ import {
   type SentimentBucket,
   type SentimentInsightResponse,
 } from "@/lib/api";
+import { useT } from "@/lib/i18n/use-t";
+import type { StringKey } from "@/lib/i18n/strings";
 
 interface Props {
   code: string;
@@ -36,10 +38,10 @@ type InsightState =
   | { kind: "unavailable"; detail: string }
   | { kind: "error"; detail: string };
 
-const BUCKET_LABEL: Record<SentimentBucket, string> = {
-  positive: "favourable",
-  neutral: "neutral",
-  negative: "cautious",
+const BUCKET_LABEL_KEY: Record<SentimentBucket, StringKey> = {
+  positive: "sentiment.bucket.favourable",
+  neutral: "sentiment.bucket.neutral",
+  negative: "sentiment.bucket.cautious",
 };
 
 // Single ink family — lightest → heaviest as the eye moves from
@@ -50,10 +52,10 @@ const BUCKET_BG: Record<SentimentBucket, string> = {
   negative: "bg-ink",
 };
 
-function Header() {
+function Header({ label }: { label: string }) {
   return (
     <div className="text-xs uppercase tracking-[0.06em] text-quiet mb-3">
-      Reddit discussion · past 7 days
+      {label}
     </div>
   );
 }
@@ -65,6 +67,7 @@ function StackedBar({
   buckets: Record<SentimentBucket, number>;
   total: number;
 }) {
+  const t = useT();
   if (total === 0) return null;
   const order: SentimentBucket[] = ["positive", "neutral", "negative"];
   return (
@@ -77,7 +80,10 @@ function StackedBar({
             key={b}
             className={BUCKET_BG[b]}
             style={{ width: `${w}%` }}
-            aria-label={`${buckets[b]} ${BUCKET_LABEL[b]} posts`}
+            aria-label={t("sentiment.aria.posts", {
+              n: buckets[b],
+              bucket: t(BUCKET_LABEL_KEY[b]),
+            })}
           />
         );
       })}
@@ -86,6 +92,7 @@ function StackedBar({
 }
 
 function MentionRow({ m }: { m: RedditMention }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   return (
     <li className="text-sm">
@@ -108,7 +115,7 @@ function MentionRow({ m }: { m: RedditMention }) {
           rel="noopener noreferrer"
           className="mt-1.5 ml-4 block text-xs text-quiet hover:text-accent underline decoration-rule underline-offset-2"
         >
-          open on reddit ↗
+          {t("sentiment.open_reddit")}
         </a>
       )}
     </li>
@@ -116,6 +123,7 @@ function MentionRow({ m }: { m: RedditMention }) {
 }
 
 function LearnMore({ code }: { code: string }) {
+  const t = useT();
   const [expanded, setExpanded] = useState(false);
   const [state, setState] = useState<InsightState>({ kind: "idle" });
 
@@ -152,16 +160,16 @@ function LearnMore({ code }: { code: string }) {
         className="text-xs uppercase tracking-[0.04em] text-quiet hover:text-accent transition-colors"
         aria-expanded={expanded}
       >
-        {expanded ? "[hide]" : "[learn more]"}
+        {expanded ? t("common.hide") : t("common.learn_more")}
       </button>
       {expanded && (
         <div className="mt-3">
           {state.kind === "loading" && (
-            <div className="text-sm text-quiet italic">drafting insight…</div>
+            <div className="text-sm text-quiet italic">{t("sentiment.drafting")}</div>
           )}
           {state.kind === "absent" && (
             <div className="text-sm text-whisper italic">
-              not enough discussion to interpret yet.
+              {t("sentiment.not_enough")}
             </div>
           )}
           {state.kind === "unavailable" && (
@@ -169,26 +177,26 @@ function LearnMore({ code }: { code: string }) {
           )}
           {state.kind === "error" && (
             <div className="text-sm text-loss">
-              insight unavailable: {state.detail}
+              {t("common.insight_unavailable", { detail: state.detail })}
             </div>
           )}
           {state.kind === "ready" && (
             <dl className="flex flex-col gap-3 text-sm leading-[1.65]">
               {state.data.what && (
                 <div className="grid grid-cols-[5rem_1fr] gap-x-3 items-baseline">
-                  <dt className="text-xs uppercase tracking-wide text-quiet">What</dt>
+                  <dt className="text-xs uppercase tracking-wide text-quiet">{t("common.what")}</dt>
                   <dd className="text-ink">{state.data.what}</dd>
                 </div>
               )}
               {state.data.meaning && (
                 <div className="grid grid-cols-[5rem_1fr] gap-x-3 items-baseline">
-                  <dt className="text-xs uppercase tracking-wide text-quiet">Meaning</dt>
+                  <dt className="text-xs uppercase tracking-wide text-quiet">{t("common.meaning")}</dt>
                   <dd className="text-ink">{state.data.meaning}</dd>
                 </div>
               )}
               {state.data.watch && (
                 <div className="grid grid-cols-[5rem_1fr] gap-x-3 items-baseline">
-                  <dt className="text-xs uppercase tracking-wide text-quiet">Watch</dt>
+                  <dt className="text-xs uppercase tracking-wide text-quiet">{t("common.watch")}</dt>
                   <dd className="text-ink">{state.data.watch}</dd>
                 </div>
               )}
@@ -201,7 +209,9 @@ function LearnMore({ code }: { code: string }) {
 }
 
 export function SentimentBlock({ code }: Props) {
+  const t = useT();
   const [state, setState] = useState<FetchState>({ kind: "loading" });
+  const headerLabel = t("sentiment.heading");
 
   useEffect(() => {
     let cancelled = false;
@@ -223,8 +233,8 @@ export function SentimentBlock({ code }: Props) {
   if (state.kind === "loading") {
     return (
       <div>
-        <Header />
-        <div className="text-sm text-quiet italic">loading discussion…</div>
+        <Header label={headerLabel} />
+        <div className="text-sm text-quiet italic">{t("sentiment.loading_discussion")}</div>
       </div>
     );
   }
@@ -232,9 +242,9 @@ export function SentimentBlock({ code }: Props) {
   if (state.kind === "error") {
     return (
       <div>
-        <Header />
+        <Header label={headerLabel} />
         <div className="text-sm text-loss">
-          could not load discussion: {state.detail}
+          {t("sentiment.discussion_load_failed", { detail: state.detail })}
         </div>
       </div>
     );
@@ -244,9 +254,9 @@ export function SentimentBlock({ code }: Props) {
   if (data.total_mentions === 0) {
     return (
       <div>
-        <Header />
+        <Header label={headerLabel} />
         <div className="text-sm text-whisper italic">
-          no discussion in the past 7 days.
+          {t("sentiment.no_discussion")}
         </div>
       </div>
     );
@@ -254,14 +264,14 @@ export function SentimentBlock({ code }: Props) {
 
   return (
     <div>
-      <Header />
+      <Header label={headerLabel} />
       <div className="text-sm text-ink tabular mb-2.5">
         <span>{data.buckets.positive}</span>
-        <span className="text-whisper"> favourable · </span>
+        <span className="text-whisper"> {t("sentiment.bucket.favourable")} · </span>
         <span>{data.buckets.neutral}</span>
-        <span className="text-whisper"> neutral · </span>
+        <span className="text-whisper"> {t("sentiment.bucket.neutral")} · </span>
         <span>{data.buckets.negative}</span>
-        <span className="text-whisper"> cautious</span>
+        <span className="text-whisper"> {t("sentiment.bucket.cautious")}</span>
       </div>
       <StackedBar buckets={data.buckets} total={data.total_mentions} />
       {data.top_mentions.length > 0 && (

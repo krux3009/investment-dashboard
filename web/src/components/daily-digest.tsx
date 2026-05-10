@@ -7,7 +7,10 @@
 
 import { useEffect, useState } from "react";
 import { fetchDigest, type DigestResponse, type TickerTiles } from "@/lib/api";
-import { timeSince } from "@/lib/format";
+import { useT } from "@/lib/i18n/use-t";
+import { useLocale } from "@/lib/i18n/locale-provider";
+import { useTimeSince } from "@/lib/i18n/use-relative-time";
+import type { StringKey } from "@/lib/i18n/strings";
 
 type State =
   | { kind: "loading" }
@@ -21,13 +24,13 @@ type QuietKey = "fundamentals_quiet" | "news_quiet" | "sentiment_quiet" | "techn
 const TILE_LABELS: Array<{
   key: SentenceKey;
   quietKey: QuietKey;
-  label: string;
+  labelKey: StringKey;
   initial: string;
 }> = [
-  { key: "fundamentals", quietKey: "fundamentals_quiet", label: "Fundamentals", initial: "F" },
-  { key: "news", quietKey: "news_quiet", label: "News", initial: "N" },
-  { key: "sentiment", quietKey: "sentiment_quiet", label: "Sentiment", initial: "S" },
-  { key: "technical", quietKey: "technical_quiet", label: "Technical", initial: "T" },
+  { key: "fundamentals", quietKey: "fundamentals_quiet", labelKey: "digest.tile.fundamentals", initial: "F" },
+  { key: "news", quietKey: "news_quiet", labelKey: "digest.tile.news", initial: "N" },
+  { key: "sentiment", quietKey: "sentiment_quiet", labelKey: "digest.tile.sentiment", initial: "S" },
+  { key: "technical", quietKey: "technical_quiet", labelKey: "digest.tile.technical", initial: "T" },
 ];
 
 // When ≥ this many of the 4 tiles are quiet, the row collapses into a
@@ -35,9 +38,9 @@ const TILE_LABELS: Array<{
 // has signal. Reduces visual noise on slow days without hiding signal.
 const QUIET_COLLAPSE_THRESHOLD = 3;
 
-function formatGeneratedAt(iso: string): string {
+function formatGeneratedAt(iso: string, locale: "en" | "zh"): string {
   const d = new Date(iso);
-  return d.toLocaleDateString("en-US", {
+  return d.toLocaleDateString(locale === "zh" ? "zh-CN" : "en-US", {
     weekday: "long",
     month: "long",
     day: "numeric",
@@ -80,6 +83,9 @@ function Tile({
 }
 
 export function DailyDigest() {
+  const t = useT();
+  const { locale } = useLocale();
+  const timeSince = useTimeSince();
   const [state, setState] = useState<State>({ kind: "loading" });
 
   async function load(refresh = false) {
@@ -101,14 +107,14 @@ export function DailyDigest() {
   return (
     <section className="border-b border-rule pb-10 mb-10">
       <div className="text-xs uppercase tracking-[0.06em] text-quiet mb-1">
-        Daily digest
+        {t("digest.heading")}
       </div>
       <div className="text-xs text-whisper mb-6">
-        Four dimensions per holding · observation only
+        {t("digest.subheading")}
       </div>
 
       {state.kind === "loading" && (
-        <div role="status" aria-label="Drafting digest…" className="space-y-8">
+        <div role="status" aria-label={t("digest.drafting_aria")} className="space-y-8">
           {[0, 1, 2].map((i) => (
             <div
               key={i}
@@ -128,7 +134,7 @@ export function DailyDigest() {
         <>
           <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 mb-6 pb-4 border-b border-rule/60">
             <div className="text-sm text-ink">
-              {formatGeneratedAt(state.data.generated_at)}
+              {formatGeneratedAt(state.data.generated_at, locale)}
             </div>
             <div className="flex items-center gap-3 text-xs text-quiet">
               <span className="tracking-wide">
@@ -137,22 +143,22 @@ export function DailyDigest() {
               <span aria-hidden className="text-rule">|</span>
               <span>
                 {state.data.cached
-                  ? `cached ${timeSince(state.data.generated_at)}`
-                  : `fresh ${timeSince(state.data.generated_at)}`}
+                  ? t("digest.cached", { time: timeSince(state.data.generated_at) })
+                  : t("digest.fresh", { time: timeSince(state.data.generated_at) })}
               </span>
               <button
                 type="button"
                 onClick={() => void load(true)}
                 className="underline-offset-4 hover:underline"
               >
-                refresh
+                {t("digest.refresh")}
               </button>
             </div>
           </div>
 
           {state.data.holdings.length === 0 && (
             <p className="text-sm text-whisper italic">
-              No open positions today.
+              {t("digest.no_open_positions")}
             </p>
           )}
 
@@ -160,16 +166,16 @@ export function DailyDigest() {
             <div className="flex flex-col gap-8">
               {state.data.holdings.map((h) => {
                 const quietCount = TILE_LABELS.reduce(
-                  (n, t) => n + (h[t.quietKey] ? 1 : 0),
+                  (n, tile) => n + (h[tile.quietKey] ? 1 : 0),
                   0,
                 );
                 const collapsed = quietCount >= QUIET_COLLAPSE_THRESHOLD;
 
                 if (collapsed) {
-                  const quietInitials = TILE_LABELS.filter((t) => h[t.quietKey])
-                    .map((t) => t.initial)
+                  const quietInitials = TILE_LABELS.filter((tile) => h[tile.quietKey])
+                    .map((tile) => tile.initial)
                     .join("/");
-                  const activeTiles = TILE_LABELS.filter((t) => !h[t.quietKey]);
+                  const activeTiles = TILE_LABELS.filter((tile) => !h[tile.quietKey]);
                   return (
                     <div
                       key={h.code}
@@ -185,13 +191,13 @@ export function DailyDigest() {
                       </div>
                       <div className="flex flex-col gap-3 md:flex-row md:items-start md:gap-8">
                         <span className="text-[13px] leading-[1.55] text-whisper italic md:pt-0">
-                          quiet across {quietInitials}
+                          {t("digest.quiet_across", { initials: quietInitials })}
                         </span>
-                        {activeTiles.map((t) => (
-                          <div key={t.key} className="md:max-w-md">
+                        {activeTiles.map((tile) => (
+                          <div key={tile.key} className="md:max-w-md">
                             <Tile
-                              label={t.label}
-                              sentence={h[t.key]}
+                              label={t(tile.labelKey)}
+                              sentence={h[tile.key]}
                               isQuiet={false}
                             />
                           </div>
@@ -214,12 +220,12 @@ export function DailyDigest() {
                         {h.name}
                       </div>
                     </div>
-                    {TILE_LABELS.map((t) => (
+                    {TILE_LABELS.map((tile) => (
                       <Tile
-                        key={t.key}
-                        label={t.label}
-                        sentence={h[t.key]}
-                        isQuiet={h[t.quietKey]}
+                        key={tile.key}
+                        label={t(tile.labelKey)}
+                        sentence={h[tile.key]}
+                        isQuiet={h[tile.quietKey]}
                       />
                     ))}
                   </div>
@@ -229,8 +235,7 @@ export function DailyDigest() {
           )}
 
           <p className="mt-8 text-xs text-whisper italic">
-            Expand a holding on the portfolio page for a deeper read of what
-            its numbers mean and what to watch.
+            {t("digest.footer_hint")}
           </p>
         </>
       )}
@@ -241,7 +246,7 @@ export function DailyDigest() {
 
       {state.kind === "error" && (
         <p className="text-sm text-loss">
-          digest unavailable: {state.detail}
+          {t("digest.unavailable", { detail: state.detail })}
         </p>
       )}
     </section>

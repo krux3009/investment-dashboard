@@ -7,6 +7,7 @@ import { useTickPulse } from "@/lib/use-tick-pulse";
 import { Fragment, useState } from "react";
 import { DrillIn } from "./drill-in";
 import { Sparkline } from "./sparkline";
+import { useT } from "@/lib/i18n/use-t";
 
 interface Props {
   codes: string[];
@@ -136,6 +137,7 @@ function WatchlistRow({
 }
 
 export function WatchlistTable({ codes, sparklines, quotes = {} }: Props) {
+  const t = useT();
   const [expandedCode, setExpandedCode] = useState<string | null>(null);
   const liveMap = useLiveWatchlistMap();
 
@@ -148,9 +150,11 @@ export function WatchlistTable({ codes, sparklines, quotes = {} }: Props) {
     <section className="mt-16">
       <div className="flex items-baseline justify-between mb-3">
         <div className="text-xs uppercase tracking-[0.06em] text-quiet">
-          Watchlist
+          {t("watchlist.heading")}
         </div>
-        <div className="text-xs text-whisper tabular">{codes.length} symbols</div>
+        <div className="text-xs text-whisper tabular">
+          {t("watchlist.symbol_count", { n: codes.length })}
+        </div>
       </div>
 
       <table className="w-full">
@@ -158,27 +162,27 @@ export function WatchlistTable({ codes, sparklines, quotes = {} }: Props) {
           <tr className="border-b border-rule">
             <th className="text-left pb-3 pr-4">
               <span className="text-xs uppercase tracking-[0.04em] font-medium text-whisper">
-                Position
+                {t("watchlist.col.position")}
               </span>
             </th>
             <th className="text-right pb-3 px-4">
               <span className="text-xs uppercase tracking-[0.04em] font-medium text-whisper">
-                Last
+                {t("watchlist.col.last")}
               </span>
             </th>
             <th className="text-right pb-3 px-4">
               <span className="text-xs uppercase tracking-[0.04em] font-medium text-whisper">
-                Today
+                {t("watchlist.col.today")}
               </span>
             </th>
             <th className="text-right pb-3 px-4">
               <span className="text-xs uppercase tracking-[0.04em] font-medium text-whisper">
-                30d
+                {t("watchlist.col.30d")}
               </span>
             </th>
             <th className="text-right pb-3 pl-4">
               <span className="text-xs uppercase tracking-[0.04em] font-medium text-whisper">
-                Trend
+                {t("watchlist.col.trend")}
               </span>
             </th>
           </tr>

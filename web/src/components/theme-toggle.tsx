@@ -2,10 +2,12 @@
 
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
+import { useT } from "@/lib/i18n/use-t";
 
 // Three-state cycle: system → light → dark → system. The label always
 // shows the *current* effective theme; click swaps to the next.
 export function ThemeToggle() {
+  const t = useT();
   const { theme, setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
@@ -15,7 +17,7 @@ export function ThemeToggle() {
   if (!mounted) {
     return (
       <span className="text-xs uppercase tracking-wider text-quiet">
-        theme
+        {t("toggle.theme.label")}
       </span>
     );
   }
@@ -26,14 +28,14 @@ export function ThemeToggle() {
     else setTheme("system");
   };
 
-  const label = theme === "system" ? `system (${resolvedTheme})` : theme;
+  const label = theme === "system" ? `system (${resolvedTheme})` : theme ?? "";
 
   return (
     <button
       type="button"
       onClick={cycle}
       className="text-xs uppercase tracking-wider text-quiet hover:text-ink transition-colors"
-      aria-label={`Theme: ${label}. Click to cycle.`}
+      aria-label={t("toggle.theme.aria", { label })}
     >
       {label}
     </button>

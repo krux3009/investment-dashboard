@@ -1,6 +1,7 @@
 "use client";
 
 import type { AnomalyItem } from "@/lib/api";
+import { useT } from "@/lib/i18n/use-t";
 
 interface Props {
   items: AnomalyItem[];
@@ -13,20 +14,21 @@ interface Props {
 // Renders the technical + capital-flow anomaly content as quiet prose.
 // Each category gets a small uppercase label. Categories with content
 // render the moomoo English copy verbatim; categories that returned no
-// anomaly fire a quiet "none in the last N days" caption so the reader
-// knows the search ran rather than wondering whether the section is
-// just hidden.
+// anomaly fire a quiet caption so the reader knows the search ran
+// rather than wondering whether the section is just hidden.
 export function AnomalyBlock({ items, timeRange, loading, error }: Props) {
+  const t = useT();
+
   if (loading) {
     return (
-      <div className="text-sm text-quiet italic">loading anomalies…</div>
+      <div className="text-sm text-quiet italic">{t("anomaly.loading")}</div>
     );
   }
 
   if (error) {
     return (
       <div className="text-sm text-loss">
-        could not load anomalies: {error}
+        {t("anomaly.load_failed", { detail: error })}
       </div>
     );
   }
@@ -34,7 +36,7 @@ export function AnomalyBlock({ items, timeRange, loading, error }: Props) {
   if (items.length === 0) {
     return (
       <div className="text-sm text-whisper italic">
-        no anomalies in the last {timeRange} days.
+        {t("anomaly.none", { n: timeRange })}
       </div>
     );
   }
@@ -52,7 +54,7 @@ export function AnomalyBlock({ items, timeRange, loading, error }: Props) {
             </div>
           ) : (
             <div className="text-sm text-whisper italic">
-              none in the last {timeRange} days.
+              {t("anomaly.none_in_kind", { n: timeRange })}
             </div>
           )}
         </div>
