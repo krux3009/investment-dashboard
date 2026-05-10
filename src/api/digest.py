@@ -47,7 +47,12 @@ log = logging.getLogger(__name__)
 # v4 → v5 (2026-05-10): locale-aware prompts (en + zh), CN forbidden
 # list, locale-suffixed cache keys ("v5-en" / "v5-zh"). Existing v4
 # rows become orphaned; rebuild on next request.
-_PROMPT_VERSION = "v5"
+# v5 → v6 (2026-05-10): added pace-language and forward-look bad/good
+# example pairs to _PROMPT_TEMPLATE_EN/ZH in analysts/_base.py to close
+# the technical-tile end-runs ("pace of decline slowing", "rate-of-change
+# easing", "may face friction ahead"). Source-edit in template,
+# FORBIDDEN_BASE unchanged. Cache keys "v6-en" / "v6-zh".
+_PROMPT_VERSION = "v6"
 _TTL = timedelta(hours=6)
 
 # Bound across-ticker concurrency. 4 tickers × 4 tiles = 16 inflight calls

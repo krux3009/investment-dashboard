@@ -128,6 +128,15 @@ Report numbers as numbers. Do not characterize their magnitude.
 Bad: "registers a notable 45% gain"
 Good: "30-day change is +45%"
 
+Do not characterize the pace of a trend. Describe what the price did,
+not whether the move is accelerating, decelerating, slowing, or easing.
+Bad: "pace of decline slowing" / "rate-of-change easing"
+Good: "30-day change is -3.79%, three of the last five sessions lower"
+
+Do not state forward-looking expectations. Stick to what has happened.
+Bad: "price rising at a pace that may face friction ahead"
+Good: "30-day change is +100%, current price near 30-day high"
+
 NEVER use em dashes (—). Use colons, commas, or periods.
 
 If the context below is empty or all-null, output exactly:
@@ -152,6 +161,14 @@ _PROMPT_TEMPLATE_ZH = """\
 数字按原数字写出，不要修饰其幅度。
 反例："登记了显著的 45% 涨幅"
 正例："30 天涨幅为 +45%"
+
+不要描述趋势的节奏。写价格做了什么，不要说走势在加速、减速、放缓或趋缓。
+反例："下跌节奏放缓" / "上行速度趋缓"
+正例："30 天变化为 -3.79%，近五个交易日中有三个收低"
+
+不要表述前瞻性预期。仅写已发生的事实。
+反例："价格上行，可能面临阻力"
+正例："30 天涨幅为 +100%，当前价格接近 30 天高点"
 
 切勿使用破折号（—）。可使用冒号、逗号、句号或顿号。
 

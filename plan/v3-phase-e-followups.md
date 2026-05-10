@@ -82,31 +82,71 @@ Chinese end-runs checked, none observed beyond above:
 Per threshold (≤3 leaks across ≤1 dimension): **HOLD at v5.**
 No ban-list change. No version bump.
 
-#### 2026-05-15 — re-audit (one week post-v5 ship) [TBD]
+#### 2026-05-10 — second audit (single-stem rescan, pre-source-edit)
 
-Decision threshold (reframed for v5 cohort):
+Compound-substring scan was too narrow. Re-running with single-word
+stems (`easing`, `slowing`, `pace`, `节奏`, `企稳`, `回落`) revealed
+the live v5 cohort had **6 leaks**, not 3:
 
-- **Hold at v5** if cumulative `pace`-family leaks remain ≤3 across
-  ≤1 dimension (still concentrated only in `technical`).
-- **Bump v5 → v6** if either:
-  - ≥3 fresh leaks on tiles built between 2026-05-10 and 2026-05-15
-    AND ≥2 dimensions affected, OR
-  - any new end-run substring listed above appears in either locale.
+- `v5-en / US.MU / technical`: "rate-of-change potentially easing"
+- `v5-en / US.ANET / technical`: "pace of decline possibly slowing"
+- `v5-en / US.INTC / technical`: "price rising at a pace that may
+  face friction ahead" — also forward-looking
+- `v5-zh / US.INTC / technical`: "上行节奏或有所放缓"
+- `v5-zh / US.ANET / technical`: "下跌速度较快，或有企稳迹象"
+- `v5-zh / US.NBIS / technical`: "价格自 May 8 起小幅回落"
 
-**Prefer source-edit over ban-list growth.** If bump is warranted,
-first try extending the `_PROMPT_TEMPLATE_EN` / `_PROMPT_TEMPLATE_ZH`
-in `src/api/analysts/_base.py` with a second bad/good pair targeting
-pace-language directly:
+All still confined to `technical` dim, both locales.
+Decision: ship source-edit immediately rather than wait for 2026-05-15.
 
-- Bad: "30-day pace of decline slowing"
-- Good: "30-day change is -3.79%"
+#### 2026-05-10 — v5 → v6 source-edit (post-rebuild audit)
 
-Source-edit reaches all four analyst roles uniformly and closes the
-end-run at the prompt rather than via blacklist proliferation.
-Substring bans like `pace` / `节奏` over-block neutral phrasing
-(`at this pace`, `set the pace`, `节奏稳定`) — acceptable but
-inferior to a clearer prompt. Only fall back to ban-list growth
-if source-edit doesn't move the leak rate after one full rebuild.
+Edited `_PROMPT_TEMPLATE_EN` and `_PROMPT_TEMPLATE_ZH` in
+`src/api/analysts/_base.py`. Two new bad/good pairs added after the
+existing magnitude pair:
+
+1. Pace-language: "describe what the price did, not whether the move
+   is accelerating, decelerating, slowing, or easing"
+2. Forward-look: "do not state forward-looking expectations, stick to
+   what has happened"
+
+`_PROMPT_VERSION` bumped v5 → v6 in `src/api/digest.py`.
+`FORBIDDEN_BASE` unchanged (no ban-list growth).
+
+Cold rebuild ~70s combined (v6-en 37.6s + v6-zh 28.7s).
+Pre-existing retries fired on `sell`/`add`/`卖出` — none on pace
+family. Post-rebuild scan across all 4 dims × both locales × all
+12 single-word stems: **zero leaks**.
+
+Side-by-side replacements (all 6 prior leaks):
+
+| Locale | Code/Dim | v5 prose | v6 prose |
+|---|---|---|---|
+| en | MU/T | "rate-of-change potentially easing" | "price climbing across recent sessions" |
+| en | ANET/T | "pace of decline possibly slowing" | "price trending lower across recent sessions" |
+| en | INTC/T | "price rising at a pace that may face friction ahead" | "price near its recent high across the observed period" |
+| zh | INTC/T | "上行节奏或有所放缓" | "当前价格接近近期高位区间" |
+| zh | ANET/T | "下跌速度较快，或有企稳迹象" | "近期价格持续收低" |
+| zh | NBIS/T | "价格自 May 8 起小幅回落" | "价格自 May 8 起连续收低" |
+
+All replacements report what price did rather than characterize
+trend speed. Source-edit confirmed effective without needing
+substring bans on `pace` / `节奏`. Plan recommendation
+(source-edit > ban-list growth) validated.
+
+#### 2026-05-15 — re-audit (one week post-v6 ship) [TBD]
+
+Decision threshold (reframed for v6 cohort):
+
+- **Hold at v6** if cumulative `pace`-family leaks remain ≤3 across
+  ≤1 dimension.
+- **Bump v6 → v7** only if a new end-run pattern emerges that the
+  template's bad/good pairs don't cover. Substring ban on
+  `pace` / `节奏` remains the last-resort lever.
+
+If 2026-05-15 audit shows 0 leaks: declare prompt stable, retire
+the watch log to `bin/`. If new leak class emerges, extend the
+bad/good pairs again before touching `FORBIDDEN_BASE`.
 
 ---
 
