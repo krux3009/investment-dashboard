@@ -118,13 +118,26 @@ def fetch_all(
 def fetch_all_plain(
     code: str,
     time_range: int = 30,
-    language_id: int = 2,
+    language_id: int | None = None,
+    locale: str = "en",
 ) -> tuple[Anomaly, ...]:
-    """Same as fetch_all but rewrites moomoo's technical prose into plain
-    English via the anomaly translator. Empty-content anomalies pass
-    through untouched so absence-as-signal still works.
+    """Same as fetch_all but rewrites moomoo's technical prose into the
+    reader's locale via the anomaly translator. Empty-content anomalies
+    pass through untouched so absence-as-signal still works.
+
+    moomoo's language_id values: 0=简中 (Simplified Chinese),
+    1=繁中 (Traditional), 2=English, 4=Thai, 5=Japanese.
+
+    For `locale="zh"`, language_id defaults to 0 (Simplified Chinese):
+    moomoo returns native Simplified prose and the translator passes
+    it through verbatim (no Claude call). For `locale="en"`,
+    language_id defaults to 2 (English) and the translator may rewrite
+    for clarity. Explicit `language_id` overrides the locale default.
     """
     from api import anomaly_translator
+
+    if language_id is None:
+        language_id = 0 if locale == "zh" else 2
 
     raw = fetch_all(code, time_range=time_range, language_id=language_id)
     out: list[Anomaly] = []
@@ -132,6 +145,6 @@ def fetch_all_plain(
         if not anom.has_content:
             out.append(anom)
             continue
-        plain = anomaly_translator.translate(anom.content, anom.kind)
+        plain = anomaly_translator.translate(anom.content, anom.kind, locale=locale)  # type: ignore[arg-type]
         out.append(Anomaly(kind=anom.kind, content=plain))
     return tuple(out)

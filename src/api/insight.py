@@ -31,11 +31,26 @@ from datetime import datetime, timedelta
 from api.data import anomalies, prices
 from api.data.moomoo_client import get_summary
 from api.digest import _fetch_news
+from api.i18n import DEFAULT_LOCALE, Locale, prompt_version_with_locale
 
 log = logging.getLogger(__name__)
 
 _TTL = timedelta(hours=6)
-_PROMPT_VERSION = "v3-no-em-dash"
+# v3-no-em-dash → v4-no-em-dash (2026-05-10): locale-aware prompts.
+# Cache key is now `f"{_PROMPT_VERSION}-{locale}"` so en + zh prose
+# coexist without collisions.
+_PROMPT_VERSION = "v4-no-em-dash"
+
+_LANG_INSTRUCTION: dict[Locale, str] = {
+    "en": "\n\nRespond in English.\n",
+    "zh": (
+        "\n\n请使用简体中文回答。所有结构化标签（'Meaning:' / 'Watch:'）保持英文以便解析。"
+        "采用零售投资者的朴素中文，避免术语。禁用以下中文词汇："
+        "买入、卖出、持有、加仓、减仓、清仓、目标价、预测、预计、推荐、建议、"
+        "应该、理应、看多、看涨、看空、看跌、飙升、暴涨、暴跌、大跌、崩盘、"
+        "突破、突破点、反弹、显著、强劲、疲软、稳健、动能、势头。\n"
+    ),
+}
 
 _INSIGHT_PROMPT = """\
 You are writing two short educational lines for ONE stock holding in a
@@ -136,13 +151,14 @@ def _ensure_table() -> None:
         )
 
 
-def _load_cached(code: str) -> Insight | None:
+def _load_cached(code: str, locale: Locale = DEFAULT_LOCALE) -> Insight | None:
     _ensure_table()
+    pv = prompt_version_with_locale(_PROMPT_VERSION, locale)
     with prices._DB_LOCK:
         row = prices._db().execute(
             "SELECT meaning, watch, generated_at FROM insight_cache "
             "WHERE code = ? AND prompt_version = ?",
-            [code, _PROMPT_VERSION],
+            [code, pv],
         ).fetchone()
     if not row:
         return None
@@ -159,14 +175,15 @@ def _load_cached(code: str) -> Insight | None:
     )
 
 
-def _save_cache(insight: Insight) -> None:
+def _save_cache(insight: Insight, locale: Locale = DEFAULT_LOCALE) -> None:
     _ensure_table()
+    pv = prompt_version_with_locale(_PROMPT_VERSION, locale)
     with prices._DB_LOCK:
         prices._db().execute(
             "INSERT OR REPLACE INTO insight_cache VALUES (?, ?, ?, ?, ?)",
             [
                 insight.code,
-                _PROMPT_VERSION,
+                pv,
                 insight.meaning,
                 insight.watch,
                 insight.generated_at,
@@ -253,7 +270,7 @@ def _build_user_message(s: dict) -> str:
 # ── Claude call ─────────────────────────────────────────────────────────────
 
 
-def _call_claude(user_message: str) -> tuple[str, str]:
+def _call_claude(user_message: str, locale: Locale = DEFAULT_LOCALE) -> tuple[str, str]:
     """Returns (meaning, watch). Parses the two-line output."""
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
@@ -266,10 +283,12 @@ def _call_claude(user_message: str) -> tuple[str, str]:
     client = Anthropic(api_key=api_key)
     model = os.environ.get("ANTHROPIC_DIGEST_MODEL", "claude-sonnet-4-6")
 
+    system_prompt = _INSIGHT_PROMPT + _LANG_INSTRUCTION[locale]
+
     response = client.messages.create(
         model=model,
-        max_tokens=320,
-        system=_INSIGHT_PROMPT,
+        max_tokens=400,
+        system=system_prompt,
         messages=[{"role": "user", "content": user_message}],
     )
     body = "\n".join(b.text for b in response.content if b.type == "text").strip()
@@ -292,12 +311,14 @@ def _call_claude(user_message: str) -> tuple[str, str]:
 # ── Public API ──────────────────────────────────────────────────────────────
 
 
-def get_insight(code: str, force_refresh: bool = False) -> Insight | None:
+def get_insight(
+    code: str, force_refresh: bool = False, locale: Locale = DEFAULT_LOCALE
+) -> Insight | None:
     """Return per-stock insight, hitting the 6h cache unless force_refresh.
     Returns None if `code` isn't a current holding.
     """
     if not force_refresh:
-        cached = _load_cached(code)
+        cached = _load_cached(code, locale)
         if cached is not None:
             return cached
 
@@ -306,7 +327,7 @@ def get_insight(code: str, force_refresh: bool = False) -> Insight | None:
         return None
 
     user_message = _build_user_message(signals)
-    meaning, watch = _call_claude(user_message)
+    meaning, watch = _call_claude(user_message, locale)
     insight = Insight(
         code=code,
         ticker=signals["ticker"],
@@ -314,5 +335,5 @@ def get_insight(code: str, force_refresh: bool = False) -> Insight | None:
         watch=watch,
         generated_at=datetime.now(),
     )
-    _save_cache(insight)
+    _save_cache(insight, locale)
     return insight

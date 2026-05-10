@@ -2,6 +2,12 @@
 
 import type { AnomalyItem } from "@/lib/api";
 import { useT } from "@/lib/i18n/use-t";
+import type { StringKey } from "@/lib/i18n/strings";
+
+const KIND_LABEL_KEY: Record<AnomalyItem["kind"], StringKey> = {
+  technical: "anomaly.kind.technical",
+  capital: "anomaly.kind.capital",
+};
 
 interface Props {
   items: AnomalyItem[];
@@ -46,7 +52,7 @@ export function AnomalyBlock({ items, timeRange, loading, error }: Props) {
       {items.map((item) => (
         <div key={item.kind}>
           <div className="text-xs uppercase tracking-[0.06em] text-quiet mb-1.5">
-            {item.label}
+            {t(KIND_LABEL_KEY[item.kind])}
           </div>
           {item.content ? (
             <div className="text-sm text-ink leading-relaxed whitespace-pre-line">

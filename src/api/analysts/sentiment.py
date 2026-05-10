@@ -16,13 +16,15 @@ import logging
 
 from api import reddit_sentiment
 from api.analysts._base import AnalystOutput, call_analyst, _quiet
+from api.i18n import Locale
 
 log = logging.getLogger(__name__)
 
 ROLE = "Sentiment"
-ROLE_BANS: tuple[str, ...] = (
-    "FOMO", "panic", "capitulation", "euphoric", "meme",
-)
+ROLE_BANS: dict[Locale, tuple[str, ...]] = {
+    "en": ("FOMO", "panic", "capitulation", "euphoric", "meme"),
+    "zh": ("恐慌", "投降", "狂热", "迷因", "踏空"),
+}
 
 
 def _build_context(code: str, ticker: str) -> dict | None:
@@ -43,10 +45,10 @@ def _build_context(code: str, ticker: str) -> dict | None:
     }
 
 
-def get_take(code: str, ticker: str, name: str) -> AnalystOutput:
+def get_take(code: str, ticker: str, name: str, locale: Locale = "en") -> AnalystOutput:
     context = _build_context(code, ticker)
     if context is None:
-        return _quiet(ROLE)
+        return _quiet(ROLE, locale)
     return call_analyst(
         role=ROLE,
         ticker=ticker,
@@ -54,4 +56,5 @@ def get_take(code: str, ticker: str, name: str) -> AnalystOutput:
         context=context,
         role_specific_bans=ROLE_BANS,
         is_context_empty=False,
+        locale=locale,
     )

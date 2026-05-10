@@ -12,6 +12,7 @@ import logging
 from fastapi import APIRouter, HTTPException, Query
 
 from api import sentiment_insight
+from api.i18n import parse_locale
 
 log = logging.getLogger(__name__)
 
@@ -19,9 +20,14 @@ router = APIRouter()
 
 
 @router.get("/sentiment-insight/{code:path}")
-def get_sentiment_insight(code: str, refresh: bool = Query(False)) -> dict:
+def get_sentiment_insight(
+    code: str,
+    refresh: bool = Query(False),
+    locale: str = Query("en"),
+) -> dict:
+    loc = parse_locale(locale)
     try:
-        ins = sentiment_insight.get_insight(code, force_refresh=refresh)
+        ins = sentiment_insight.get_insight(code, force_refresh=refresh, locale=loc)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:

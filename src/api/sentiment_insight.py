@@ -22,11 +22,23 @@ from datetime import datetime, timedelta
 from api import reddit_sentiment
 from api.data import prices
 from api.data.moomoo_client import get_summary
+from api.i18n import DEFAULT_LOCALE, Locale, prompt_version_with_locale
 
 log = logging.getLogger(__name__)
 
 _TTL = timedelta(hours=6)
-_PROMPT_VERSION = "v1"
+# v1 → v2 (2026-05-10): locale-aware prompts (en + zh).
+_PROMPT_VERSION = "v2"
+
+_LANG_INSTRUCTION: dict[Locale, str] = {
+    "en": "\n\nRespond in English.\n",
+    "zh": (
+        "\n\n请使用简体中文回答。所有结构化标签（'What:' / 'Meaning:' / 'Watch:'）保持英文以便解析。"
+        "采用零售投资者的朴素中文。禁用以下中文词汇："
+        "买入、卖出、持有、加仓、减仓、目标价、预测、推荐、应该、看多、看空、"
+        "飙升、暴跌、崩盘、突破、反弹、显著、强劲、疲软、动能、恐慌、狂热、踏空。\n"
+    ),
+}
 
 _PROMPT = """\
 You are summarising Reddit discussion volume and tone for ONE stock,
@@ -100,13 +112,14 @@ def _ensure_table() -> None:
         )
 
 
-def _load_cached(code: str) -> SentimentInsight | None:
+def _load_cached(code: str, locale: Locale = DEFAULT_LOCALE) -> SentimentInsight | None:
     _ensure_table()
+    pv = prompt_version_with_locale(_PROMPT_VERSION, locale)
     with prices._DB_LOCK:
         row = prices._db().execute(
             "SELECT what, meaning, watch, generated_at FROM sentiment_insight_cache "
             "WHERE code = ? AND prompt_version = ?",
-            [code, _PROMPT_VERSION],
+            [code, pv],
         ).fetchone()
     if not row:
         return None
@@ -123,14 +136,15 @@ def _load_cached(code: str) -> SentimentInsight | None:
     )
 
 
-def _save_cache(insight: SentimentInsight) -> None:
+def _save_cache(insight: SentimentInsight, locale: Locale = DEFAULT_LOCALE) -> None:
     _ensure_table()
+    pv = prompt_version_with_locale(_PROMPT_VERSION, locale)
     with prices._DB_LOCK:
         prices._db().execute(
             "INSERT OR REPLACE INTO sentiment_insight_cache VALUES (?, ?, ?, ?, ?, ?)",
             [
                 insight.code,
-                _PROMPT_VERSION,
+                pv,
                 insight.what,
                 insight.meaning,
                 insight.watch,
@@ -179,7 +193,9 @@ def _build_user_message(code: str, summary: reddit_sentiment.SentimentSummary, n
     return "\n".join(lines)
 
 
-def _call_claude(user_message: str) -> tuple[str, str, str]:
+def _call_claude(
+    user_message: str, locale: Locale = DEFAULT_LOCALE
+) -> tuple[str, str, str]:
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         raise RuntimeError(
@@ -191,10 +207,12 @@ def _call_claude(user_message: str) -> tuple[str, str, str]:
     client = Anthropic(api_key=api_key)
     model = os.environ.get("ANTHROPIC_DIGEST_MODEL", "claude-sonnet-4-6")
 
+    system_prompt = _PROMPT + _LANG_INSTRUCTION[locale]
+
     response = client.messages.create(
         model=model,
-        max_tokens=320,
-        system=_PROMPT,
+        max_tokens=400,
+        system=system_prompt,
         messages=[{"role": "user", "content": user_message}],
     )
     body = "\n".join(b.text for b in response.content if b.type == "text").strip()
@@ -217,7 +235,9 @@ def _call_claude(user_message: str) -> tuple[str, str, str]:
 # ── Public API ──────────────────────────────────────────────────────────────
 
 
-def get_insight(code: str, force_refresh: bool = False) -> SentimentInsight | None:
+def get_insight(
+    code: str, force_refresh: bool = False, locale: Locale = DEFAULT_LOCALE
+) -> SentimentInsight | None:
     """Return the three-line sentiment insight for `code`.
 
     Returns None when there's nothing to interpret (zero mentions in the
@@ -225,7 +245,7 @@ def get_insight(code: str, force_refresh: bool = False) -> SentimentInsight | No
     missing — the route translates that to 503.
     """
     if not force_refresh:
-        cached = _load_cached(code)
+        cached = _load_cached(code, locale)
         if cached is not None:
             return cached
 
@@ -237,7 +257,7 @@ def get_insight(code: str, force_refresh: bool = False) -> SentimentInsight | No
         return None
     summary = reddit_sentiment.aggregate(code, mentions, days=7)
 
-    what, meaning, watch = _call_claude(_build_user_message(code, summary, name))
+    what, meaning, watch = _call_claude(_build_user_message(code, summary, name), locale)
     insight = SentimentInsight(
         code=code,
         what=what,
@@ -245,5 +265,5 @@ def get_insight(code: str, force_refresh: bool = False) -> SentimentInsight | No
         watch=watch,
         generated_at=datetime.now(),
     )
-    _save_cache(insight)
+    _save_cache(insight, locale)
     return insight

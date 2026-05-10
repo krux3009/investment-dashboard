@@ -7,6 +7,7 @@ import logging
 from fastapi import APIRouter, HTTPException, Query
 
 from api import concentration_insight
+from api.i18n import parse_locale
 
 log = logging.getLogger(__name__)
 
@@ -14,9 +15,13 @@ router = APIRouter()
 
 
 @router.get("/concentration-insight")
-def get_concentration_insight(refresh: bool = Query(False)) -> dict:
+def get_concentration_insight(
+    refresh: bool = Query(False),
+    locale: str = Query("en"),
+) -> dict:
+    loc = parse_locale(locale)
     try:
-        ins = concentration_insight.get_insight(force_refresh=refresh)
+        ins = concentration_insight.get_insight(force_refresh=refresh, locale=loc)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:

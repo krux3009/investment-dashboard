@@ -9,6 +9,7 @@ import {
 } from "@/lib/api";
 import { BenchmarkChart } from "./benchmark-chart";
 import { useT } from "@/lib/i18n/use-t";
+import { useLocale } from "@/lib/i18n/locale-provider";
 import type { StringKey } from "@/lib/i18n/strings";
 
 interface Props {
@@ -30,6 +31,7 @@ type InsightState =
 
 export function BenchmarkBlock({ initial }: Props) {
   const t = useT();
+  const { locale } = useLocale();
   const [data, setData] = useState<BenchmarkResponse>(initial);
   const [days, setDays] = useState<number>(initial.days);
   const [loading, setLoading] = useState(false);
@@ -62,7 +64,7 @@ export function BenchmarkBlock({ initial }: Props) {
     let cancelled = false;
     setInsight({ kind: "loading" });
     (async () => {
-      const result = await fetchBenchmarkInsight(days, symbolsKey);
+      const result = await fetchBenchmarkInsight(days, symbolsKey, false, locale);
       if (cancelled) return;
       if (result.ok) {
         setInsight({ kind: "ready", data: result.data });
@@ -75,7 +77,7 @@ export function BenchmarkBlock({ initial }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [expanded, days, symbolsKey]);
+  }, [expanded, days, symbolsKey, locale]);
 
   useEffect(() => {
     setExpanded(false);

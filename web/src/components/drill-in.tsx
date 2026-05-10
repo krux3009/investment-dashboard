@@ -9,6 +9,7 @@ import { NotesBlock } from "./notes-block";
 import { PriceChart } from "./price-chart";
 import { SentimentBlock } from "./sentiment-block";
 import { useT } from "@/lib/i18n/use-t";
+import { useLocale } from "@/lib/i18n/locale-provider";
 
 interface Props {
   code: string;
@@ -21,6 +22,7 @@ interface Props {
 // code via component state. Symmetric for holdings + watchlist rows.
 export function DrillIn({ code, direction }: Props) {
   const t = useT();
+  const { locale } = useLocale();
   const [points, setPoints] = useState<PricePoint[] | null>(null);
   const [pricesError, setPricesError] = useState<string | null>(null);
   const [anomalyItems, setAnomalyItems] = useState<AnomalyItem[]>([]);
@@ -38,9 +40,11 @@ export function DrillIn({ code, direction }: Props) {
         if (!cancelled) setPricesError(String(e));
       }
     })();
+    setAnomaliesLoading(true);
+    setAnomaliesError(null);
     (async () => {
       try {
-        const data = await fetchAnomalies(code);
+        const data = await fetchAnomalies(code, locale);
         if (!cancelled) {
           setAnomalyItems(data.items);
           setAnomalyWindow(data.time_range);
@@ -56,7 +60,7 @@ export function DrillIn({ code, direction }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [code]);
+  }, [code, locale]);
 
   return (
     <div className="px-6 py-6 bg-surface-expanded border-t border-rule">

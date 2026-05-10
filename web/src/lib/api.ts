@@ -1,6 +1,8 @@
 // API client for the FastAPI backend.
 // Types mirror api/models.py — keep in sync.
 
+import type { Locale } from "@/lib/i18n/locale-provider";
+
 export type Currency =
   | "USD" | "HKD" | "CNH" | "JPY" | "SGD" | "AUD" | "MYR" | "CAD" | "?";
 
@@ -80,8 +82,11 @@ export interface AnomaliesResponse {
   time_range: number;
 }
 
-export async function fetchAnomalies(code: string): Promise<AnomaliesResponse> {
-  const url = `${API_BASE}/api/anomalies/${encodeURIComponent(code)}`;
+export async function fetchAnomalies(
+  code: string,
+  locale: Locale = "en",
+): Promise<AnomaliesResponse> {
+  const url = `${API_BASE}/api/anomalies/${encodeURIComponent(code)}?locale=${locale}`;
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) {
     throw new Error(`/api/anomalies/${code} ${res.status}: ${await res.text()}`);
@@ -147,8 +152,13 @@ export type DigestResult =
   | { ok: true; data: DigestResponse }
   | { ok: false; status: number; detail: string };
 
-export async function fetchDigest(refresh = false): Promise<DigestResult> {
-  const url = `${API_BASE}/api/digest${refresh ? "?refresh=true" : ""}`;
+export async function fetchDigest(
+  refresh = false,
+  locale: Locale = "en",
+): Promise<DigestResult> {
+  const qs = new URLSearchParams({ locale });
+  if (refresh) qs.set("refresh", "true");
+  const url = `${API_BASE}/api/digest?${qs}`;
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) {
     let detail = `${res.status}`;
@@ -177,8 +187,14 @@ export type InsightResult =
   | { ok: true; data: InsightResponse | null }
   | { ok: false; status: number; detail: string };
 
-export async function fetchInsight(code: string, refresh = false): Promise<InsightResult> {
-  const url = `${API_BASE}/api/insight/${encodeURIComponent(code)}${refresh ? "?refresh=true" : ""}`;
+export async function fetchInsight(
+  code: string,
+  refresh = false,
+  locale: Locale = "en",
+): Promise<InsightResult> {
+  const qs = new URLSearchParams({ locale });
+  if (refresh) qs.set("refresh", "true");
+  const url = `${API_BASE}/api/insight/${encodeURIComponent(code)}?${qs}`;
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) {
     let detail = `${res.status}`;
@@ -335,8 +351,9 @@ export async function fetchBenchmarkInsight(
   days = 90,
   symbols?: string,
   refresh = false,
+  locale: Locale = "en",
 ): Promise<BenchmarkInsightResult> {
-  const qs = new URLSearchParams({ days: String(days) });
+  const qs = new URLSearchParams({ days: String(days), locale });
   if (symbols) qs.set("symbols", symbols);
   if (refresh) qs.set("refresh", "true");
   const url = `${API_BASE}/api/benchmark-insight?${qs}`;
@@ -393,8 +410,11 @@ export type ConcentrationInsightResult =
 
 export async function fetchConcentrationInsight(
   refresh = false,
+  locale: Locale = "en",
 ): Promise<ConcentrationInsightResult> {
-  const url = `${API_BASE}/api/concentration-insight${refresh ? "?refresh=true" : ""}`;
+  const qs = new URLSearchParams({ locale });
+  if (refresh) qs.set("refresh", "true");
+  const url = `${API_BASE}/api/concentration-insight?${qs}`;
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) {
     let detail = `${res.status}`;
@@ -456,8 +476,9 @@ export async function fetchForesightInsight(
   eventId: string,
   days = 30,
   refresh = false,
+  locale: Locale = "en",
 ): Promise<ForesightInsightResult> {
-  const qs = new URLSearchParams({ days: String(days) });
+  const qs = new URLSearchParams({ days: String(days), locale });
   if (refresh) qs.set("refresh", "true");
   const url = `${API_BASE}/api/foresight-insight/${encodeURIComponent(eventId)}?${qs}`;
   const res = await fetch(url, { cache: "no-store" });
@@ -533,10 +554,11 @@ export type SentimentInsightResult =
 export async function fetchSentimentInsight(
   code: string,
   refresh = false,
+  locale: Locale = "en",
 ): Promise<SentimentInsightResult> {
-  const url = `${API_BASE}/api/sentiment-insight/${encodeURIComponent(code)}${
-    refresh ? "?refresh=true" : ""
-  }`;
+  const qs = new URLSearchParams({ locale });
+  if (refresh) qs.set("refresh", "true");
+  const url = `${API_BASE}/api/sentiment-insight/${encodeURIComponent(code)}?${qs}`;
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) {
     let detail = `${res.status}`;

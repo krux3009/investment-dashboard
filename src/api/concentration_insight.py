@@ -15,11 +15,25 @@ from datetime import datetime, timedelta
 
 from api import concentration
 from api.data import prices
+from api.i18n import DEFAULT_LOCALE, Locale, prompt_version_with_locale
 
 log = logging.getLogger(__name__)
 
 _TTL = timedelta(hours=6)
-_PROMPT_VERSION = "v2-no-em-dash"
+# v2-no-em-dash → v3-no-em-dash (2026-05-10): locale-aware prompts.
+_PROMPT_VERSION = "v3-no-em-dash"
+
+_LANG_INSTRUCTION: dict[Locale, str] = {
+    "en": "\n\nRespond in English.\n",
+    "zh": (
+        "\n\n请使用简体中文回答。所有结构化标签（'What:' / 'Meaning:' / 'Watch:'）保持英文以便解析。"
+        "采用零售投资者的朴素中文。禁用以下中文词汇："
+        "买入、卖出、持有、加仓、减仓、目标价、推荐、应该、看多、看空、"
+        "飙升、暴跌、突破、反弹、显著、强劲、疲软、动能、"
+        "再平衡、分散投资、过度集中、分散开来、降低敞口、增加敞口、"
+        "超配、低配、过配、欠配。\n"
+    ),
+}
 
 _PROMPT = """\
 You are writing three short educational lines about the SHAPE of a
@@ -102,13 +116,16 @@ def _make_key(c: concentration.Concentration) -> str:
     return f"{round(c.top1_pct, 2)}|{round(c.top3_pct, 2)}|{round(c.top5_pct, 2)}|{biggest}|{ccys}|n={c.count}"
 
 
-def _load_cached(cache_key: str) -> tuple[str, str, str, datetime] | None:
+def _load_cached(
+    cache_key: str, locale: Locale = DEFAULT_LOCALE
+) -> tuple[str, str, str, datetime] | None:
     _ensure_table()
+    pv = prompt_version_with_locale(_PROMPT_VERSION, locale)
     with prices._DB_LOCK:
         row = prices._db().execute(
             "SELECT what, meaning, watch, generated_at FROM concentration_insight_cache "
             "WHERE cache_key = ? AND prompt_version = ?",
-            [cache_key, _PROMPT_VERSION],
+            [cache_key, pv],
         ).fetchone()
     if not row:
         return None
@@ -118,12 +135,20 @@ def _load_cached(cache_key: str) -> tuple[str, str, str, datetime] | None:
     return what, meaning, watch, generated_at
 
 
-def _save_cache(cache_key: str, what: str, meaning: str, watch: str, generated_at: datetime) -> None:
+def _save_cache(
+    cache_key: str,
+    what: str,
+    meaning: str,
+    watch: str,
+    generated_at: datetime,
+    locale: Locale = DEFAULT_LOCALE,
+) -> None:
     _ensure_table()
+    pv = prompt_version_with_locale(_PROMPT_VERSION, locale)
     with prices._DB_LOCK:
         prices._db().execute(
             "INSERT OR REPLACE INTO concentration_insight_cache VALUES (?, ?, ?, ?, ?, ?)",
-            [cache_key, _PROMPT_VERSION, what, meaning, watch, generated_at],
+            [cache_key, pv, what, meaning, watch, generated_at],
         )
 
 
@@ -146,7 +171,9 @@ def _build_user_message(c: concentration.Concentration) -> str:
     return "\n".join(parts)
 
 
-def _call_claude(user_message: str) -> tuple[str, str, str]:
+def _call_claude(
+    user_message: str, locale: Locale = DEFAULT_LOCALE
+) -> tuple[str, str, str]:
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         raise RuntimeError(
@@ -158,10 +185,12 @@ def _call_claude(user_message: str) -> tuple[str, str, str]:
     client = Anthropic(api_key=api_key)
     model = os.environ.get("ANTHROPIC_DIGEST_MODEL", "claude-sonnet-4-6")
 
+    system_prompt = _PROMPT + _LANG_INSTRUCTION[locale]
+
     response = client.messages.create(
         model=model,
-        max_tokens=320,
-        system=_PROMPT,
+        max_tokens=400,
+        system=system_prompt,
         messages=[{"role": "user", "content": user_message}],
     )
     body = "\n".join(b.text for b in response.content if b.type == "text").strip()
@@ -181,13 +210,15 @@ def _call_claude(user_message: str) -> tuple[str, str, str]:
     return what, meaning, watch
 
 
-def get_insight(force_refresh: bool = False) -> ConcentrationInsight | None:
+def get_insight(
+    force_refresh: bool = False, locale: Locale = DEFAULT_LOCALE
+) -> ConcentrationInsight | None:
     c = concentration.get_concentration()
     if c.count == 0:
         return None
     cache_key = _make_key(c)
     if not force_refresh:
-        cached = _load_cached(cache_key)
+        cached = _load_cached(cache_key, locale)
         if cached is not None:
             what, meaning, watch, gen_at = cached
             return ConcentrationInsight(
@@ -199,9 +230,9 @@ def get_insight(force_refresh: bool = False) -> ConcentrationInsight | None:
                 cached=True,
             )
     user_message = _build_user_message(c)
-    what, meaning, watch = _call_claude(user_message)
+    what, meaning, watch = _call_claude(user_message, locale)
     now = datetime.now()
-    _save_cache(cache_key, what, meaning, watch, now)
+    _save_cache(cache_key, what, meaning, watch, now, locale)
     return ConcentrationInsight(
         cache_key=cache_key,
         what=what,

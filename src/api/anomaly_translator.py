@@ -27,6 +27,7 @@ from datetime import datetime, timedelta
 from typing import Literal
 
 from api.data import prices
+from api.i18n import DEFAULT_LOCALE, Locale
 
 log = logging.getLogger(__name__)
 
@@ -179,14 +180,24 @@ def _call_claude(content: str, kind: AnomalyKind) -> str:
 # ── Public API ──────────────────────────────────────────────────────────────
 
 
-def translate(content: str, kind: AnomalyKind) -> str:
-    """Return a plain-English rewrite, or the original on any failure.
+def translate(
+    content: str, kind: AnomalyKind, locale: Locale = DEFAULT_LOCALE
+) -> str:
+    """Return a plain-language rewrite of moomoo anomaly content.
 
-    Empty / whitespace input passes through unchanged. Anything else is
-    cached by content hash so the cost is paid at most once per unique
-    moomoo prose.
+    For `locale="zh"` this short-circuits: moomoo returns Simplified
+    Chinese already, so passthrough avoids an unnecessary Claude call.
+    For `locale="en"` the legacy path runs (Claude rewrites the
+    technical Chinese-source prose into plain English) — cached by
+    content hash so the cost is paid at most once per unique moomoo
+    prose.
+
+    Empty / whitespace input passes through unchanged in both locales.
     """
     if not content or not content.strip():
+        return content
+
+    if locale == "zh":
         return content
 
     key = _hash_key(content, kind)

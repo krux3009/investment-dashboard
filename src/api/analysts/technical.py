@@ -11,9 +11,10 @@ from __future__ import annotations
 
 from api.analysts._base import AnalystOutput, call_analyst
 from api.data import anomalies, prices
+from api.i18n import Locale
 
 ROLE = "Technical"
-ROLE_BANS: tuple[str, ...] = ()
+ROLE_BANS: dict[Locale, tuple[str, ...]] = {"en": (), "zh": ()}
 
 
 def _build_context(code: str, ticker: str) -> dict:
@@ -33,7 +34,7 @@ def _build_context(code: str, ticker: str) -> dict:
     }
 
 
-def get_take(code: str, ticker: str, name: str) -> AnalystOutput:
+def get_take(code: str, ticker: str, name: str, locale: Locale = "en") -> AnalystOutput:
     context = _build_context(code, ticker)
     is_empty = (
         not context["technical_signals"]
@@ -46,4 +47,5 @@ def get_take(code: str, ticker: str, name: str) -> AnalystOutput:
         context=context,
         role_specific_bans=ROLE_BANS,
         is_context_empty=is_empty,
+        locale=locale,
     )
