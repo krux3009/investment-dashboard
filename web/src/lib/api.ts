@@ -574,3 +574,105 @@ export async function fetchSentimentInsight(
   if (data.available === false) return { ok: true, data: null };
   return { ok: true, data };
 }
+
+// ── dividends / income ledger ────────────────────────────────────────
+
+export interface DividendPayment {
+  ex_date: string;
+  amount_per_share_native: number;
+  amount_total_native: number;
+  amount_total_usd: number;
+}
+
+export interface HoldingDividend {
+  code: string;
+  ticker: string;
+  name: string;
+  currency: string;
+  shares_held: number;
+  is_reit: boolean;
+  next_ex_date: string | null;
+  next_amount_per_share_native: number | null;
+  next_amount_total_usd: number | null;
+  ttm_per_share_native: number;
+  ttm_total_native: number;
+  ttm_total_usd: number;
+  history_count: number;
+  history: DividendPayment[];
+}
+
+export interface DividendsResponse {
+  as_of: string;
+  items: HoldingDividend[];
+  totals: {
+    ttm_total_usd: number;
+    next_30d_total_usd: number;
+    next_90d_total_usd: number;
+  };
+  rates_used: Record<string, number>;
+}
+
+export async function fetchDividends(): Promise<DividendsResponse> {
+  const res = await fetch(`${API_BASE}/api/dividends`, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`/api/dividends ${res.status}: ${await res.text()}`);
+  }
+  return (await res.json()) as DividendsResponse;
+}
+
+export type HoldingDividendResult =
+  | { ok: true; data: HoldingDividend }
+  | { ok: false; status: number; detail: string };
+
+export async function fetchDividendForCode(
+  code: string,
+): Promise<HoldingDividendResult> {
+  const res = await fetch(
+    `${API_BASE}/api/dividends/${encodeURIComponent(code)}`,
+    { cache: "no-store" },
+  );
+  if (!res.ok) {
+    let detail = `${res.status}`;
+    try {
+      const body = await res.json();
+      detail = body.detail ?? detail;
+    } catch {
+      detail = await res.text();
+    }
+    return { ok: false, status: res.status, detail };
+  }
+  return { ok: true, data: (await res.json()) as HoldingDividend };
+}
+
+export interface DividendsInsightResponse {
+  what: string;
+  meaning: string;
+  watch: string;
+  generated_at: string;
+  cached: boolean;
+}
+
+export type DividendsInsightResult =
+  | { ok: true; data: DividendsInsightResponse }
+  | { ok: false; status: number; detail: string };
+
+export async function fetchDividendsInsight(
+  refresh = false,
+  locale: Locale = "en",
+): Promise<DividendsInsightResult> {
+  const qs = new URLSearchParams({ locale });
+  if (refresh) qs.set("refresh", "true");
+  const url = `${API_BASE}/api/dividends-insight?${qs}`;
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) {
+    let detail = `${res.status}`;
+    try {
+      const body = await res.json();
+      detail = body.detail ?? detail;
+    } catch {
+      detail = await res.text();
+    }
+    return { ok: false, status: res.status, detail };
+  }
+  return { ok: true, data: (await res.json()) as DividendsInsightResponse };
+}

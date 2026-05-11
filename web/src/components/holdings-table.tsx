@@ -1,6 +1,12 @@
 "use client";
 
-import type { EarningsItem, Holding, PriceHistory, PricePoint } from "@/lib/api";
+import type {
+  EarningsItem,
+  Holding,
+  HoldingDividend,
+  PriceHistory,
+  PricePoint,
+} from "@/lib/api";
 import { arrowFor, directionClass, fmtCurrency, fmtPct, fmtUsd } from "@/lib/format";
 import { useLiveHoldingsMap } from "@/lib/live-store";
 import { useTickPulse } from "@/lib/use-tick-pulse";
@@ -11,6 +17,7 @@ import { useT } from "@/lib/i18n/use-t";
 import { useLocale } from "@/lib/i18n/locale-provider";
 
 const EARNINGS_SOON_DAYS = 14;
+const EX_DIV_SOON_DAYS = 14;
 
 type SortKey = "ticker" | "qty" | "current_price" | "today_change_pct" | "market_value_usd" | "total_pnl_pct";
 type SortDir = "asc" | "desc";
@@ -87,6 +94,7 @@ interface HoldingRowProps {
   isExpanded: boolean;
   onToggle: (code: string) => void;
   earningsItem: EarningsItem | undefined;
+  dividendSoon: HoldingDividend | undefined;
 }
 
 // Per-row pulse: when any field that the SSE tick mutates changes, the
@@ -101,6 +109,7 @@ function HoldingRow({
   isExpanded,
   onToggle,
   earningsItem,
+  dividendSoon,
 }: HoldingRowProps) {
   const t = useT();
   const { locale } = useLocale();
@@ -174,6 +183,43 @@ function HoldingRow({
                       <line x1="5.5" y1="2" x2="5.5" y2="4.5" />
                       <line x1="10.5" y1="2" x2="10.5" y2="4.5" />
                     </svg>
+                  </span>
+                );
+              })()}
+              {(() => {
+                if (!dividendSoon || !dividendSoon.next_ex_date) return null;
+                const ex = new Date(dividendSoon.next_ex_date);
+                const today = new Date();
+                const daysUntil = Math.ceil(
+                  (ex.getTime() - today.getTime()) / 86_400_000,
+                );
+                if (daysUntil < 0 || daysUntil > EX_DIV_SOON_DAYS) return null;
+                const dateLabel = new Intl.DateTimeFormat(
+                  locale === "zh" ? "zh-CN" : "en-US",
+                  { month: "long", day: "numeric" },
+                ).format(ex);
+                const daysLabel =
+                  daysUntil === 0
+                    ? t("dividends.exdiv.today")
+                    : t(
+                        daysUntil === 1
+                          ? "dividends.exdiv.in_day"
+                          : "dividends.exdiv.in_days",
+                        { n: daysUntil },
+                      );
+                return (
+                  <span
+                    title={t("dividends.exdiv.title", {
+                      date: dateLabel,
+                      label: daysLabel,
+                    })}
+                    aria-label={t("dividends.exdiv.aria", {
+                      date: dateLabel,
+                      label: daysLabel,
+                    })}
+                    className="text-quiet inline-flex items-center cursor-help font-serif italic text-sm leading-none"
+                  >
+                    ƒ
                   </span>
                 );
               })()}
@@ -279,9 +325,17 @@ interface Props {
   // Map of code → next-earnings record. Tickers reporting within
   // EARNINGS_SOON_DAYS get a small calendar icon next to the name.
   earningsByCode: Record<string, EarningsItem>;
+  // Map of code → upcoming dividend record. Tickers with an ex-date
+  // within EX_DIV_SOON_DAYS get a small ƒ glyph next to the name.
+  dividendsByCode?: Record<string, HoldingDividend>;
 }
 
-export function HoldingsTable({ holdings, sparklines, earningsByCode }: Props) {
+export function HoldingsTable({
+  holdings,
+  sparklines,
+  earningsByCode,
+  dividendsByCode = {},
+}: Props) {
   const t = useT();
   const [sort, setSort] = useState<SortState | null>(null);
   const [expandedCode, setExpandedCode] = useState<string | null>(null);
@@ -381,6 +435,7 @@ export function HoldingsTable({ holdings, sparklines, earningsByCode }: Props) {
                 isExpanded={expandedCode === h.code}
                 onToggle={handleRowToggle}
                 earningsItem={earningsByCode[h.code]}
+                dividendSoon={dividendsByCode[h.code]}
               />
             );
           })}

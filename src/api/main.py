@@ -38,6 +38,8 @@ from api.routes import (
     concentration,
     concentration_insight,
     digest,
+    dividends,
+    dividends_insight,
     earnings,
     foresight,
     foresight_insight,
@@ -99,6 +101,8 @@ app.include_router(foresight_insight.router, prefix="/api")
 app.include_router(stream.router, prefix="/api")
 app.include_router(reddit.router, prefix="/api")
 app.include_router(sentiment_insight.router, prefix="/api")
+app.include_router(dividends.router, prefix="/api")
+app.include_router(dividends_insight.router, prefix="/api")
 
 
 @app.get("/api/health")
