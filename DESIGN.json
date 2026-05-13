@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-05-05T00:00:00Z",
+  "generatedAt": "2026-05-13T00:00:00Z",
   "title": "Design System: Quiet Ledger",
   "extensions": {
     "colorMeta": {
@@ -48,6 +48,12 @@
         "role": "neutral",
         "displayName": "Hairline Rule",
         "canonical": "oklch(86% 0.006 70)"
+      },
+      "surface-zebra": {
+        "role": "neutral",
+        "displayName": "Surface Zebra",
+        "canonical": "oklch(94.5% 0.006 75)",
+        "note": "Subtle alternating-row tint for the holdings register (~1.5% delta from surface). Dark mode pair: oklch(20.5% 0.008 60). Added 2026-05-13 with the register-row primitive."
       },
       "accent": {
         "role": "primary",
@@ -178,6 +184,14 @@
       "description": "The header cell trigger inside holdings + watchlist tables. Three-click cycle: desc, asc, cleared. Persists in localStorage.",
       "html": "<button type=\"button\" class=\"ds-sortable-header ds-sortable-header-active\" aria-sort=\"descending\">Total return<span class=\"ds-sortable-indicator\">↓</span></button>",
       "css": ".ds-sortable-header { font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 0.75rem; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; color: oklch(58% 0.007 65); background: none; border: 0; padding: 0; cursor: pointer; transition: color 200ms; } .ds-sortable-header:hover { color: oklch(20% 0.008 60); } .ds-sortable-header-active { color: oklch(20% 0.008 60); } .ds-sortable-indicator { margin-left: 0.25rem; color: oklch(45% 0.008 60); }"
+    },
+    {
+      "name": "Register row (holdings table)",
+      "kind": "row",
+      "refersTo": "row",
+      "description": "Holdings table row as a register row primitive (introduced 2026-05-13). Dedicated leftmost glyph margin column (w-6, always present even when empty) stacks the earnings ⊙ and ex-dividend ƒ marks. Body rows: border-b border-rule, py-3 (~25% tighter than the prior py-4). Even rows tint to surface-zebra (~1.5% delta from surface) via the `even:` Tailwind variant; hover and expanded override the zebra base. Numeric columns use font-medium + tabular; secondary captions inside the same cell drop to font-normal + text-whisper so the primary figure carries the row.",
+      "html": "<table class=\"ds-register\"><tbody><tr class=\"ds-register-row\"><td class=\"ds-register-glyph\"><span class=\"ds-glyph-exdiv\">ƒ</span></td><td class=\"ds-register-name\"><div class=\"ds-register-ticker\">MU</div><div class=\"ds-register-name-meta\">Micron Technology · NASDAQ · USD</div></td><td class=\"ds-register-figure ds-register-gain\">↑ +5.2%</td></tr><tr class=\"ds-register-row ds-register-row-zebra\"><td class=\"ds-register-glyph\"></td><td class=\"ds-register-name\"><div class=\"ds-register-ticker\">INTC</div><div class=\"ds-register-name-meta\">Intel Corp · NASDAQ · USD</div></td><td class=\"ds-register-figure ds-register-loss\">↓ −0.9%</td></tr><tr class=\"ds-register-row\"><td class=\"ds-register-glyph\"><span class=\"ds-glyph-earnings\">⊙</span></td><td class=\"ds-register-name\"><div class=\"ds-register-ticker\">ANET</div><div class=\"ds-register-name-meta\">Arista Networks · NYSE · USD</div></td><td class=\"ds-register-figure ds-register-gain\">↑ +0.4%</td></tr></tbody></table>",
+      "css": ".ds-register { width: 100%; border-collapse: collapse; font-family: 'IBM Plex Sans', system-ui, sans-serif; } .ds-register-row { border-bottom: 1px solid oklch(86% 0.006 70); } .ds-register-row-zebra { background: oklch(94.5% 0.006 75); } .ds-register-glyph { width: 1.5rem; padding: 0.75rem 0.5rem 0.75rem 0.25rem; text-align: center; color: oklch(45% 0.008 60); vertical-align: top; } .ds-glyph-exdiv { font-family: Georgia, serif; font-style: italic; font-size: 0.875rem; } .ds-glyph-earnings { font-size: 0.875rem; } .ds-register-name { padding: 0.75rem 1rem 0.75rem 0; vertical-align: top; } .ds-register-ticker { font-size: 1rem; font-weight: 500; color: oklch(20% 0.008 60); line-height: 1.2; } .ds-register-name-meta { font-size: 0.75rem; color: oklch(45% 0.008 60); margin-top: 0.125rem; } .ds-register-figure { padding: 0.75rem 1rem; text-align: right; font-feature-settings: 'tnum' 1; font-variant-numeric: tabular-nums; font-weight: 500; vertical-align: top; } .ds-register-gain { color: oklch(48% 0.10 145); } .ds-register-loss { color: oklch(48% 0.13 25); }"
     },
     {
       "name": "Drill-in container",

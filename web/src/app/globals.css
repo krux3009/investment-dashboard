@@ -15,6 +15,7 @@
   /* Surfaces — light theme (default) */
   --surface: oklch(96% 0.005 75);          /* paper cream */
   --surface-raised: oklch(98% 0.004 75);   /* card lift */
+  --surface-zebra: oklch(94.5% 0.006 75);  /* register alt row (subtle) */
   --surface-hover: oklch(93% 0.008 75);    /* row hover */
   --surface-expanded: oklch(94% 0.008 75); /* drill-in row */
 
@@ -52,6 +53,7 @@
 .dark {
   --surface: oklch(18% 0.008 60);
   --surface-raised: oklch(22% 0.008 60);
+  --surface-zebra: oklch(20.5% 0.008 60);
   --surface-hover: oklch(24% 0.008 60);
   --surface-expanded: oklch(26% 0.008 60);
 
@@ -82,6 +84,7 @@
   /* Color tokens exposed to Tailwind utilities. */
   --color-surface: var(--surface);
   --color-surface-raised: var(--surface-raised);
+  --color-surface-zebra: var(--surface-zebra);
   --color-surface-hover: var(--surface-hover);
   --color-surface-expanded: var(--surface-expanded);
   --color-ink: var(--ink);

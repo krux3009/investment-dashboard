@@ -118,12 +118,93 @@ function HoldingRow({
   const pulseCls = pulsing ? "tick-pulse-cell" : "";
   const isUsd = h.currency === "USD";
 
+  // Earnings glyph (rendered in the left margin column when reporting
+  // within EARNINGS_SOON_DAYS). Returns null if no upcoming event.
+  const earningsGlyph = (() => {
+    const e = earningsItem;
+    if (!e || e.days_until > EARNINGS_SOON_DAYS) return null;
+    const dateLabel = new Intl.DateTimeFormat(
+      locale === "zh" ? "zh-CN" : "en-US",
+      { month: "long", day: "numeric" },
+    ).format(new Date(e.date));
+    const daysLabel =
+      e.days_until === 0
+        ? t("holdings.earnings.today")
+        : t(
+            e.days_until === 1
+              ? "holdings.earnings.in_day"
+              : "holdings.earnings.in_days",
+            { n: e.days_until },
+          );
+    return (
+      <span
+        title={t("holdings.earnings.title", { date: dateLabel, label: daysLabel })}
+        aria-label={t("holdings.earnings.aria", { date: dateLabel, label: daysLabel })}
+        className="text-quiet inline-flex items-center cursor-help"
+      >
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden
+        >
+          <rect x="2.5" y="3.5" width="11" height="10" rx="1" />
+          <line x1="2.5" y1="6.5" x2="13.5" y2="6.5" />
+          <line x1="5.5" y1="2" x2="5.5" y2="4.5" />
+          <line x1="10.5" y1="2" x2="10.5" y2="4.5" />
+        </svg>
+      </span>
+    );
+  })();
+
+  // Ex-dividend glyph (ƒ in serif italic), rendered when next_ex_date is
+  // within EX_DIV_SOON_DAYS.
+  const dividendGlyph = (() => {
+    if (!dividendSoon || !dividendSoon.next_ex_date) return null;
+    const ex = new Date(dividendSoon.next_ex_date);
+    const today = new Date();
+    const daysUntil = Math.ceil((ex.getTime() - today.getTime()) / 86_400_000);
+    if (daysUntil < 0 || daysUntil > EX_DIV_SOON_DAYS) return null;
+    const dateLabel = new Intl.DateTimeFormat(
+      locale === "zh" ? "zh-CN" : "en-US",
+      { month: "long", day: "numeric" },
+    ).format(ex);
+    const daysLabel =
+      daysUntil === 0
+        ? t("dividends.exdiv.today")
+        : t(
+            daysUntil === 1
+              ? "dividends.exdiv.in_day"
+              : "dividends.exdiv.in_days",
+            { n: daysUntil },
+          );
+    return (
+      <span
+        title={t("dividends.exdiv.title", { date: dateLabel, label: daysLabel })}
+        aria-label={t("dividends.exdiv.aria", { date: dateLabel, label: daysLabel })}
+        className="text-quiet inline-flex items-center cursor-help font-serif italic text-sm leading-none"
+      >
+        ƒ
+      </span>
+    );
+  })();
+
+  // Zebra tint via :nth-child(even). The register's alternating-row
+  // pattern is the structural cue. Expanded + hover states win in the
+  // cascade because their utility classes are emitted later than `even:`.
+  const rowBgCls = isExpanded
+    ? "bg-surface-expanded"
+    : "even:bg-surface-zebra hover:bg-surface-hover";
+
   return (
     <Fragment>
       <tr
-        className={`border-t border-rule cursor-pointer transition-colors ${
-          isExpanded ? "bg-surface-expanded" : "hover:bg-surface-hover"
-        }`}
+        className={`border-b border-rule cursor-pointer transition-colors ${rowBgCls}`}
         onClick={() => onToggle(h.code)}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
@@ -135,95 +216,21 @@ function HoldingRow({
         role="button"
         aria-expanded={isExpanded}
       >
-        <td className="py-4 pr-4">
+        {/* Glyph margin column — register left margin. Always present
+            so the row's left edge reads as structural, even when no
+            glyph applies. Earnings glyph wins if both are present. */}
+        <td className="py-3 pl-1 pr-2 align-top w-6">
+          <div className="flex flex-col items-center gap-1 pt-1">
+            {earningsGlyph}
+            {dividendGlyph}
+          </div>
+        </td>
+
+        <td className="py-3 pr-4 align-top">
           <div className="flex flex-col gap-0.5">
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-base font-medium text-ink">{h.ticker}</span>
-              {(() => {
-                const e = earningsItem;
-                if (!e || e.days_until > EARNINGS_SOON_DAYS) return null;
-                const dateLabel = new Intl.DateTimeFormat(
-                  locale === "zh" ? "zh-CN" : "en-US",
-                  { month: "long", day: "numeric" },
-                ).format(new Date(e.date));
-                const daysLabel =
-                  e.days_until === 0
-                    ? t("holdings.earnings.today")
-                    : t(
-                        e.days_until === 1
-                          ? "holdings.earnings.in_day"
-                          : "holdings.earnings.in_days",
-                        { n: e.days_until },
-                      );
-                return (
-                  <span
-                    title={t("holdings.earnings.title", {
-                      date: dateLabel,
-                      label: daysLabel,
-                    })}
-                    aria-label={t("holdings.earnings.aria", {
-                      date: dateLabel,
-                      label: daysLabel,
-                    })}
-                    className="text-quiet inline-flex items-center cursor-help"
-                  >
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 16 16"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.4"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden
-                    >
-                      <rect x="2.5" y="3.5" width="11" height="10" rx="1" />
-                      <line x1="2.5" y1="6.5" x2="13.5" y2="6.5" />
-                      <line x1="5.5" y1="2" x2="5.5" y2="4.5" />
-                      <line x1="10.5" y1="2" x2="10.5" y2="4.5" />
-                    </svg>
-                  </span>
-                );
-              })()}
-              {(() => {
-                if (!dividendSoon || !dividendSoon.next_ex_date) return null;
-                const ex = new Date(dividendSoon.next_ex_date);
-                const today = new Date();
-                const daysUntil = Math.ceil(
-                  (ex.getTime() - today.getTime()) / 86_400_000,
-                );
-                if (daysUntil < 0 || daysUntil > EX_DIV_SOON_DAYS) return null;
-                const dateLabel = new Intl.DateTimeFormat(
-                  locale === "zh" ? "zh-CN" : "en-US",
-                  { month: "long", day: "numeric" },
-                ).format(ex);
-                const daysLabel =
-                  daysUntil === 0
-                    ? t("dividends.exdiv.today")
-                    : t(
-                        daysUntil === 1
-                          ? "dividends.exdiv.in_day"
-                          : "dividends.exdiv.in_days",
-                        { n: daysUntil },
-                      );
-                return (
-                  <span
-                    title={t("dividends.exdiv.title", {
-                      date: dateLabel,
-                      label: daysLabel,
-                    })}
-                    aria-label={t("dividends.exdiv.aria", {
-                      date: dateLabel,
-                      label: daysLabel,
-                    })}
-                    className="text-quiet inline-flex items-center cursor-help font-serif italic text-sm leading-none"
-                  >
-                    ƒ
-                  </span>
-                );
-              })()}
-            </div>
+            <span className="text-base font-medium text-ink leading-tight">
+              {h.ticker}
+            </span>
             <span className="text-xs text-quiet">
               {h.name}{" "}
               <span className="text-whisper">
@@ -233,23 +240,23 @@ function HoldingRow({
           </div>
         </td>
 
-        <td className="py-4 px-4 text-right tabular text-ink">
+        <td className="py-3 px-4 text-right tabular text-ink font-medium align-top">
           <div className={pulseCls}>{h.qty.toLocaleString()}</div>
         </td>
 
-        <td className="py-4 px-4 text-right tabular text-ink">
+        <td className="py-3 px-4 text-right tabular text-ink font-medium align-top">
           <div className={pulseCls}>
             {fmtCurrency(h.current_price, h.currency, { decimals: 2 })}
           </div>
         </td>
 
-        <td className={`py-4 px-4 text-right tabular ${directionClass(h.today_change_pct)}`}>
+        <td className={`py-3 px-4 text-right tabular font-medium align-top ${directionClass(h.today_change_pct)}`}>
           {(() => {
             const noData =
               (h.today_change_pct === 0 || h.today_change_pct === null) &&
               (h.today_change_abs === 0 || h.today_change_abs === null);
             if (noData) {
-              return <span className="text-whisper">—</span>;
+              return <span className="text-whisper font-normal">—</span>;
             }
             return (
               <div className={pulseCls}>
@@ -258,7 +265,7 @@ function HoldingRow({
                   <span>{fmtPct(h.today_change_pct, 2)}</span>
                 </div>
                 {h.today_change_abs !== null && (
-                  <div className="text-xs text-whisper">
+                  <div className="text-xs text-whisper font-normal">
                     {fmtCurrency(h.today_change_abs, h.currency, { decimals: 2, signed: true })}
                   </div>
                 )}
@@ -267,30 +274,32 @@ function HoldingRow({
           })()}
         </td>
 
-        <td className="py-4 px-4 text-right">
-          <div className="flex justify-end">
+        <td className="py-3 px-4 text-right align-top">
+          <div className="flex justify-end pt-1">
             <Sparkline points={sparkData} direction={sparkDirection} />
           </div>
         </td>
 
-        <td className="py-4 px-4 text-right tabular">
+        <td className="py-3 px-4 text-right tabular align-top">
           <div className={pulseCls}>
-            <div className="text-ink">{fmtUsd(h.market_value_usd, { decimals: 2 })}</div>
+            <div className="text-ink font-medium">
+              {fmtUsd(h.market_value_usd, { decimals: 2 })}
+            </div>
             {!isUsd && (
-              <div className="text-xs text-whisper">
+              <div className="text-xs text-whisper font-normal">
                 {fmtCurrency(h.market_value, h.currency, { decimals: 2 })}
               </div>
             )}
           </div>
         </td>
 
-        <td className={`py-4 pl-4 text-right tabular ${directionClass(h.total_pnl_pct)}`}>
+        <td className={`py-3 pl-4 text-right tabular font-medium align-top ${directionClass(h.total_pnl_pct)}`}>
           <div className={pulseCls}>
             <div className="flex items-baseline justify-end gap-1.5">
               <span aria-hidden>{arrowFor(h.total_pnl_pct)}</span>
               <span>{fmtPct(h.total_pnl_pct, 2)}</span>
             </div>
-            <div className="text-xs text-whisper">
+            <div className="text-xs text-whisper font-normal">
               {fmtUsd(h.total_pnl_abs_usd, { decimals: 2, signed: true })}
             </div>
           </div>
@@ -299,7 +308,7 @@ function HoldingRow({
 
       {isExpanded && (
         <tr>
-          <td colSpan={7} className="p-0">
+          <td colSpan={8} className="p-0">
             <DrillIn
               code={h.code}
               direction={
@@ -389,9 +398,12 @@ export function HoldingsTable({
         {t("holdings.heading")}
       </div>
 
-      <table className="w-full">
+      <table className="w-full border-collapse">
         <thead>
           <tr className="border-b border-rule">
+            {/* Glyph margin column header — empty but reserved so the
+                register's left margin remains a structural element. */}
+            <th aria-hidden className="pb-3 w-6" />
             <th className="text-left pb-3 pr-4">
               <SortableHeader label={t("holdings.col.position")} sortKey="ticker" sort={sort} onSort={handleSort} />
             </th>

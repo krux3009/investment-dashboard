@@ -4,6 +4,7 @@ description: A paper-and-ink reading room for a long-horizon personal portfolio.
 colors:
   surface: "oklch(96% 0.005 75)"
   surface-raised: "oklch(98% 0.004 75)"
+  surface-zebra: "oklch(94.5% 0.006 75)"
   surface-hover: "oklch(93% 0.008 75)"
   surface-expanded: "oklch(94% 0.008 75)"
   ink: "oklch(20% 0.008 60)"
@@ -23,6 +24,7 @@ colors:
   slice-7: "oklch(82% 0.007 70)"
   surface-dark: "oklch(18% 0.008 60)"
   surface-raised-dark: "oklch(22% 0.008 60)"
+  surface-zebra-dark: "oklch(20.5% 0.008 60)"
   surface-hover-dark: "oklch(24% 0.008 60)"
   surface-expanded-dark: "oklch(26% 0.008 60)"
   ink-dark: "oklch(92% 0.005 75)"
@@ -155,6 +157,7 @@ Tinted neutrals carry the surface; one warm rust accent appears rarely and force
 
 - **Paper Cream** surface (`oklch(96% 0.005 75)` light · `oklch(18% 0.008 60)` dark): the surface tint. Warm enough to reject the white-paper SaaS reflex; in dark mode it becomes a warm graphite that visibly belongs to the same family.
 - **Surface Raised** (`oklch(98% 0.004 75)` light · `oklch(22% 0.008 60)` dark): the textarea fill in the notes block. The only place a panel "lifts" tonally.
+- **Surface Zebra** (`oklch(94.5% 0.006 75)` light · `oklch(20.5% 0.008 60)` dark): the subtle alternating-row tint applied to even rows of the holdings register. ~1.5% delta from `surface` in both modes. Reads as register pattern, not stripe; the alternation is the structural cue, not the color itself.
 - **Surface Hover** (`oklch(93% 0.008 75)` light · `oklch(24% 0.008 60)` dark): the 2-3% darken applied to hovered rows in the holdings + watchlist tables. No shadow, no shift.
 - **Surface Expanded** (`oklch(94% 0.008 75)` light · `oklch(26% 0.008 60)` dark): the drill-in fill when a row is open. A degree quieter than hover so the open state reads as anchored.
 - **Warm Graphite Ink** (`oklch(20% 0.008 60)` light · `oklch(92% 0.005 75)` dark): body and headings. Tinted toward the surface family; never `#000` and never `#fff`.
@@ -241,10 +244,14 @@ The home and portfolio routes both lead with a hero section: `border-b border-ru
 
 ### Tables (`holdings-table.tsx`, `watchlist-table.tsx`)
 
-- **Shape:** `w-full`. No outer border. Section divider only at the top and bottom edges via `border-b border-rule`.
-- **Header row:** `border-b border-rule`, columns left-aligned for text and right-aligned for numbers and trend.
-- **Body rows:** `border-t border-rule`, `py-4` for vertical rhythm. Hover darkens to `bg-surface-hover`. Click toggles to `bg-surface-expanded` and reveals a drill-in.
-- **Sortable header:** `<button>` rendering label + `↑` / `↓` indicator when active. `text-whisper` rest, `text-ink` active, hover lifts to `text-ink`. Sort state persists in localStorage (`ql.holdings.sort`).
+`holdings-table.tsx` ships as a **register row primitive** (2026-05-13). The table reads as a paper register rather than a generic data table: alternating zebra tint, tighter row rhythm, a structural left-margin glyph column. `watchlist-table.tsx` retains the older shape pending session-2 parity.
+
+- **Shape:** `w-full border-collapse`. No outer border. Section divider only at the top and bottom edges via `border-b border-rule`.
+- **Header row:** `border-b border-rule`. First column is the empty glyph margin (`w-6`, `aria-hidden`); remaining columns left-aligned for text and right-aligned for numbers and trend.
+- **Body rows:** `border-b border-rule`, `py-3` (~25% tighter than the prior `py-4`). Even rows tint to `bg-surface-zebra` (~1.5% delta from surface) via the `even:` Tailwind variant. Hover darkens to `bg-surface-hover`; expanded row sits at `bg-surface-expanded`. Hover and expanded both override the zebra base because they emit later in the cascade.
+- **Glyph margin column:** dedicated leftmost `<td>` (`w-6`, `pl-1 pr-2`), always present even when no glyph applies, so the register's left margin remains a structural element. Stacks the earnings icon (`⊙` SVG calendar) and the ex-dividend mark (`ƒ` serif italic) vertically inside the cell when both apply.
+- **Numeric column weight:** every numeric cell uses `font-medium` (500) + `tabular`. Secondary captions inside the same cell (FX equivalent, signed $ change) drop back to `font-normal` and `text-whisper` so the primary figure carries the row.
+- **Sortable header:** `<button>` rendering label + `↑` / `↓` indicator when active. `text-whisper` rest, `text-ink` active, hover lifts to `text-ink`. Sort state persists in localStorage (`ql.holdings.sort`). The glyph margin column is non-sortable by design.
 - **Row trigger:** the whole row is the affordance (`role="button"`, `tabIndex={0}`, Enter / Space toggle). `aria-expanded` mirrors state.
 
 ### Drill-in (`drill-in.tsx`)
