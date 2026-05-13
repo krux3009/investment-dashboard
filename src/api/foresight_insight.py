@@ -24,7 +24,17 @@ log = logging.getLogger(__name__)
 
 _TTL = timedelta(hours=6)
 # v2-no-em-dash → v3-no-em-dash (2026-05-10): locale-aware prompts.
-_PROMPT_VERSION = "v3-no-em-dash"
+# v3-no-em-dash → v4-source-edit (2026-05-13): ported the digest v6
+# source-edit pairs into _PROMPT (en) + _LANG_INSTRUCTION["zh"], adapted
+# to the forward-event surface: (1) no pace characterization on macro
+# background indicators (inflation cooling, growth slowing) — "pace"
+# itself banned; (2) the event being in the future is fine, but no
+# prediction of the event outcome, print number, or market reaction;
+# Watch line names an observation target without predicting its outcome;
+# (3) ZH Watch wording nudged toward 未来/下次/下个 over 后续.
+# FORBIDDEN list unchanged. Cache keys "v4-source-edit-en" /
+# "v4-source-edit-zh"; old v3 rows orphan and rebuild on next request.
+_PROMPT_VERSION = "v4-source-edit"
 
 _LANG_INSTRUCTION: dict[Locale, str] = {
     "en": "\n\nRespond in English.\n",
@@ -33,7 +43,18 @@ _LANG_INSTRUCTION: dict[Locale, str] = {
         "采用零售投资者的朴素中文。禁用以下中文词汇："
         "买入、卖出、持有、加仓、减仓、目标价、预测、推荐、应该、看多、看空、"
         "飙升、暴跌、突破、反弹、跑赢、跑输、催化剂、"
-        "可能上涨、可能下跌、预期上涨、预期下跌。\n"
+        "可能上涨、可能下跌、预期上涨、预期下跌。"
+        "\n\n不要描述任何宏观背景指标的节奏（通胀降温、增长放缓、需求加速、动能积累）。"
+        "写出前值或事实，不要叙述其轨迹。\"节奏\" 一词本身禁用。"
+        "\n    反例：\"通胀降温节奏正在加速\""
+        "\n    正例：\"前值 4 月 CPI 为 2.4%，较 3 月 2.7% 回落\""
+        "\n\n不得预测事件结果、数据读数或市场反应。事件本身在未来无妨，"
+        "但不可预判其结局。\"Watch:\" 一行写一个观察对象，不得预测其结果。"
+        "\n    反例 (Meaning)：\"此次数据可能推动联储进一步降息\""
+        "\n    正例 (Meaning)：\"该数据是联储利率决策的输入，与 MU 和 ANET 的融资成本相关\""
+        "\n    反例 (Watch)：\"发布后股价可能出现大幅波动\""
+        "\n    正例 (Watch)：\"观察标题数据是否符合 2.3% 的一致预期，以及与近期读数的对比\""
+        "\n\nWatch 一行的时间词优先使用 \"下次/下个/未来\"，避免 \"后续\"。\n"
     ),
 }
 
@@ -56,6 +77,20 @@ Hard rules:
 - EXACTLY three lines, with the literal labels "What:" / "Meaning:" /
   "Watch:".
 - Each line ONE sentence, ≤22 words. Aim for 15.
+- Do not characterize the pace of any background metric (inflation
+  cooling, growth slowing, demand accelerating, momentum building).
+  Report the prior print or fact; do not narrate its trajectory. The
+  word "pace" itself is banned.
+    Bad: "inflation has been cooling at an accelerating pace"
+    Good: "the prior April CPI print was 2.4%, down from March's 2.7%"
+- Do not predict the outcome of the event, the print number, or the
+  market reaction. The event being in the future is fine; predicting
+  its result is not. The "Watch" line names an observation target
+  without predicting its outcome.
+    Bad (Meaning): "the print may push the Fed toward another cut"
+    Good (Meaning): "the print feeds into the Fed's rate-setting decisions, which connect to funding costs for MU and ANET"
+    Bad (Watch):   "the stock will likely move sharply after the release"
+    Good (Watch):  "Whether the headline number matches the consensus 2.3% and how the cadence compares to recent prints"
 - NEVER use em dashes (—) in any output line. Use colons, commas, or
   periods instead.
 
