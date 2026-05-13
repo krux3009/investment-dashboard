@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from api import foresight
+from api._advisor_guard import RETRY_SUFFIX_EN, RETRY_SUFFIX_ZH, has_forbidden
 from api.data import prices
 from api.data.moomoo_client import get_summary
 from api.i18n import DEFAULT_LOCALE, Locale, prompt_version_with_locale
@@ -35,6 +36,57 @@ _TTL = timedelta(hours=6)
 # FORBIDDEN list unchanged. Cache keys "v4-source-edit-en" /
 # "v4-source-edit-zh"; old v3 rows orphan and rebuild on next request.
 _PROMPT_VERSION = "v4-source-edit"
+
+# Post-check ban tuples for FORBIDDEN retry. See _advisor_guard.py
+# for matcher semantics. Foresight-specific bans add finance-theory
+# terms + reaction-prediction phrasings (catalyst / could move /
+# 催化剂 / 可能上涨) on top of the magnitude + hype + pace baseline.
+_BANS: dict[Locale, tuple[str, ...]] = {
+    "en": (
+        "forecast", "predict", "recommend", "should", "ought", "tomorrow",
+        "surge", "plunge", "soar", "crash", "breakout", "rally", "tank",
+        "bullish", "bearish",
+        "notable", "significant", "remarkable", "impressive", "robust",
+        "solid", "sharp", "stark", "dramatic", "modest", "outsized", "massive",
+        "registers", "boasts", "showcases", "demonstrates", "highlights",
+        "momentum", "decelerat", "mover",
+        "pace", "accelerat", "slowing", "easing", "rate-of-change",
+        # Foresight surface-specific:
+        "alpha", "beta", "outperform", "underperform", "benchmark-beating",
+        "catalyst", "could move", "expected to",
+    ),
+    "zh": (
+        "加仓", "减仓", "清仓", "目标价", "推荐", "建议",
+        "应该", "理应",
+        "看多", "看涨", "看空", "看跌",
+        "飙升", "暴涨", "暴跌", "大跌", "崩盘", "突破点", "反弹",
+        "显著", "强劲", "疲软", "稳健", "急剧",
+        "动能", "势头",
+        "节奏", "放缓", "减速", "加速", "趋缓",
+        # Foresight surface-specific:
+        "跑赢", "跑输", "催化剂",
+        "可能上涨", "可能下跌", "预期上涨", "预期下跌",
+        # Note: 预测 deliberately excluded from post-check — the standard
+        # Chinese rendering of "Summary of Economic Projections" is
+        # 经济预测摘要, which is a proper noun. Prompt prose still
+        # discourages 预测 as a verb; retain that as the soft guard.
+    ),
+}
+
+# Quiet fallback when both Claude attempts produce a forbidden hit.
+_QUIET: dict[Locale, tuple[str, str, str]] = {
+    "en": (
+        "An upcoming dated event tied to one or more of the listed holdings or the broader macro calendar.",
+        "Its details connect to the listed book through the named ticker or rate channel.",
+        "Whether reported figures match prior printed values on the day of release.",
+    ),
+    "zh": (
+        "持仓列表或宏观日历上的一个即将到来的事件。",
+        "其细节通过具名持仓或利率渠道与账本相连。",
+        "观察发布当日公布数据与此前读数的对比。",
+    ),
+}
+
 
 _LANG_INSTRUCTION: dict[Locale, str] = {
     "en": "\n\nRespond in English.\n",
@@ -191,30 +243,7 @@ def _build_user_message(ev: foresight.ForesightEvent, holdings: list[str]) -> st
     return "\n".join(lines)
 
 
-def _call_claude(
-    user_message: str, locale: Locale = DEFAULT_LOCALE
-) -> tuple[str, str, str]:
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise RuntimeError(
-            "ANTHROPIC_API_KEY not set — add it to .env to enable /api/foresight-insight."
-        )
-
-    from anthropic import Anthropic
-
-    client = Anthropic(api_key=api_key)
-    model = os.environ.get("ANTHROPIC_DIGEST_MODEL", "claude-sonnet-4-6")
-
-    system_prompt = _PROMPT + _LANG_INSTRUCTION[locale]
-
-    response = client.messages.create(
-        model=model,
-        max_tokens=400,
-        system=system_prompt,
-        messages=[{"role": "user", "content": user_message}],
-    )
-    body = "\n".join(b.text for b in response.content if b.type == "text").strip()
-
+def _parse_body(body: str) -> tuple[str, str, str]:
     what = meaning = watch = ""
     for line in body.splitlines():
         line = line.strip()
@@ -228,6 +257,55 @@ def _call_claude(
     if not (what or meaning or watch):
         what = body
     return what, meaning, watch
+
+
+def _call_claude(
+    user_message: str, locale: Locale = DEFAULT_LOCALE
+) -> tuple[str, str, str]:
+    """Returns (what, meaning, watch). Runs FORBIDDEN post-check +
+    one retry; falls back to the locale-specific quiet template on
+    repeated violation.
+    """
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise RuntimeError(
+            "ANTHROPIC_API_KEY not set — add it to .env to enable /api/foresight-insight."
+        )
+
+    from anthropic import Anthropic
+
+    client = Anthropic(api_key=api_key)
+    model = os.environ.get("ANTHROPIC_DIGEST_MODEL", "claude-sonnet-4-6")
+    bans = _BANS[locale]
+    system_prompt = _PROMPT + _LANG_INSTRUCTION[locale]
+
+    def _shot(system: str) -> str:
+        response = client.messages.create(
+            model=model,
+            max_tokens=400,
+            system=system,
+            messages=[{"role": "user", "content": user_message}],
+        )
+        return "\n".join(b.text for b in response.content if b.type == "text").strip()
+
+    body = _shot(system_prompt)
+    bad = has_forbidden(body, bans, locale)
+    if bad is not None:
+        log.info(
+            "foresight_insight: forbidden %r in first draft, retrying (locale=%s)",
+            bad, locale,
+        )
+        retry_suffix = (RETRY_SUFFIX_ZH if locale == "zh" else RETRY_SUFFIX_EN).format(bad=bad)
+        body = _shot(system_prompt + retry_suffix)
+        bad2 = has_forbidden(body, bans, locale)
+        if bad2 is not None:
+            log.warning(
+                "foresight_insight: forbidden %r persisted after retry, quieting (locale=%s)",
+                bad2, locale,
+            )
+            return _QUIET[locale]
+
+    return _parse_body(body)
 
 
 def get_insight(

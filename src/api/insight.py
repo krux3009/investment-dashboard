@@ -28,6 +28,7 @@ import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+from api._advisor_guard import RETRY_SUFFIX_EN, RETRY_SUFFIX_ZH, has_forbidden
 from api.data import anomalies, prices
 from api.data.moomoo_client import get_summary
 from api.digest import _fetch_news
@@ -48,6 +49,57 @@ _TTL = timedelta(hours=6)
 # the prompt level. Old v4 rows in insight_cache become orphaned and
 # rebuild on next request.
 _PROMPT_VERSION = "v5-source-edit"
+
+# Post-check ban tuples for FORBIDDEN retry. Narrower than the prompt
+# prose ban list — descriptive-use tokens (buy/sell/hold/target/add in
+# EN, 买入/卖出/持有 in ZH) live in the prompt only, since the prompt's
+# concept-translation table actively uses them descriptively
+# ("big institutions have been buying / selling"). Including them here
+# would cause retry loops on legitimate observational prose. Pace +
+# magnitude + hype + outcome-prediction tokens stay because their use
+# is always characterization, never description.
+_BANS: dict[Locale, tuple[str, ...]] = {
+    "en": (
+        # Action recommendation (clear-cut):
+        "forecast", "predict", "recommend", "should", "ought", "tomorrow",
+        # Hype:
+        "surge", "plunge", "soar", "crash", "breakout", "rally", "tank",
+        "bullish", "bearish",
+        # Magnitude qualifiers:
+        "notable", "significant", "remarkable", "impressive", "robust",
+        "solid", "sharp", "stark", "dramatic", "modest", "outsized", "massive",
+        # Highlight verbs:
+        "registers", "boasts", "showcases", "demonstrates", "highlights",
+        # Indicator behavior:
+        "momentum", "decelerat", "mover",
+        # Pace + forward-look (v5 source-edit):
+        "pace", "accelerat", "slowing", "easing", "rate-of-change",
+    ),
+    "zh": (
+        "加仓", "减仓", "清仓", "目标价", "预测", "推荐", "建议",
+        "应该", "理应",
+        "看多", "看涨", "看空", "看跌",
+        "飙升", "暴涨", "暴跌", "大跌", "崩盘", "突破点", "反弹",
+        "显著", "强劲", "疲软", "稳健", "急剧",
+        "动能", "势头",
+        # Pace + forward-look:
+        "节奏", "放缓", "减速", "加速", "趋缓",
+    ),
+}
+
+# Quiet fallback when both Claude attempts produce a forbidden hit.
+# Same shape as the prompt's "genuinely nothing to teach" template.
+_QUIET: dict[Locale, tuple[str, str]] = {
+    "en": (
+        "No material new information for this holding right now.",
+        "Watch for the next earnings update or material news.",
+    ),
+    "zh": (
+        "本周该持仓暂无重要新信息。",
+        "留意下次财报或重要消息。",
+    ),
+}
+
 
 _LANG_INSTRUCTION: dict[Locale, str] = {
     "en": "\n\nRespond in English.\n",
@@ -307,8 +359,28 @@ def _build_user_message(s: dict) -> str:
 # ── Claude call ─────────────────────────────────────────────────────────────
 
 
+def _parse_body(body: str) -> tuple[str, str]:
+    meaning = ""
+    watch = ""
+    for line in body.splitlines():
+        line = line.strip()
+        if line.lower().startswith("meaning:"):
+            meaning = line.split(":", 1)[1].strip()
+        elif line.lower().startswith("watch:"):
+            watch = line.split(":", 1)[1].strip()
+    if not meaning and not watch:
+        # Model drifted from the format — surface raw body as meaning.
+        meaning = body
+    return meaning, watch
+
+
 def _call_claude(user_message: str, locale: Locale = DEFAULT_LOCALE) -> tuple[str, str]:
-    """Returns (meaning, watch). Parses the two-line output."""
+    """Returns (meaning, watch). Parses the two-line output.
+
+    Runs the FORBIDDEN post-check + one retry, mirroring
+    `analysts/_base.call_analyst`. If both attempts produce a banned
+    token, falls back to the locale-specific quiet template.
+    """
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         raise RuntimeError(
@@ -319,30 +391,33 @@ def _call_claude(user_message: str, locale: Locale = DEFAULT_LOCALE) -> tuple[st
 
     client = Anthropic(api_key=api_key)
     model = os.environ.get("ANTHROPIC_DIGEST_MODEL", "claude-sonnet-4-6")
-
+    bans = _BANS[locale]
     system_prompt = _INSIGHT_PROMPT + _LANG_INSTRUCTION[locale]
 
-    response = client.messages.create(
-        model=model,
-        max_tokens=400,
-        system=system_prompt,
-        messages=[{"role": "user", "content": user_message}],
-    )
-    body = "\n".join(b.text for b in response.content if b.type == "text").strip()
+    def _shot(system: str) -> str:
+        response = client.messages.create(
+            model=model,
+            max_tokens=400,
+            system=system,
+            messages=[{"role": "user", "content": user_message}],
+        )
+        return "\n".join(b.text for b in response.content if b.type == "text").strip()
 
-    meaning = ""
-    watch = ""
-    for line in body.splitlines():
-        line = line.strip()
-        if line.lower().startswith("meaning:"):
-            meaning = line.split(":", 1)[1].strip()
-        elif line.lower().startswith("watch:"):
-            watch = line.split(":", 1)[1].strip()
+    body = _shot(system_prompt)
+    bad = has_forbidden(body, bans, locale)
+    if bad is not None:
+        log.info("insight: forbidden %r in first draft, retrying (locale=%s)", bad, locale)
+        retry_suffix = (RETRY_SUFFIX_ZH if locale == "zh" else RETRY_SUFFIX_EN).format(bad=bad)
+        body = _shot(system_prompt + retry_suffix)
+        bad2 = has_forbidden(body, bans, locale)
+        if bad2 is not None:
+            log.warning(
+                "insight: forbidden %r persisted after retry, quieting (locale=%s)",
+                bad2, locale,
+            )
+            return _QUIET[locale]
 
-    if not meaning and not watch:
-        # Model drifted from the format — surface raw body as meaning.
-        meaning = body
-    return meaning, watch
+    return _parse_body(body)
 
 
 # ── Public API ──────────────────────────────────────────────────────────────
