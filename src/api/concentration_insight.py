@@ -21,7 +21,16 @@ log = logging.getLogger(__name__)
 
 _TTL = timedelta(hours=6)
 # v2-no-em-dash → v3-no-em-dash (2026-05-10): locale-aware prompts.
-_PROMPT_VERSION = "v3-no-em-dash"
+# v3-no-em-dash → v4-source-edit (2026-05-13): ported the digest v6
+# source-edit pairs into _PROMPT (en) + _LANG_INSTRUCTION["zh"], adapted
+# to the snapshot surface: (1) no pace characterization on top-N share
+# or exposure — "pace" itself banned; (2) What + Meaning lines are
+# snapshot-only, no forward-look on how the shape will evolve; Watch
+# line names an observation target without predicting its outcome;
+# (3) ZH Watch wording nudged toward 未来/下次/下个 over 后续.
+# FORBIDDEN list unchanged. Cache keys "v4-source-edit-en" /
+# "v4-source-edit-zh"; old v3 rows orphan and rebuild on next request.
+_PROMPT_VERSION = "v4-source-edit"
 
 _LANG_INSTRUCTION: dict[Locale, str] = {
     "en": "\n\nRespond in English.\n",
@@ -31,7 +40,18 @@ _LANG_INSTRUCTION: dict[Locale, str] = {
         "买入、卖出、持有、加仓、减仓、目标价、推荐、应该、看多、看空、"
         "飙升、暴跌、突破、反弹、显著、强劲、疲软、动能、"
         "再平衡、分散投资、过度集中、分散开来、降低敞口、增加敞口、"
-        "超配、低配、过配、欠配。\n"
+        "超配、低配、过配、欠配。"
+        "\n\n不要描述账本形态变化的节奏。仅写当前快照。\"节奏\" 一词本身禁用，"
+        "加速、减速、放缓、趋缓亦不得用于头号持仓占比、敞口或仓位权重。"
+        "\n    反例：\"头号持仓占比正在加速上升\""
+        "\n    正例：\"头号持仓占账本价值 47.3%，其后四只持仓与之差距明显\""
+        "\n\n\"What:\" 与 \"Meaning:\" 两行只写当前快照，不得包含对形态演变的前瞻性预期。"
+        "\"Watch:\" 一行写一个观察对象，不得预测其结果。"
+        "\n    反例 (Meaning)：\"账本越来越集中，这一趋势可能持续\""
+        "\n    正例 (Meaning)：\"账本依赖单只持仓 K71U，其占比达 47.3%\""
+        "\n    反例 (Watch)：\"头号持仓占比或将继续上升\""
+        "\n    正例 (Watch)：\"观察未来数月头号持仓占比相对当前 47.3% 的变化方向\""
+        "\n\nWatch 一行的时间词优先使用 \"下次/下个/未来\"，避免 \"后续\"。\n"
     ),
 }
 
@@ -57,6 +77,20 @@ Hard rules:
   "Watch:".
 - Each line ONE sentence, ≤22 words. Aim for 15.
 - Percentages quoted verbatim if used.
+- Do not characterize the pace at which the shape is changing. Stick
+  to the current snapshot. The word "pace" itself is banned, as are
+  accelerating / decelerating / slowing / easing applied to top-N
+  share, exposure, or position weight.
+    Bad: "top-1 share has been growing at an accelerating clip"
+    Good: "top-1 is 47.3% of book value, with the next four positions trailing well behind"
+- The "What" and "Meaning" lines describe the current snapshot only.
+  Do not state forward-looking expectations about how the shape will
+  evolve. The "Watch" line names an observation target without
+  predicting its outcome.
+    Bad (Meaning): "the book is becoming more concentrated, and this trend may continue"
+    Good (Meaning): "the book leans on one position, K71U, which makes up 47.3% of value"
+    Bad (Watch):   "top-1 share will likely keep rising as K71U gains momentum"
+    Good (Watch):  "Whether top-1 share moves above or below its current 47.3% over the coming months"
 - NEVER use em dashes (—) in any output line. Use colons, commas, or
   periods instead.
 
