@@ -39,7 +39,15 @@ _TTL = timedelta(hours=6)
 # v3-no-em-dash → v4-no-em-dash (2026-05-10): locale-aware prompts.
 # Cache key is now `f"{_PROMPT_VERSION}-{locale}"` so en + zh prose
 # coexist without collisions.
-_PROMPT_VERSION = "v4-no-em-dash"
+# v4-no-em-dash → v5-source-edit (2026-05-13): ported the digest v6
+# source-edit pairs into _INSIGHT_PROMPT (en) + _LANG_INSTRUCTION["zh"]:
+# (1) describe price movement, not the pace of a trend (accelerating /
+# decelerating / slowing / easing); (2) Meaning line is past-only, no
+# forward-look expectations — the Watch line names an observation target
+# without predicting its outcome. FORBIDDEN list unchanged; fix is at
+# the prompt level. Old v4 rows in insight_cache become orphaned and
+# rebuild on next request.
+_PROMPT_VERSION = "v5-source-edit"
 
 _LANG_INSTRUCTION: dict[Locale, str] = {
     "en": "\n\nRespond in English.\n",
@@ -48,7 +56,22 @@ _LANG_INSTRUCTION: dict[Locale, str] = {
         "采用零售投资者的朴素中文，避免术语。禁用以下中文词汇："
         "买入、卖出、持有、加仓、减仓、清仓、目标价、预测、预计、推荐、建议、"
         "应该、理应、看多、看涨、看空、看跌、飙升、暴涨、暴跌、大跌、崩盘、"
-        "突破、突破点、反弹、显著、强劲、疲软、稳健、动能、势头。\n"
+        "突破、突破点、反弹、显著、强劲、疲软、稳健、动能、势头。"
+        "\n\n不要描述任何指标的节奏——无论是趋势、资金流、买盘还是卖盘。"
+        "写发生了什么，不要说它在加速、减速、放缓或趋缓。\"节奏\" 一词本身禁用。"
+        "\n    反例：\"下跌节奏放缓\" / \"上行速度趋缓\" / \"机构卖出节奏改变\""
+        "\n    正例：\"过去 30 天下跌 3.79%，近五个交易日中有三个收低\" / "
+        "\"机构卖出：May 13 当日成交量比前三日小 65%\""
+        "\n\n\"Meaning:\" 一行只写已发生的事实，不得包含前瞻性预期。"
+        "\"Watch:\" 一行写一个观察对象，不得预测其结果。"
+        "\n    反例 (Meaning)：\"价格上行，可能面临阻力\""
+        "\n    正例 (Meaning)：\"30 天涨幅为 +100%，当前价格接近 30 天高点\""
+        "\n    反例 (Watch)：\"价格下周可能继续上涨\""
+        "\n    正例 (Watch)：\"观察下次财报现金流是否延续当前趋势\""
+        "\n\nWatch 一行的时间词优先使用 \"下次/下个/未来\"，避免 \"后续\"。"
+        "\n    反例 (Watch)：\"观察后续季度营收是否出现变化\""
+        "\n    正例 (Watch)：\"观察未来季度营收是否出现变化\""
+        "\n\n日期保留原英文（如 \"May 8\"）即可，无需翻译。\n"
     ),
 }
 
@@ -70,6 +93,20 @@ Hard rules:
   Use it as context for the educational point.
 - Quote tickers, percentages, and currency figures verbatim if you use
   them. Numbers stay; words around them must be plain.
+- Do not characterize the pace of any metric — trend, flows, selling,
+  buying. Describe what happened, not whether it is accelerating,
+  decelerating, slowing, or easing. The word "pace" itself is banned.
+    Bad: "pace of decline slowing" / "rate-of-change easing" /
+         "shifts the pace of institutional selling"
+    Good: "down 3.79% over 30 days, three of the last five sessions lower" /
+          "institutional selling: 65% smaller volume on May 13 than the prior three days"
+- The "Meaning" line is past-only. Stick to what has happened. Do not
+  state forward-looking expectations in Meaning. The "Watch" line names
+  an observation target without predicting its outcome.
+    Bad (Meaning): "price rising at a pace that may face friction ahead"
+    Good (Meaning): "30-day change is +100%, current price near the 30-day high"
+    Bad (Watch):   "the price will likely climb further next week"
+    Good (Watch):  "Whether the next earnings update confirms the cash-flow trend"
 - NEVER use em dashes (—) in any output line. Use colons, commas, or
   periods instead.
 
