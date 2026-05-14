@@ -63,12 +63,17 @@ function WatchlistRow({
   const pulsing = useTickPulse(pulseHash);
   const pulseCls = pulsing ? "tick-pulse-cell" : "";
 
+  // Zebra cascade mirrors holdings-table: expanded overrides; otherwise
+  // even rows tint, hover darkens further. Hover + expanded utilities
+  // emit later than `even:` so the cascade resolves correctly.
+  const rowBgCls = isExpanded
+    ? "bg-surface-expanded"
+    : "even:bg-surface-zebra hover:bg-surface-hover";
+
   return (
     <Fragment>
       <tr
-        className={`border-t border-rule cursor-pointer transition-colors ${
-          isExpanded ? "bg-surface-expanded" : "hover:bg-surface-hover"
-        }`}
+        className={`border-b border-rule cursor-pointer transition-colors ${rowBgCls}`}
         onClick={() => onToggle(code)}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
@@ -80,6 +85,13 @@ function WatchlistRow({
         role="button"
         aria-expanded={isExpanded}
       >
+        {/* Glyph margin column — reserved for future earnings/ex-div marks
+            once /api/watchlist carries those dates. Keeps watchlist rows
+            aligned with the holdings register's left edge. */}
+        <td className="py-3 pl-1 pr-2 align-top w-6">
+          <div className="flex flex-col items-center gap-1 pt-1" />
+        </td>
+
         <td className="py-3 pr-4">
           <div className="flex items-baseline gap-2">
             <span className="text-base font-medium text-ink">{ticker}</span>
@@ -89,7 +101,7 @@ function WatchlistRow({
           </div>
         </td>
 
-        <td className="py-3 px-4 text-right tabular text-ink">
+        <td className="py-3 px-4 text-right tabular font-medium text-ink">
           <div className={pulseCls}>
             {last === null
               ? "–"
@@ -100,9 +112,9 @@ function WatchlistRow({
           </div>
         </td>
 
-        <td className={`py-3 px-4 text-right tabular ${directionClass(today)}`}>
+        <td className={`py-3 px-4 text-right tabular font-medium ${directionClass(today)}`}>
           {today === null || today === 0 ? (
-            <span className="text-whisper">—</span>
+            <span className="text-whisper font-normal">—</span>
           ) : (
             <div className={`flex items-baseline justify-end gap-1.5 ${pulseCls}`}>
               <span aria-hidden>{arrowFor(today)}</span>
@@ -111,7 +123,7 @@ function WatchlistRow({
           )}
         </td>
 
-        <td className={`py-3 px-4 text-right tabular ${directionClass(change30)}`}>
+        <td className={`py-3 px-4 text-right tabular font-medium ${directionClass(change30)}`}>
           <div className="flex items-baseline justify-end gap-1.5">
             <span aria-hidden>{arrowFor(change30)}</span>
             <span>{fmtPct(change30, 1)}</span>
@@ -127,7 +139,7 @@ function WatchlistRow({
 
       {isExpanded && (
         <tr>
-          <td colSpan={5} className="p-0">
+          <td colSpan={6} className="p-0">
             <DrillIn code={code} direction={direction} />
           </td>
         </tr>
@@ -160,6 +172,9 @@ export function WatchlistTable({ codes, sparklines, quotes = {} }: Props) {
       <table className="w-full">
         <thead>
           <tr className="border-b border-rule">
+            {/* Glyph margin header — empty + aria-hidden; mirrors the
+                holdings register's reserved left column. */}
+            <th aria-hidden className="pb-3 w-6" />
             <th className="text-left pb-3 pr-4">
               <span className="text-xs uppercase tracking-[0.04em] font-medium text-whisper">
                 {t("watchlist.col.position")}

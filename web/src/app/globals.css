@@ -53,7 +53,7 @@
 .dark {
   --surface: oklch(18% 0.008 60);
   --surface-raised: oklch(22% 0.008 60);
-  --surface-zebra: oklch(20.5% 0.008 60);
+  --surface-zebra: oklch(21.5% 0.008 60);
   --surface-hover: oklch(24% 0.008 60);
   --surface-expanded: oklch(26% 0.008 60);
 

@@ -24,7 +24,7 @@ colors:
   slice-7: "oklch(82% 0.007 70)"
   surface-dark: "oklch(18% 0.008 60)"
   surface-raised-dark: "oklch(22% 0.008 60)"
-  surface-zebra-dark: "oklch(20.5% 0.008 60)"
+  surface-zebra-dark: "oklch(21.5% 0.008 60)"
   surface-hover-dark: "oklch(24% 0.008 60)"
   surface-expanded-dark: "oklch(26% 0.008 60)"
   ink-dark: "oklch(92% 0.005 75)"

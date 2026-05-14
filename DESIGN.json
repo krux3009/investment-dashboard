@@ -53,7 +53,7 @@
         "role": "neutral",
         "displayName": "Surface Zebra",
         "canonical": "oklch(94.5% 0.006 75)",
-        "note": "Subtle alternating-row tint for the holdings register (~1.5% delta from surface). Dark mode pair: oklch(20.5% 0.008 60). Added 2026-05-13 with the register-row primitive."
+        "note": "Subtle alternating-row tint for the holdings + watchlist register rows (~1.5% delta from surface in light, ~3.5% in dark). Dark mode pair: oklch(21.5% 0.008 60) — bumped 2026-05-14 from 20.5% so the alternation reads in dark too. Added 2026-05-13 with the register-row primitive."
       },
       "accent": {
         "role": "primary",
