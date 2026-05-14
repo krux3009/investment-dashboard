@@ -204,6 +204,23 @@ export const STRINGS = {
     "dividends.exdiv.today": "today",
     "dividends.exdiv.in_day": "in {n} day",
     "dividends.exdiv.in_days": "in {n} days",
+
+    // ── portfolio tab nav + calendar view ───────────────────────────
+    "portfolio.tab.table": "Table",
+    "portfolio.tab.calendar": "Calendar",
+    "portfolio.tab.aria": "Portfolio view",
+    "calendar.prev": "prev",
+    "calendar.next": "next",
+    "calendar.today_cap": "TODAY",
+    "calendar.horizon_note": "Earnings forecast horizon: ~90 days. Distant months show macro events only.",
+    "calendar.more": "+{n} more",
+    "calendar.weekday.sun": "Sun",
+    "calendar.weekday.mon": "Mon",
+    "calendar.weekday.tue": "Tue",
+    "calendar.weekday.wed": "Wed",
+    "calendar.weekday.thu": "Thu",
+    "calendar.weekday.fri": "Fri",
+    "calendar.weekday.sat": "Sat",
   },
 
   zh: {
@@ -395,6 +412,23 @@ export const STRINGS = {
     "dividends.exdiv.today": "今日",
     "dividends.exdiv.in_day": "{n} 天后",
     "dividends.exdiv.in_days": "{n} 天后",
+
+    // ── portfolio tab nav + calendar view ───────────────────────────
+    "portfolio.tab.table": "明细",
+    "portfolio.tab.calendar": "日历",
+    "portfolio.tab.aria": "投资组合视图",
+    "calendar.prev": "上月",
+    "calendar.next": "下月",
+    "calendar.today_cap": "今日",
+    "calendar.horizon_note": "财报预测窗口约 90 天，更远的月份仅显示宏观事件。",
+    "calendar.more": "另 {n} 项",
+    "calendar.weekday.sun": "日",
+    "calendar.weekday.mon": "一",
+    "calendar.weekday.tue": "二",
+    "calendar.weekday.wed": "三",
+    "calendar.weekday.thu": "四",
+    "calendar.weekday.fri": "五",
+    "calendar.weekday.sat": "六",
   },
 } as const satisfies Record<Locale, Record<string, string>>;
 
