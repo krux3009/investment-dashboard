@@ -5,14 +5,16 @@ import {
   fetchForesight,
   fetchForesightInsight,
   type ForesightEvent,
-  type ForesightInsightResponse,
   type ForesightKind,
   type ForesightResponse,
 } from "@/lib/api";
 import { useT } from "@/lib/i18n/use-t";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import type { StringKey } from "@/lib/i18n/strings";
-import type { Locale } from "@/lib/i18n/locale-provider";
+import {
+  ForesightInsightBody,
+  type InsightState,
+} from "@/components/foresight-insight-body";
 
 interface Props {
   initial: ForesightResponse;
@@ -29,12 +31,6 @@ const KIND_LABEL_KEY: Record<ForesightKind, StringKey> = {
   company_event: "foresight.kind.company_event",
   exdiv: "foresight.kind.exdiv",
 };
-
-type InsightState =
-  | { kind: "loading" }
-  | { kind: "ready"; data: ForesightInsightResponse }
-  | { kind: "unavailable"; detail: string }
-  | { kind: "error"; detail: string };
 
 function formatDate(iso: string, locale: "en" | "zh"): string {
   return new Date(iso + "T00:00:00").toLocaleDateString(
@@ -93,46 +89,7 @@ function EventRow({ event, days, expanded, onToggle, insight }: RowProps) {
 
       {expanded && (
         <div className="mt-3 ml-[7rem] pl-4 border-l border-rule/60">
-          {(!insight || insight.kind === "loading") && (
-            <div role="status" aria-label={t("common.drafting_commentary")} className="flex flex-col gap-2 max-w-[60ch]">
-              {[0, 1, 2].map((i) => (
-                <div key={i} className="grid grid-cols-[5rem_1fr] gap-x-3 items-center">
-                  <div className="h-3 w-16 rounded bg-rule/40 animate-pulse" />
-                  <div className="h-4 w-full rounded bg-rule/40 animate-pulse" />
-                </div>
-              ))}
-            </div>
-          )}
-          {insight?.kind === "unavailable" && (
-            <p className="text-sm text-whisper italic">{insight.detail}</p>
-          )}
-          {insight?.kind === "error" && (
-            <p className="text-sm text-loss">
-              {t("common.commentary_unavailable", { detail: insight.detail })}
-            </p>
-          )}
-          {insight?.kind === "ready" && (
-            <dl className="flex flex-col gap-2 text-sm leading-[1.6] max-w-[60ch]">
-              {insight.data.what && (
-                <div className="grid grid-cols-[5rem_1fr] gap-x-3 items-baseline">
-                  <dt className="text-xs uppercase tracking-wide text-quiet">{t("common.what")}</dt>
-                  <dd className="text-ink">{insight.data.what}</dd>
-                </div>
-              )}
-              {insight.data.meaning && (
-                <div className="grid grid-cols-[5rem_1fr] gap-x-3 items-baseline">
-                  <dt className="text-xs uppercase tracking-wide text-quiet">{t("common.meaning")}</dt>
-                  <dd className="text-ink">{insight.data.meaning}</dd>
-                </div>
-              )}
-              {insight.data.watch && (
-                <div className="grid grid-cols-[5rem_1fr] gap-x-3 items-baseline">
-                  <dt className="text-xs uppercase tracking-wide text-quiet">{t("common.watch")}</dt>
-                  <dd className="text-ink">{insight.data.watch}</dd>
-                </div>
-              )}
-            </dl>
-          )}
+          <ForesightInsightBody insight={insight} />
         </div>
       )}
     </div>

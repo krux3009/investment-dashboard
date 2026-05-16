@@ -1,10 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
-import type { ForesightEvent, ForesightResponse } from "@/lib/api";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  fetchForesightInsight,
+  type ForesightEvent,
+  type ForesightResponse,
+} from "@/lib/api";
 import { useT } from "@/lib/i18n/use-t";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import {
+  ForesightInsightBody,
+  type InsightState,
+} from "@/components/foresight-insight-body";
+import type { StringKey } from "@/lib/i18n/strings";
 
 interface Props {
   initial: ForesightResponse;
@@ -23,6 +38,13 @@ const WEEKDAY_KEYS = [
 ] as const;
 
 const MAX_EVENTS_PER_CELL = 4;
+
+const KIND_LABEL_KEY: Record<ForesightEvent["kind"], StringKey> = {
+  earnings: "foresight.kind.earnings",
+  macro: "foresight.kind.macro",
+  company_event: "foresight.kind.company_event",
+  exdiv: "foresight.kind.exdiv",
+};
 
 function pad2(n: number): string {
   return n < 10 ? `0${n}` : `${n}`;
@@ -46,6 +68,13 @@ function todayParts() {
     month: now.getMonth() + 1,
     day: now.getDate(),
   };
+}
+
+function formatDate(iso: string, locale: "en" | "zh"): string {
+  return new Date(iso + "T00:00:00").toLocaleDateString(
+    locale === "zh" ? "zh-CN" : "en-US",
+    { weekday: "short", month: "short", day: "numeric" },
+  );
 }
 
 // 12px calendar SVG glyph — copied from holdings-table.tsx:145-160 so
@@ -72,7 +101,7 @@ function EarningsGlyph() {
   );
 }
 
-function EventRow({ ev }: { ev: ForesightEvent }) {
+function EventRowContent({ ev }: { ev: ForesightEvent }) {
   if (ev.kind === "earnings") {
     return (
       <div className="flex items-center gap-1 text-xs text-ink tabular leading-tight">
@@ -113,11 +142,42 @@ function EventRow({ ev }: { ev: ForesightEvent }) {
   );
 }
 
+interface EventRowProps {
+  ev: ForesightEvent;
+  selected: boolean;
+  onSelect: (eventId: string) => void;
+  label: string;
+}
+
+function EventRow({ ev, selected, onSelect, label }: EventRowProps) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(ev.event_id)}
+      aria-pressed={selected}
+      aria-label={label}
+      className={`block w-full text-left rounded-sm px-0.5 -mx-0.5 mt-1 cursor-pointer transition-colors ${
+        selected
+          ? "bg-surface-expanded"
+          : "hover:bg-surface-hover"
+      }`}
+    >
+      <EventRowContent ev={ev} />
+    </button>
+  );
+}
+
 export function CalendarView({ initial, year, month }: Props) {
   const t = useT();
   const { locale } = useLocale();
   const today = todayParts();
   const isThisMonth = today.year === year && today.month === month;
+
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [insightById, setInsightById] = useState<
+    Record<string, InsightState>
+  >({});
+  const panelRef = useRef<HTMLDivElement | null>(null);
 
   const monthLabel = useMemo(() => {
     return new Intl.DateTimeFormat(
@@ -152,6 +212,69 @@ export function CalendarView({ initial, year, month }: Props) {
       out.push({ y, m, d, inMonth: m === month && y === year });
     }
     return out;
+  }, [year, month]);
+
+  const selected = useMemo(
+    () => initial.events.find((e) => e.event_id === selectedId) ?? null,
+    [initial.events, selectedId],
+  );
+
+  const load = useCallback(
+    async (eventId: string) => {
+      setInsightById((s) => ({ ...s, [eventId]: { kind: "loading" } }));
+      const result = await fetchForesightInsight(
+        eventId,
+        initial.days,
+        false,
+        locale,
+      );
+      setInsightById((s) => ({
+        ...s,
+        [eventId]: result.ok
+          ? { kind: "ready", data: result.data }
+          : result.status === 503
+            ? { kind: "unavailable", detail: result.detail }
+            : { kind: "error", detail: result.detail },
+      }));
+    },
+    [initial.days, locale],
+  );
+
+  const handleSelect = useCallback(
+    (eventId: string) => {
+      setSelectedId((cur) => (cur === eventId ? null : eventId));
+      if (!insightById[eventId]) void load(eventId);
+    },
+    [insightById, load],
+  );
+
+  // ESC clears selection.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setSelectedId(null);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // Scroll panel into view when a fresh selection is made.
+  useEffect(() => {
+    if (selectedId && panelRef.current) {
+      panelRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+      });
+    }
+  }, [selectedId]);
+
+  // Locale flip wipes cached prose so next select fetches fresh language.
+  useEffect(() => {
+    setInsightById({});
+  }, [locale]);
+
+  // Month change clears selection (event ids belong to current fetch).
+  useEffect(() => {
+    setSelectedId(null);
   }, [year, month]);
 
   const prev = adjacentMonth(year, month, -1);
@@ -232,9 +355,17 @@ export function CalendarView({ initial, year, month }: Props) {
               )}
               {c.inMonth &&
                 visible.map((ev) => (
-                  <div key={ev.event_id} className="mt-1">
-                    <EventRow ev={ev} />
-                  </div>
+                  <EventRow
+                    key={ev.event_id}
+                    ev={ev}
+                    selected={ev.event_id === selectedId}
+                    onSelect={handleSelect}
+                    label={t("calendar.select_event", {
+                      date: formatDate(ev.date, locale),
+                      kind: t(KIND_LABEL_KEY[ev.kind]),
+                      label: ev.label,
+                    })}
+                  />
                 ))}
               {c.inMonth && overflow > 0 && (
                 <div className="mt-1 text-xs text-quiet leading-tight">
@@ -245,6 +376,46 @@ export function CalendarView({ initial, year, month }: Props) {
           );
         })}
       </div>
+
+      {selected && (
+        <div
+          ref={panelRef}
+          className="mt-6 border-t border-rule pt-4"
+          role="region"
+          aria-label={t("calendar.insight_region")}
+        >
+          <div className="flex items-baseline justify-between mb-3 gap-4">
+            <div className="flex flex-col gap-1 min-w-0">
+              <div className="flex items-baseline gap-3 flex-wrap text-xs tabular">
+                <span className="text-ink">
+                  {formatDate(selected.date, locale)}
+                </span>
+                <span className="uppercase tracking-[0.06em] text-quiet">
+                  {t(KIND_LABEL_KEY[selected.kind])}
+                </span>
+                {selected.ticker && (
+                  <span className="font-mono text-[11px] text-ink">
+                    {selected.ticker}
+                  </span>
+                )}
+              </div>
+              <div className="text-sm text-ink">{selected.label}</div>
+              <div className="text-xs text-quiet leading-[1.5] max-w-[60ch]">
+                {selected.description}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelectedId(null)}
+              className="text-xs text-quiet hover:text-ink whitespace-nowrap shrink-0"
+              aria-label={t("common.hide")}
+            >
+              {t("common.hide")}
+            </button>
+          </div>
+          <ForesightInsightBody insight={insightById[selected.event_id]} />
+        </div>
+      )}
 
       {showHorizonNote && (
         <p className="text-xs text-whisper mt-4 italic">
