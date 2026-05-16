@@ -90,7 +90,7 @@ class ConcentrationResponse(BaseModel):
     single_name_max: TopName | None
 
 
-ForesightKind = Literal["earnings", "macro", "company_event"]
+ForesightKind = Literal["earnings", "macro", "company_event", "exdiv"]
 
 
 class ForesightEvent(BaseModel):

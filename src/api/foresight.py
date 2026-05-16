@@ -17,7 +17,7 @@ import re
 from dataclasses import dataclass
 from datetime import date
 
-from api import company_events, earnings, macro_events
+from api import company_events, dividends, earnings, macro_events
 from api.data.moomoo_client import get_summary
 
 log = logging.getLogger(__name__)
@@ -133,6 +133,43 @@ def get_foresight(days: int) -> tuple[list[ForesightEvent], list[str]]:
                     description=ev.description,
                 )
             )
+
+    # Ex-dividend marks — projected next ex-date per holding (24h-cached
+    # via dividends_fetch_log). Filtered to window like earnings.
+    try:
+        for item in dividends.get_portfolio().items:
+            if not item.next_ex_date:
+                continue
+            try:
+                du = _days_until(item.next_ex_date)
+            except ValueError:
+                continue
+            if du > days or du < 0:
+                continue
+            label = f"{item.ticker} ex-div"
+            per_share = item.next_amount_per_share_native
+            if per_share is not None:
+                description = (
+                    f"Ex-dividend date for {item.name}. "
+                    f"Estimated ~{item.currency} {per_share:.4f}/share "
+                    f"based on prior cadence."
+                )
+            else:
+                description = f"Ex-dividend date for {item.name}."
+            out.append(
+                ForesightEvent(
+                    event_id=_make_event_id("exdiv", item.code, item.next_ex_date, label),
+                    date=item.next_ex_date,
+                    days_until=du,
+                    kind="exdiv",
+                    code=item.code,
+                    ticker=item.ticker,
+                    label=label,
+                    description=description,
+                )
+            )
+    except Exception as exc:
+        log.warning("dividends stream failed in foresight: %s", exc)
 
     out.sort(key=lambda e: (e.date, e.kind, e.code or ""))
     return out, held_tickers

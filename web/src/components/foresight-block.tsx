@@ -27,6 +27,7 @@ const KIND_LABEL_KEY: Record<ForesightKind, StringKey> = {
   earnings: "foresight.kind.earnings",
   macro: "foresight.kind.macro",
   company_event: "foresight.kind.company_event",
+  exdiv: "foresight.kind.exdiv",
 };
 
 type InsightState =

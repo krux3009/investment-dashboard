@@ -429,7 +429,7 @@ export async function fetchConcentrationInsight(
   return { ok: true, data: (await res.json()) as ConcentrationInsightResponse };
 }
 
-export type ForesightKind = "earnings" | "macro" | "company_event";
+export type ForesightKind = "earnings" | "macro" | "company_event" | "exdiv";
 
 export interface ForesightEvent {
   event_id: string;

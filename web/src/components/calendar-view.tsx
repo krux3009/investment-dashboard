@@ -88,6 +88,19 @@ function EventRow({ ev }: { ev: ForesightEvent }) {
       </div>
     );
   }
+  if (ev.kind === "exdiv") {
+    return (
+      <div className="flex items-center gap-1 text-xs text-ink tabular leading-tight">
+        <span
+          aria-hidden
+          className="text-quiet font-serif italic text-sm leading-none shrink-0"
+        >
+          ƒ
+        </span>
+        <span className="truncate">{ev.ticker ?? ev.label}</span>
+      </div>
+    );
+  }
   // company_event
   return (
     <div className="flex items-center gap-1 text-xs text-quiet leading-tight">
