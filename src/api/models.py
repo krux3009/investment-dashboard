@@ -123,6 +123,16 @@ class QuotesResponse(BaseModel):
     quotes: dict[str, Quote]
 
 
+class WatchlistMark(BaseModel):
+    code: str
+    next_earnings_date: str | None        # ISO date
+    next_earnings_days_until: int | None
+    next_ex_date: str | None              # ISO date
+    next_ex_days_until: int | None
+    next_ex_amount_per_share: float | None
+    next_ex_currency: str | None
+
+
 SentimentBucket = Literal["positive", "neutral", "negative"]
 
 
