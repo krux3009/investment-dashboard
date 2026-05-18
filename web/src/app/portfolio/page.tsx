@@ -1,6 +1,7 @@
 import {
   fetchBenchmark,
   fetchConcentration,
+  fetchDailyPnl,
   fetchDividends,
   fetchEarnings,
   fetchForesight,
@@ -10,6 +11,7 @@ import {
 import type {
   BenchmarkResponse,
   ConcentrationResponse,
+  DailyPnlResponse,
   DividendsResponse,
   EarningsItem,
   EarningsResponse,
@@ -17,12 +19,24 @@ import type {
   HoldingDividend,
   PriceHistory,
 } from "@/lib/api";
+import { Suspense } from "react";
 import { HoldingsTable } from "@/components/holdings-table";
 import { BenchmarkBlock } from "@/components/benchmark-block";
+import { BlockSkeleton } from "@/components/block-skeleton";
 import { ConcentrationBlock } from "@/components/concentration-block";
 import { DividendLedgerBlock } from "@/components/dividend-ledger-block";
 import { PortfolioTabNav } from "@/components/portfolio-tab-nav";
 import { CalendarView } from "@/components/calendar-view";
+
+async function BenchmarkSection() {
+  const benchmark = await safeFetchBenchmark();
+  return benchmark ? <BenchmarkBlock initial={benchmark} /> : null;
+}
+
+async function ConcentrationSection() {
+  const concentration = await safeFetchConcentration();
+  return concentration ? <ConcentrationBlock initial={concentration} /> : null;
+}
 
 async function fetchSparklineMap(
   codes: string[],
@@ -71,12 +85,41 @@ async function safeFetchDividends(): Promise<DividendsResponse | null> {
   }
 }
 
-async function safeFetchForesight(days: number): Promise<ForesightResponse> {
+async function safeFetchDailyPnl(
+  opts: { start: string; end: string },
+): Promise<DailyPnlResponse> {
   try {
-    return await fetchForesight(days);
+    return await fetchDailyPnl(opts);
+  } catch (e) {
+    console.warn("fetchDailyPnl failed, calendar omits P&L:", e);
+    const now = new Date();
+    return {
+      start: opts.start,
+      end: opts.end,
+      as_of: now.toISOString().slice(0, 10),
+      entries: [],
+    };
+  }
+}
+
+async function safeFetchForesight(
+  opts: { days?: number } | { start: string; end: string },
+): Promise<ForesightResponse> {
+  try {
+    return await fetchForesight(opts);
   } catch (e) {
     console.warn("fetchForesight failed, calendar shows empty:", e);
     const now = new Date();
+    const days =
+      "start" in opts
+        ? Math.max(
+            0,
+            Math.round(
+              (new Date(opts.end).getTime() - new Date(opts.start).getTime()) /
+                86_400_000,
+            ),
+          )
+        : opts.days ?? 7;
     return {
       days,
       as_of: now.toISOString().slice(0, 10),
@@ -88,6 +131,10 @@ async function safeFetchForesight(days: number): Promise<ForesightResponse> {
 
 const EX_DIV_SOON_DAYS = 14;
 
+function pad2(n: number): string {
+  return n < 10 ? `0${n}` : `${n}`;
+}
+
 function parseMonth(raw: string | undefined): { year: number; month: number } {
   if (raw && /^\d{4}-\d{2}$/.test(raw)) {
     const [y, m] = raw.split("-").map(Number);
@@ -97,22 +144,20 @@ function parseMonth(raw: string | undefined): { year: number; month: number } {
   return { year: now.getFullYear(), month: now.getMonth() + 1 };
 }
 
-function daysNeededForMonth(year: number, month: number): number {
-  // Cover the last visible cell of the 6×7 grid plus a 7-day buffer.
-  const firstOfMonth = new Date(year, month - 1, 1);
-  const startSunday = new Date(firstOfMonth);
-  startSunday.setDate(firstOfMonth.getDate() - firstOfMonth.getDay());
-  const lastCell = new Date(startSunday);
-  lastCell.setDate(startSunday.getDate() + 41);
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const diff = Math.ceil(
-    (lastCell.getTime() - today.getTime()) / 86_400_000,
-  );
-  // Clamp to the route's [1, 90] range. 30 minimum keeps current-month
-  // fetch parity with the existing /api/foresight?days=30 default usage.
-  return Math.min(Math.max(diff + 7, 30), 90);
+// Mirrors calendar-view.tsx cell builder: 42-day window starting from the
+// Sunday on or before the 1st of the visible month.
+function calendarWindow(
+  year: number,
+  month: number,
+): { start: string; end: string } {
+  const first = new Date(year, month - 1, 1);
+  const start = new Date(first);
+  start.setDate(first.getDate() - first.getDay());
+  const end = new Date(start);
+  end.setDate(start.getDate() + 41);
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  return { start: fmt(start), end: fmt(end) };
 }
 
 interface PageProps {
@@ -125,20 +170,27 @@ export default async function Portfolio({ searchParams }: PageProps) {
 
   if (tab === "calendar") {
     const { year, month } = parseMonth(sp.month);
-    const foresight = await safeFetchForesight(daysNeededForMonth(year, month));
+    const window = calendarWindow(year, month);
+    const [foresight, dailyPnl] = await Promise.all([
+      safeFetchForesight(window),
+      safeFetchDailyPnl(window),
+    ]);
     return (
       <>
         <PortfolioTabNav active="calendar" />
-        <CalendarView initial={foresight} year={year} month={month} />
+        <CalendarView
+          initial={foresight}
+          dailyPnl={dailyPnl}
+          year={year}
+          month={month}
+        />
       </>
     );
   }
 
-  const [data, earnings, benchmark, concentration, dividends] = await Promise.all([
+  const [data, earnings, dividends] = await Promise.all([
     fetchHoldings(),
     safeFetchEarnings(),
-    safeFetchBenchmark(),
-    safeFetchConcentration(),
     safeFetchDividends(),
   ]);
 
@@ -162,14 +214,18 @@ export default async function Portfolio({ searchParams }: PageProps) {
   return (
     <>
       <PortfolioTabNav active="table" />
-      {benchmark && <BenchmarkBlock initial={benchmark} />}
+      <Suspense fallback={<BlockSkeleton lines={6} />}>
+        <BenchmarkSection />
+      </Suspense>
       <HoldingsTable
         holdings={data.holdings}
         sparklines={sparklines}
         earningsByCode={earningsByCode}
         dividendsByCode={dividendsByCode}
       />
-      {concentration && <ConcentrationBlock initial={concentration} />}
+      <Suspense fallback={<BlockSkeleton lines={4} />}>
+        <ConcentrationSection />
+      </Suspense>
       {dividends && <DividendLedgerBlock initial={dividends} />}
     </>
   );

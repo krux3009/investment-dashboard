@@ -41,6 +41,8 @@ class HoldingsResponse(BaseModel):
     total_market_value_usd: float
     total_pnl_abs_usd: float
     total_pnl_pct: float                # weighted-avg in USD terms
+    total_today_change_abs_usd: float   # today's session Δ, USD-aggregated
+    total_today_change_pct: float       # today's session Δ / prior-close portfolio value
     currencies: dict[str, float]        # ccy → native subtotal (for hero tooltip)
     fx_rates_used: dict[str, float]     # e.g. {"USDSGD": 1.319}
     last_updated: str                   # ISO 8601
@@ -179,3 +181,17 @@ class AnalystTiledDigestResponse(BaseModel):
     generated_at: str                  # ISO
     holdings: list[TickerTiles]
     cached: bool
+
+
+class DailyPnlEntry(BaseModel):
+    date: str                          # ISO trading day
+    pnl_usd: float                     # M2M Δ + dividends paid that day
+    pnl_pct: float                     # pnl_usd / prior-close portfolio value
+    value_usd: float                   # close-of-day portfolio value (M2M only)
+
+
+class DailyPnlResponse(BaseModel):
+    start: str                         # ISO
+    end: str                           # ISO
+    as_of: str                         # ISO
+    entries: list[DailyPnlEntry]

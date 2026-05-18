@@ -37,6 +37,7 @@ from api.routes import (
     benchmark_insight,
     concentration,
     concentration_insight,
+    daily_pnl,
     digest,
     dividends,
     dividends_insight,
@@ -103,6 +104,7 @@ app.include_router(reddit.router, prefix="/api")
 app.include_router(sentiment_insight.router, prefix="/api")
 app.include_router(dividends.router, prefix="/api")
 app.include_router(dividends_insight.router, prefix="/api")
+app.include_router(daily_pnl.router, prefix="/api")
 
 
 @app.get("/api/health")

@@ -444,6 +444,35 @@ def get_portfolio() -> DividendsResponse:
     )
 
 
+def get_payments_between(start: date, end: date) -> dict[str, float]:
+    """USD totals paid (or due to pay, per ex-date) per ISO date inside the
+    window, summed across current holdings. yfinance returns ex-date, not
+    pay-date — same approximation the calendar's ex-div marks already use.
+    FX = today's spot (the dividends module's standing policy).
+    """
+    summary = get_summary()
+    if not summary.positions:
+        return {}
+
+    # Prime caches: ensure each code's history is loaded into dividends_cache.
+    for p in summary.positions:
+        _fetch_one(p.code, (p.currency or "?").upper(), p.name or "")
+
+    qty_by_code = {p.code: p.qty for p in summary.positions}
+    ccy_by_code = {p.code: (p.currency or "?").upper() for p in summary.positions}
+
+    out: dict[str, float] = {}
+    for code, qty in qty_by_code.items():
+        for ex_d, per_share, _ccy_cached in _read_history(code):
+            if not (start <= ex_d <= end):
+                continue
+            ccy = ccy_by_code[code]
+            usd, _ = fx.convert(per_share * qty, ccy, "USD")
+            iso = ex_d.isoformat()
+            out[iso] = out.get(iso, 0.0) + usd
+    return out
+
+
 def get_one(code: str) -> HoldingDividend | None:
     """Per-holding history endpoint. Falls back to the portfolio query
     when the code isn't in the live book (lets watchlist surfaces opt

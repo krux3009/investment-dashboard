@@ -32,6 +32,8 @@ export interface HoldingsResponse {
   total_market_value_usd: number;
   total_pnl_abs_usd: number;
   total_pnl_pct: number;
+  total_today_change_abs_usd: number;
+  total_today_change_pct: number;
   currencies: Record<string, number>;
   fx_rates_used: Record<string, number>;
   last_updated: string;
@@ -449,8 +451,45 @@ export interface ForesightResponse {
   events: ForesightEvent[];
 }
 
-export async function fetchForesight(days = 7): Promise<ForesightResponse> {
-  const res = await fetch(`${API_BASE}/api/foresight?days=${days}`, {
+export interface DailyPnlEntry {
+  date: string;
+  pnl_usd: number;
+  pnl_pct: number;
+  value_usd: number;
+}
+
+export interface DailyPnlResponse {
+  start: string;
+  end: string;
+  as_of: string;
+  entries: DailyPnlEntry[];
+}
+
+export async function fetchDailyPnl(
+  opts: { start: string; end: string },
+): Promise<DailyPnlResponse> {
+  const url = `${API_BASE}/api/daily-pnl?start=${opts.start}&end=${opts.end}`;
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`/api/daily-pnl ${res.status}: ${await res.text()}`);
+  }
+  return (await res.json()) as DailyPnlResponse;
+}
+
+export type ForesightFetchOpts =
+  | { days?: number }
+  | { start: string; end: string };
+
+export async function fetchForesight(
+  opts: ForesightFetchOpts | number = 7,
+): Promise<ForesightResponse> {
+  const normalized: ForesightFetchOpts =
+    typeof opts === "number" ? { days: opts } : opts;
+  const qs =
+    "start" in normalized
+      ? `start=${normalized.start}&end=${normalized.end}`
+      : `days=${normalized.days ?? 7}`;
+  const res = await fetch(`${API_BASE}/api/foresight?${qs}`, {
     cache: "no-store",
   });
   if (!res.ok) {

@@ -34,6 +34,8 @@ export interface LiveState {
     total_market_value_usd: number;
     total_pnl_abs_usd: number;
     total_pnl_pct: number;
+    total_today_change_abs_usd: number;
+    total_today_change_pct: number;
   } | null;
   holdings: Map<string, Holding>;
   watchlist: Map<string, LiveWatchlistQuote>;
@@ -90,6 +92,8 @@ export function applyTick(tick: LiveTickPayload): void {
       total_market_value_usd: tick.holdings.total_market_value_usd,
       total_pnl_abs_usd: tick.holdings.total_pnl_abs_usd,
       total_pnl_pct: tick.holdings.total_pnl_pct,
+      total_today_change_abs_usd: tick.holdings.total_today_change_abs_usd,
+      total_today_change_pct: tick.holdings.total_today_change_pct,
     },
     holdings,
     watchlist,

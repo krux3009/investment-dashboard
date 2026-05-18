@@ -10,11 +10,14 @@ import {
 } from "react";
 import {
   fetchForesightInsight,
+  type DailyPnlEntry,
+  type DailyPnlResponse,
   type ForesightEvent,
   type ForesightResponse,
 } from "@/lib/api";
 import { useT } from "@/lib/i18n/use-t";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import { useLiveMarket, useLiveTotals } from "@/lib/live-store";
 import {
   ForesightInsightBody,
   type InsightState,
@@ -23,6 +26,7 @@ import type { StringKey } from "@/lib/i18n/strings";
 
 interface Props {
   initial: ForesightResponse;
+  dailyPnl?: DailyPnlResponse;
   year: number;
   month: number; // 1-12
 }
@@ -101,6 +105,40 @@ function EarningsGlyph() {
   );
 }
 
+function formatSignedUsd(n: number): string {
+  const sign = n >= 0 ? "+" : "−";
+  return `${sign}$${Math.abs(n).toFixed(2)}`;
+}
+
+function formatSignedPct(n: number): string {
+  const sign = n >= 0 ? "+" : "−";
+  return `${sign}${Math.abs(n * 100).toFixed(2)}%`;
+}
+
+function PnlRow({
+  pnl,
+  pct,
+  dim,
+  isLive,
+}: {
+  pnl: number;
+  pct: number;
+  dim: boolean;
+  isLive: boolean;
+}) {
+  return (
+    <div
+      className={`flex items-baseline justify-between text-[11px] tabular font-mono leading-tight mb-1 ${
+        dim ? "opacity-45" : ""
+      }`}
+      aria-label={isLive ? "running daily P&L" : "daily P&L"}
+    >
+      <span className="text-ink">{formatSignedUsd(pnl)}</span>
+      <span className="text-quiet">{formatSignedPct(pct)}</span>
+    </div>
+  );
+}
+
 function EventRowContent({ ev }: { ev: ForesightEvent }) {
   if (ev.kind === "earnings") {
     return (
@@ -167,11 +205,14 @@ function EventRow({ ev, selected, onSelect, label }: EventRowProps) {
   );
 }
 
-export function CalendarView({ initial, year, month }: Props) {
+export function CalendarView({ initial, dailyPnl, year, month }: Props) {
   const t = useT();
   const { locale } = useLocale();
   const today = todayParts();
+  const todayIso = isoDate(today.year, today.month, today.day);
   const isThisMonth = today.year === year && today.month === month;
+  const liveTotals = useLiveTotals();
+  const { market } = useLiveMarket();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [insightById, setInsightById] = useState<
@@ -196,6 +237,14 @@ export function CalendarView({ initial, year, month }: Props) {
     }
     return map;
   }, [initial.events]);
+
+  const pnlByDate = useMemo(() => {
+    const map = new Map<string, DailyPnlEntry>();
+    if (dailyPnl) {
+      for (const e of dailyPnl.entries) map.set(e.date, e);
+    }
+    return map;
+  }, [dailyPnl]);
 
   // Build 42 cells starting from the Sunday on or before the 1st.
   const cells = useMemo(() => {
@@ -282,12 +331,20 @@ export function CalendarView({ initial, year, month }: Props) {
   const prevHref = `/portfolio?tab=calendar&month=${prev.year}-${pad2(prev.month)}`;
   const nextHref = `/portfolio?tab=calendar&month=${next.year}-${pad2(next.month)}`;
 
-  // Horizon footnote: how far past today is the visible month?
+  // Horizon footnote: signals the yfinance earnings ceiling (~90d), not the
+  // route's window. Show when the visible month is >60d out AND no earnings
+  // event lands inside it — i.e. macro shows up but earnings don't.
   const monthStart = new Date(year, month - 1, 1);
   const now = new Date(today.year, today.month - 1, today.day);
   const daysToMonthStart =
     (monthStart.getTime() - now.getTime()) / 86_400_000;
-  const showHorizonNote = daysToMonthStart > 60;
+  const hasInMonthEarnings = useMemo(() => {
+    const ym = `${year}-${pad2(month)}-`;
+    return initial.events.some(
+      (e) => e.kind === "earnings" && e.date.startsWith(ym),
+    );
+  }, [initial.events, year, month]);
+  const showHorizonNote = daysToMonthStart > 60 && !hasInMonthEarnings;
 
   return (
     <section className="mb-12">
@@ -298,6 +355,7 @@ export function CalendarView({ initial, year, month }: Props) {
         <div className="flex gap-1 text-xs">
           <Link
             href={prevHref}
+            prefetch
             className="px-2 py-1 rounded-sm tabular text-quiet hover:text-ink border border-transparent"
             aria-label={t("calendar.prev")}
           >
@@ -305,6 +363,7 @@ export function CalendarView({ initial, year, month }: Props) {
           </Link>
           <Link
             href={nextHref}
+            prefetch
             className="px-2 py-1 rounded-sm tabular text-quiet hover:text-ink border border-transparent"
             aria-label={t("calendar.next")}
           >
@@ -330,45 +389,82 @@ export function CalendarView({ initial, year, month }: Props) {
       <div className="grid grid-cols-7">
         {cells.map((c, i) => {
           const iso = isoDate(c.y, c.m, c.d);
-          const evs = c.inMonth ? eventsByDate.get(iso) ?? [] : [];
-          const isToday =
-            isThisMonth && c.inMonth && c.d === today.day;
+          const evs = eventsByDate.get(iso) ?? [];
+          const cellIsToday = iso === todayIso;
+          const isPast = iso < todayIso;
+          const pnlEntry = pnlByDate.get(iso);
+          let pnlForCell: { pnl: number; pct: number; isLive: boolean } | null = null;
+          if (cellIsToday && liveTotals && market === "open") {
+            pnlForCell = {
+              pnl: liveTotals.total_today_change_abs_usd,
+              pct: liveTotals.total_today_change_pct,
+              isLive: true,
+            };
+          } else if (isPast && pnlEntry) {
+            pnlForCell = {
+              pnl: pnlEntry.pnl_usd,
+              pct: pnlEntry.pnl_pct,
+              isLive: false,
+            };
+          }
+          const isToday = cellIsToday;
           const visible = evs.slice(0, MAX_EVENTS_PER_CELL);
           const overflow = evs.length - visible.length;
+          const trailingPrefix = c.inMonth
+            ? ""
+            : c.y > year || (c.y === year && c.m > month)
+              ? t("calendar.next_month_prefix") + " "
+              : t("calendar.prev_month_prefix") + " ";
 
           return (
             <div
               key={i}
-              className={`border border-rule -mt-px -ml-px min-h-[88px] p-2 ${
+              className={`border border-rule -mt-px -ml-px min-h-[104px] p-2 ${
                 isToday ? "ring-1 ring-rule ring-inset" : ""
               }`}
             >
-              {c.inMonth && (
-                <div className="flex items-baseline justify-between mb-1">
-                  <span className="text-quiet text-xs tabular">{c.d}</span>
-                  {isToday && (
-                    <span className="text-[10px] uppercase tracking-wider text-whisper">
-                      {t("calendar.today_cap")}
-                    </span>
-                  )}
-                </div>
+              <div className="flex items-baseline justify-between mb-1">
+                <span
+                  className={`text-xs tabular ${
+                    c.inMonth ? "text-quiet" : "text-whisper opacity-60"
+                  }`}
+                >
+                  {c.d}
+                </span>
+                {isToday && (
+                  <span className="text-[10px] uppercase tracking-wider text-whisper">
+                    {t("calendar.today_cap")}
+                  </span>
+                )}
+              </div>
+              {pnlForCell && (
+                <PnlRow
+                  pnl={pnlForCell.pnl}
+                  pct={pnlForCell.pct}
+                  dim={!c.inMonth}
+                  isLive={pnlForCell.isLive}
+                />
               )}
-              {c.inMonth &&
-                visible.map((ev) => (
+              {visible.map((ev) => (
+                <div key={ev.event_id} className={c.inMonth ? "" : "opacity-45"}>
                   <EventRow
-                    key={ev.event_id}
                     ev={ev}
                     selected={ev.event_id === selectedId}
                     onSelect={handleSelect}
-                    label={t("calendar.select_event", {
+                    label={trailingPrefix + t("calendar.select_event", {
                       date: formatDate(ev.date, locale),
                       kind: t(KIND_LABEL_KEY[ev.kind]),
                       label: ev.label,
                     })}
                   />
-                ))}
-              {c.inMonth && overflow > 0 && (
-                <div className="mt-1 text-xs text-quiet leading-tight">
+                </div>
+              ))}
+              {overflow > 0 && (
+                <div
+                  className={`mt-1 text-xs leading-tight ${
+                    c.inMonth ? "text-quiet" : "text-whisper opacity-60"
+                  }`}
+                >
                   {t("calendar.more", { n: overflow })}
                 </div>
               )}
