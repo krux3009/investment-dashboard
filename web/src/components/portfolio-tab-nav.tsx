@@ -23,6 +23,7 @@ export function PortfolioTabNav({ active }: Props) {
     >
       <Link
         href="/portfolio?tab=table"
+        prefetch
         className={cls(active === "table")}
         aria-current={active === "table" ? "page" : undefined}
       >
@@ -30,6 +31,7 @@ export function PortfolioTabNav({ active }: Props) {
       </Link>
       <Link
         href="/portfolio?tab=calendar"
+        prefetch
         className={cls(active === "calendar")}
         aria-current={active === "calendar" ? "page" : undefined}
       >

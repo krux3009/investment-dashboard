@@ -29,6 +29,7 @@ export function NavBar() {
               <Link
                 key={tab.href}
                 href={tab.href}
+                prefetch
                 className={`pb-1 border-b ${
                   active
                     ? "text-ink border-ink"

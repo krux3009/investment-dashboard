@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
+import time
 from dataclasses import replace
 from datetime import datetime
 from typing import Any
@@ -28,6 +30,13 @@ from api.data.positions import (
 )
 
 log = logging.getLogger(__name__)
+
+# In-memory dedupe cache for get_summary(). Sized to absorb a single
+# multi-endpoint page batch (~1s wall-clock) without becoming stale for the
+# 20s SSE broadcaster cadence. Demo path bypasses — it's already free.
+_SUMMARY_CACHE: tuple[PortfolioSummary, float] | None = None
+_SUMMARY_TTL = 5.0
+_SUMMARY_LOCK = threading.Lock()
 
 # moomoo's code prefixes map to our Market literal.
 _MARKET_FROM_PREFIX: dict[str, Market] = {
@@ -399,7 +408,17 @@ def get_summary() -> PortfolioSummary:
         if scenario == "empty":
             return demo_summary_empty()
         return demo_summary()
-    return _live_client().fetch_positions()
+
+    global _SUMMARY_CACHE
+    with _SUMMARY_LOCK:
+        if _SUMMARY_CACHE is not None:
+            cached, ts = _SUMMARY_CACHE
+            if (time.monotonic() - ts) < _SUMMARY_TTL:
+                return cached
+    summary = _live_client().fetch_positions()
+    with _SUMMARY_LOCK:
+        _SUMMARY_CACHE = (summary, time.monotonic())
+    return summary
 
 
 def _live_client() -> MoomooClient:
