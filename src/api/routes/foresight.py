@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
 from api import foresight
 from api.models import ForesightEvent, ForesightResponse
@@ -13,10 +13,29 @@ router = APIRouter()
 
 
 @router.get("/foresight", response_model=ForesightResponse)
-def get_foresight(days: int = Query(7, ge=1, le=90)) -> ForesightResponse:
-    events, held = foresight.get_foresight(days=days)
+def get_foresight(
+    days: int = Query(7, ge=1, le=400),
+    start: date | None = Query(None),
+    end: date | None = Query(None),
+) -> ForesightResponse:
+    if (start is None) != (end is None):
+        raise HTTPException(
+            status_code=400,
+            detail="`start` and `end` must be provided together.",
+        )
+    if start is not None and end is not None:
+        if end < start:
+            raise HTTPException(
+                status_code=400, detail="`end` must be on or after `start`."
+            )
+        events, held = foresight.get_foresight_window(start=start, end=end)
+        window_days = (end - start).days
+    else:
+        events, held = foresight.get_foresight(days=days)
+        window_days = days
+
     return ForesightResponse(
-        days=days,
+        days=window_days,
         as_of=date.today().isoformat(),
         holdings_covered=held,
         events=[

@@ -66,7 +66,10 @@ def _load() -> list[MacroEvent]:
 def get_within(days: int) -> list[MacroEvent]:
     today = date.today()
     horizon = today + timedelta(days=days)
-    return [
-        e for e in _load()
-        if today.isoformat() <= e.date <= horizon.isoformat()
-    ]
+    return get_between(today, horizon)
+
+
+def get_between(start: date, end: date) -> list[MacroEvent]:
+    start_str = start.isoformat()
+    end_str = end.isoformat()
+    return [e for e in _load() if start_str <= e.date <= end_str]
