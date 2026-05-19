@@ -27,13 +27,30 @@ from api.i18n import Locale
 log = logging.getLogger(__name__)
 
 
-# Mirrors digest.py / insight.py. Action + hype words forbidden across
-# every analyst tile.
-FORBIDDEN_BASE: tuple[str, ...] = (
+# v5 split: trading-action subset (used by SWS-style aggregators that
+# allow judgement words like "strong"/"moderate") vs. the full base
+# (existing analyst tiles, which keep the magnitude + hype tail).
+FORBIDDEN_TRADING_ACTIONS: tuple[str, ...] = (
     "buy", "sell", "hold", "trim", "add", "target", "forecast",
     "predict", "expect", "recommend", "surge", "plunge", "soar",
     "crash", "breakout", "rally", "tank", "should", "ought",
     "bullish", "bearish",
+)
+
+
+FORBIDDEN_TRADING_ACTIONS_ZH: tuple[str, ...] = (
+    "买入", "买进", "卖出", "卖空", "持有", "加仓", "减仓", "建仓", "清仓",
+    "目标价", "预测", "预计", "推荐", "建议",
+    "应该", "理应",
+    "看多", "看涨", "看空", "看跌",
+    "大涨", "暴涨", "飙升", "大跌", "暴跌", "崩盘",
+    "突破点", "反弹",
+)
+
+
+# Mirrors digest.py / insight.py. Trading-action subset + magnitude /
+# hype tail forbidden across every analyst tile.
+FORBIDDEN_BASE: tuple[str, ...] = FORBIDDEN_TRADING_ACTIONS + (
     # Magnitude qualifiers (v3): describe ≠ characterize.
     "notable", "notably", "significant", "significantly",
     "remarkable", "remarkably", "impressive", "impressively",
@@ -51,15 +68,7 @@ FORBIDDEN_BASE: tuple[str, ...] = (
 
 # Chinese mirror. Same observation-only register; substring match still
 # applies (CJK substrings are stable). v1 — review pass intended.
-FORBIDDEN_BASE_ZH: tuple[str, ...] = (
-    # Action language
-    "买入", "买进", "卖出", "卖空", "持有", "加仓", "减仓", "建仓", "清仓",
-    "目标价", "预测", "预计", "推荐", "建议",
-    "应该", "理应",
-    "看多", "看涨", "看空", "看跌",
-    # Hype
-    "大涨", "暴涨", "飙升", "大跌", "暴跌", "崩盘",
-    "突破点", "反弹",
+FORBIDDEN_BASE_ZH: tuple[str, ...] = FORBIDDEN_TRADING_ACTIONS_ZH + (
     # Magnitude qualifiers
     "显著", "重大", "出色", "强劲", "疲软", "稳健", "急剧",
     "戏剧性",
