@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
+import { IBM_Plex_Sans, IBM_Plex_Mono, IBM_Plex_Serif } from "next/font/google";
 import "./globals.css";
 import { LiveIndicator } from "@/components/live-indicator";
 import { LivePricesProvider } from "@/components/live-prices-provider";
@@ -19,6 +19,13 @@ const plexMono = IBM_Plex_Mono({
   weight: ["400", "500"],
 });
 
+const plexSerif = IBM_Plex_Serif({
+  variable: "--font-plex-serif",
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  display: "swap",
+});
+
 export const metadata: Metadata = {
   title: "Quiet Ledger",
   description: "Personal investment dashboard.",
@@ -32,15 +39,15 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${plexSans.variable} ${plexMono.variable} h-full antialiased`}
+      className={`${plexSans.variable} ${plexMono.variable} ${plexSerif.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <body className="min-h-full bg-surface text-ink">
         <LocaleProvider>
           <ThemeProvider
             attribute="class"
-            defaultTheme="light"
-            enableSystem
+            defaultTheme="dark"
+            enableSystem={false}
             disableTransitionOnChange
           >
             <LivePricesProvider>

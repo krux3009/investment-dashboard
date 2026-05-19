@@ -31,5 +31,8 @@ wheels/
 .playwright-mcp/
 /audit-*.png
 
+# Local-only scratch (logs, audit dumps, prompt-output snapshots)
+/tmp/
+
 # Claude Code local-only settings (machine-specific Bash allowlist)
 .claude/settings.local.json

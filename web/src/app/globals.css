@@ -1,10 +1,15 @@
-/* Quiet Ledger v3 — warm-graphite design tokens.
+/* v4 SWS-faithful — gold accent + dark default tokens.
  *
- * Light theme = paper-cream surface + warm-graphite ink.
- * Dark theme  = warm-graphite surface + paper-cream ink.
+ * Dark (default): near-black surface + paper-cream ink + SWS gold accent (#D9B97A).
+ * Light:          paper-cream surface + warm-graphite ink + same gold accent
+ *                 (slightly tuned for light-surface readability).
  *
- * Tokens mirror src/dashboard/theme.py so v2 and v3 can be eyeballed
- * side-by-side until v2 is retired (Phase B end).
+ * Token structure inherited from v3 Quiet Ledger. Names preserved so existing
+ * components keep working through the palette swap. New status tokens added:
+ * --accent-primary, --accent-success, --accent-warn, --accent-danger.
+ *
+ * `--accent` is now an alias of `--accent-primary` — anywhere v3 read the rust
+ * accent (NavBar active, focus rings, tick-pulse) now reads gold.
  */
 
 @import "tailwindcss";
@@ -12,7 +17,7 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  /* Surfaces — light theme (default) */
+  /* Surfaces — light theme */
   --surface: oklch(96% 0.005 75);          /* paper cream */
   --surface-raised: oklch(98% 0.004 75);   /* card lift */
   --surface-zebra: oklch(94.5% 0.006 75);  /* register alt row (subtle) */
@@ -27,18 +32,22 @@
   /* Lines */
   --rule: oklch(86% 0.006 70);             /* hairlines */
 
-  /* Accents (rare) */
-  --accent: oklch(55% 0.12 28);            /* muted rust */
-  --accent-strong: oklch(60% 0.13 28);     /* focus rings */
+  /* SWS-faithful status palette — light variant (deeper for readability). */
+  --accent-primary: #B89968;               /* SWS gold, slightly toned for light bg */
+  --accent-success: #009244;               /* positive ↑ */
+  --accent-warn:    #C25F1F;               /* warn ⚠ */
+  --accent-danger:  #BC0024;               /* negative ↓ */
+
+  /* Backwards-compatible aliases. v3 components reading --accent now read gold. */
+  --accent: var(--accent-primary);
+  --accent-strong: oklch(58% 0.10 80);
 
   /* Direction tints (paired with arrows + signs, never sole signal) */
   --gain: oklch(48% 0.10 145);             /* muted forest */
   --loss: oklch(48% 0.13 25);              /* muted sienna */
 
-  /* Tick-pulse highlight — intentionally desaturated. Used for the
-     600ms cell flash when a live SSE update lands. Not a direction
-     signal, so we keep it accent-family and ignore gain/loss colors. */
-  --accent-tint: oklch(92% 0.025 28);
+  /* Tick-pulse highlight — desaturated gold (no green/red). 600ms fade. */
+  --accent-tint: color-mix(in oklch, var(--accent-primary) 25%, var(--surface));
 
   /* Sequential graphite for charts (largest = darkest) */
   --slice-1: oklch(28% 0.008 60);
@@ -51,25 +60,32 @@
 }
 
 .dark {
-  --surface: oklch(18% 0.008 60);
-  --surface-raised: oklch(22% 0.008 60);
-  --surface-zebra: oklch(21.5% 0.008 60);
-  --surface-hover: oklch(24% 0.008 60);
-  --surface-expanded: oklch(26% 0.008 60);
+  /* Surfaces — SWS-style near-black with warm undertone. */
+  --surface: oklch(14% 0.01 240);          /* page bg */
+  --surface-raised: oklch(18% 0.008 240);  /* card */
+  --surface-zebra: oklch(19% 0.008 240);   /* register alt row */
+  --surface-hover: oklch(22% 0.008 240);   /* row hover */
+  --surface-expanded: oklch(16% 0.008 240);/* drill-in row */
 
-  --ink: oklch(92% 0.005 75);
-  --quiet: oklch(70% 0.008 60);
-  --whisper: oklch(58% 0.008 60);
+  --ink: oklch(94% 0.005 75);              /* near-white */
+  --quiet: oklch(72% 0.01 60);
+  --whisper: oklch(55% 0.01 60);
 
-  --rule: oklch(30% 0.008 60);
+  --rule: oklch(28% 0.005 240);            /* hairline */
 
-  --accent: oklch(68% 0.12 28);
-  --accent-strong: oklch(72% 0.13 28);
+  /* SWS gold + brighter status tones for dark surface. */
+  --accent-primary: #D9B97A;
+  --accent-success: #00DA5A;
+  --accent-warn:    #EB7930;
+  --accent-danger:  #D6002A;
+
+  --accent: var(--accent-primary);
+  --accent-strong: oklch(78% 0.12 80);
 
   --gain: oklch(62% 0.11 145);
   --loss: oklch(62% 0.13 25);
 
-  --accent-tint: oklch(30% 0.04 28);
+  --accent-tint: color-mix(in oklch, var(--accent-primary) 22%, var(--surface));
 
   --slice-1: oklch(85% 0.008 70);
   --slice-2: oklch(75% 0.008 65);
@@ -92,7 +108,11 @@
   --color-whisper: var(--whisper);
   --color-rule: var(--rule);
   --color-accent: var(--accent);
+  --color-accent-primary: var(--accent-primary);
   --color-accent-strong: var(--accent-strong);
+  --color-accent-success: var(--accent-success);
+  --color-accent-warn: var(--accent-warn);
+  --color-accent-danger: var(--accent-danger);
   --color-gain: var(--gain);
   --color-loss: var(--loss);
   --color-slice-1: var(--slice-1);
@@ -103,9 +123,10 @@
   --color-slice-6: var(--slice-6);
   --color-slice-7: var(--slice-7);
 
-  /* Type. IBM Plex Sans loads via next/font (--font-plex-sans). */
+  /* Type. Sans + Mono via next/font; Serif used for display h1s. */
   --font-sans: var(--font-plex-sans), "IBM Plex Sans", system-ui, sans-serif;
   --font-mono: var(--font-plex-mono), "IBM Plex Mono", ui-monospace, monospace;
+  --font-serif: var(--font-plex-serif), "IBM Plex Serif", ui-serif, Georgia, serif;
 }
 
 html, body {
@@ -130,10 +151,11 @@ body {
   background-color: var(--surface-hover);
 }
 
-/* Tick-pulse: 600ms warm-graphite tint fade when a numeric cell takes
- * a fresh SSE value. No green/red, no scale, no row shift — principle-#2
- * (calm under volatility) holds. The negative margin cancels the horizontal
- * padding so the pulse halo extends past the text without nudging layout. */
+/* Tick-pulse: 600ms gold tint fade when a numeric cell takes a fresh SSE
+ * value. No green/red, no scale, no row shift — principle-#2 (calm under
+ * volatility) holds even with the SWS palette swap. The negative margin
+ * cancels the horizontal padding so the pulse halo extends past the text
+ * without nudging layout. */
 @keyframes tick-pulse {
   from { background-color: var(--accent-tint); }
   to   { background-color: transparent; }
