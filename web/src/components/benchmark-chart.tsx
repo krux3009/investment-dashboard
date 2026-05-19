@@ -111,15 +111,15 @@ export function BenchmarkChart({ data }: Props) {
       <path
         d={pathFor(data.portfolio, minPct, range)}
         fill="none"
-        stroke="var(--ink)"
-        strokeWidth={1.5}
+        stroke="var(--accent-primary)"
+        strokeWidth={1.75}
         strokeLinecap="round"
         strokeLinejoin="round"
       />
       <text
         x={portfolioLast.x + 6}
         y={portfolioLast.y}
-        fill="var(--ink)"
+        fill="var(--accent-primary)"
         fontSize={11}
         fontWeight={500}
         dominantBaseline="middle"

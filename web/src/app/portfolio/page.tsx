@@ -21,32 +21,23 @@ import type {
 } from "@/lib/api";
 import { Suspense } from "react";
 import { HoldingsTable } from "@/components/holdings-table";
-import { BenchmarkBlock } from "@/components/benchmark-block";
 import { BlockSkeleton } from "@/components/block-skeleton";
 import { ConcentrationBlock } from "@/components/concentration-block";
 import { DividendLedgerBlock } from "@/components/dividend-ledger-block";
-import { PortfolioTabNav } from "@/components/portfolio-tab-nav";
+import { PortfolioTabNav, type PortfolioTab } from "@/components/portfolio-tab-nav";
 import { CalendarView } from "@/components/calendar-view";
+import { PerformanceChartCard } from "@/components/performance-chart-card";
+import { SnowflakeCard } from "@/components/snowflake-card";
+import { KpiStrip } from "@/components/kpi-strip";
 
-async function BenchmarkSection() {
-  const benchmark = await safeFetchBenchmark();
-  return benchmark ? <BenchmarkBlock initial={benchmark} /> : null;
-}
+const TAB_KEYS: PortfolioTab[] = [
+  "holdings", "returns", "updates", "dividends", "analysis", "calendar",
+];
 
-async function ConcentrationSection() {
-  const concentration = await safeFetchConcentration();
-  return concentration ? <ConcentrationBlock initial={concentration} /> : null;
-}
-
-async function fetchSparklineMap(
-  codes: string[],
-): Promise<Record<string, PriceHistory>> {
-  const results = await Promise.allSettled(codes.map((c) => fetchPrices(c, 30)));
-  const map: Record<string, PriceHistory> = {};
-  results.forEach((r, i) => {
-    if (r.status === "fulfilled") map[codes[i]] = r.value;
-  });
-  return map;
+function parseTab(raw: string | undefined): PortfolioTab {
+  if (!raw) return "holdings";
+  if (raw === "table") return "holdings";  // backward compat
+  return (TAB_KEYS as string[]).includes(raw) ? (raw as PortfolioTab) : "holdings";
 }
 
 async function safeFetchEarnings(): Promise<EarningsResponse> {
@@ -129,6 +120,17 @@ async function safeFetchForesight(
   }
 }
 
+async function fetchSparklineMap(
+  codes: string[],
+): Promise<Record<string, PriceHistory>> {
+  const results = await Promise.allSettled(codes.map((c) => fetchPrices(c, 30)));
+  const map: Record<string, PriceHistory> = {};
+  results.forEach((r, i) => {
+    if (r.status === "fulfilled") map[codes[i]] = r.value;
+  });
+  return map;
+}
+
 const EX_DIV_SOON_DAYS = 14;
 
 function pad2(n: number): string {
@@ -166,8 +168,23 @@ interface PageProps {
 
 export default async function Portfolio({ searchParams }: PageProps) {
   const sp = await searchParams;
-  const tab = sp.tab === "calendar" ? "calendar" : "table";
+  const tab = parseTab(sp.tab);
 
+  return (
+    <>
+      <header className="mb-6">
+        <h1 className="font-serif text-3xl font-medium text-ink">My Portfolio</h1>
+      </header>
+      <PortfolioTabNav active={tab} />
+      {await renderTabContent(tab, sp)}
+    </>
+  );
+}
+
+async function renderTabContent(
+  tab: PortfolioTab,
+  sp: { tab?: string; month?: string },
+) {
   if (tab === "calendar") {
     const { year, month } = parseMonth(sp.month);
     const window = calendarWindow(year, month);
@@ -176,22 +193,37 @@ export default async function Portfolio({ searchParams }: PageProps) {
       safeFetchDailyPnl(window),
     ]);
     return (
-      <>
-        <PortfolioTabNav active="calendar" />
-        <CalendarView
-          initial={foresight}
-          dailyPnl={dailyPnl}
-          year={year}
-          month={month}
-        />
-      </>
+      <CalendarView
+        initial={foresight}
+        dailyPnl={dailyPnl}
+        year={year}
+        month={month}
+      />
     );
   }
 
-  const [data, earnings, dividends] = await Promise.all([
+  if (tab === "returns" || tab === "updates" || tab === "analysis") {
+    return <ComingSoonPanel tab={tab} />;
+  }
+
+  if (tab === "dividends") {
+    // P2 partial: render existing DividendLedgerBlock here (was on Holdings
+    // tab in v3). Full Dividends-tab content lands in P3.
+    const dividends = await safeFetchDividends();
+    return (
+      <div className="flex flex-col gap-10">
+        <ComingSoonPanel tab={tab} preview="DividendLedgerBlock kept from v3 below — full tab content in P3." />
+        {dividends ? <DividendLedgerBlock initial={dividends} /> : null}
+      </div>
+    );
+  }
+
+  // ── Holdings tab (default) ──────────────────────────────────────
+  const [data, earnings, dividends, benchmark] = await Promise.all([
     fetchHoldings(),
     safeFetchEarnings(),
     safeFetchDividends(),
+    safeFetchBenchmark(),
   ]);
 
   const sparklines = await fetchSparklineMap(data.holdings.map((h) => h.code));
@@ -212,21 +244,78 @@ export default async function Portfolio({ searchParams }: PageProps) {
   }
 
   return (
-    <>
-      <PortfolioTabNav active="table" />
-      <Suspense fallback={<BlockSkeleton lines={6} />}>
-        <BenchmarkSection />
-      </Suspense>
+    <div className="flex flex-col gap-10">
+      {/* 2-col header: PerformanceChartCard (left, 2/3 width) + SnowflakeCard (right, 1/3 width) */}
+      <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4">
+        <PerformanceChartCard
+          initial={benchmark}
+          totalValueUsd={data.total_market_value_usd}
+          holdingsCount={data.holdings.length}
+          totalPnlAbsUsd={data.total_pnl_abs_usd}
+          totalPnlPct={data.total_pnl_pct}
+          todayPnlAbsUsd={data.total_today_change_abs_usd}
+          todayPnlPct={data.total_today_change_pct}
+        />
+        <SnowflakeCard
+          heading="Portfolio Snowflake"
+          scores={{ valuation: null, future: null, past: 4, health: 3, dividends: 4 }}
+          summary="Snapshot pending — scores ship in P5 backend."
+          holdingsCount={data.holdings.length}
+          holdingsCountLabel={`${data.holdings.length} holdings`}
+        />
+      </div>
+
+      {/* KPI strip — stubbed values until backend P5 */}
+      <KpiStrip
+        tiles={[
+          { label: "Unrealized Returns", value: "—", sub: "Pending P5" },
+          { label: "Realized Returns", value: "—", sub: "Pending P5" },
+          { label: "Dividends", value: "—", sub: "Pending P5" },
+          { label: "Currency Impact", value: "—", sub: "Pending P5" },
+        ]}
+        caption="Stubbed — /api/returns/summary wires up in P5."
+      />
+
+      {/* Holdings table */}
       <HoldingsTable
         holdings={data.holdings}
         sparklines={sparklines}
         earningsByCode={earningsByCode}
         dividendsByCode={dividendsByCode}
       />
+
+      {/* Concentration kept here in P2; migrates to Analysis tab in P3 */}
       <Suspense fallback={<BlockSkeleton lines={4} />}>
         <ConcentrationSection />
       </Suspense>
-      {dividends && <DividendLedgerBlock initial={dividends} />}
-    </>
+    </div>
+  );
+}
+
+async function ConcentrationSection() {
+  const concentration = await safeFetchConcentration();
+  return concentration ? <ConcentrationBlock initial={concentration} /> : null;
+}
+
+function ComingSoonPanel({ tab, preview }: { tab: PortfolioTab; preview?: string }) {
+  const TITLE: Record<PortfolioTab, string> = {
+    holdings: "Holdings",
+    returns: "Returns",
+    updates: "Updates",
+    dividends: "Dividends",
+    analysis: "Analysis",
+    calendar: "Calendar",
+  };
+  return (
+    <section className="rounded-xl border border-dashed border-rule bg-surface-raised p-10 flex flex-col items-center gap-2 text-center">
+      <p className="text-sm font-medium text-ink">{TITLE[tab]} tab</p>
+      <p className="text-xs text-quiet max-w-[44ch]">
+        Coming in P3 — wired up next phase. The SWS-faithful surface design is
+        approved; backend aggregators land first.
+      </p>
+      {preview ? (
+        <p className="text-[11px] text-whisper italic mt-2">{preview}</p>
+      ) : null}
+    </section>
   );
 }

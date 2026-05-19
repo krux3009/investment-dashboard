@@ -13,6 +13,7 @@ import { useTickPulse } from "@/lib/use-tick-pulse";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { DrillIn } from "./drill-in";
 import { Sparkline } from "./sparkline";
+import { Snowflake, type SnowflakeScores } from "./snowflake";
 import { useT } from "@/lib/i18n/use-t";
 import { useLocale } from "@/lib/i18n/locale-provider";
 
@@ -95,6 +96,7 @@ interface HoldingRowProps {
   onToggle: (code: string) => void;
   earningsItem: EarningsItem | undefined;
   dividendSoon: HoldingDividend | undefined;
+  snowflakeScores?: SnowflakeScores;
 }
 
 // Per-row pulse: when any field that the SSE tick mutates changes, the
@@ -110,6 +112,7 @@ function HoldingRow({
   onToggle,
   earningsItem,
   dividendSoon,
+  snowflakeScores,
 }: HoldingRowProps) {
   const t = useT();
   const { locale } = useLocale();
@@ -280,6 +283,17 @@ function HoldingRow({
           </div>
         </td>
 
+        <td className="py-3 px-3 text-center align-top">
+          <div className="flex justify-center pt-1">
+            <Snowflake
+              size={28}
+              scores={snowflakeScores ?? {}}
+              showLabels={false}
+              showRings={false}
+            />
+          </div>
+        </td>
+
         <td className="py-3 px-4 text-right tabular align-top">
           <div className={pulseCls}>
             <div className="text-ink font-medium">
@@ -308,7 +322,7 @@ function HoldingRow({
 
       {isExpanded && (
         <tr>
-          <td colSpan={8} className="p-0">
+          <td colSpan={9} className="p-0">
             <DrillIn
               code={h.code}
               direction={
@@ -337,6 +351,9 @@ interface Props {
   // Map of code → upcoming dividend record. Tickers with an ex-date
   // within EX_DIV_SOON_DAYS get a small ƒ glyph next to the name.
   dividendsByCode?: Record<string, HoldingDividend>;
+  // Map of code → snowflake scores. Missing keys render a greyed mini.
+  // Wired in P5 via /api/snowflake/{code}.
+  snowflakeScoresByCode?: Record<string, SnowflakeScores>;
 }
 
 export function HoldingsTable({
@@ -344,6 +361,7 @@ export function HoldingsTable({
   sparklines,
   earningsByCode,
   dividendsByCode = {},
+  snowflakeScoresByCode = {},
 }: Props) {
   const t = useT();
   const [sort, setSort] = useState<SortState | null>(null);
@@ -419,6 +437,9 @@ export function HoldingsTable({
             <th className="text-right pb-3 px-4">
               <span className="text-xs uppercase tracking-[0.04em] font-medium text-whisper">{t("holdings.col.30d")}</span>
             </th>
+            <th className="text-center pb-3 px-3">
+              <span className="text-xs uppercase tracking-[0.04em] font-medium text-whisper">Snow</span>
+            </th>
             <th className="text-right pb-3 px-4">
               <SortableHeader label={t("holdings.col.value_usd")} sortKey="market_value_usd" sort={sort} onSort={handleSort} className="text-right" />
             </th>
@@ -448,6 +469,7 @@ export function HoldingsTable({
                 onToggle={handleRowToggle}
                 earningsItem={earningsByCode[h.code]}
                 dividendSoon={dividendsByCode[h.code]}
+                snowflakeScores={snowflakeScoresByCode[h.code]}
               />
             );
           })}

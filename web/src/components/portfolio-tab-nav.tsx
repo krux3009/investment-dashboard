@@ -3,40 +3,58 @@
 import Link from "next/link";
 import { useT } from "@/lib/i18n/use-t";
 
+export type PortfolioTab =
+  | "holdings"
+  | "returns"
+  | "updates"
+  | "dividends"
+  | "analysis"
+  | "calendar";
+
 interface Props {
-  active: "table" | "calendar";
+  active: PortfolioTab;
 }
+
+const TABS: { key: PortfolioTab; labelKey: `portfolio.tab.${string}` }[] = [
+  { key: "holdings",  labelKey: "portfolio.tab.holdings" },
+  { key: "returns",   labelKey: "portfolio.tab.returns" },
+  { key: "updates",   labelKey: "portfolio.tab.updates" },
+  { key: "dividends", labelKey: "portfolio.tab.dividends" },
+  { key: "analysis",  labelKey: "portfolio.tab.analysis" },
+  { key: "calendar",  labelKey: "portfolio.tab.calendar" },
+];
 
 export function PortfolioTabNav({ active }: Props) {
   const t = useT();
-  const cls = (on: boolean) =>
-    `px-2 py-1 rounded-sm tabular text-xs ${
-      on
-        ? "text-ink border border-rule"
-        : "text-quiet hover:text-ink border border-transparent"
-    }`;
 
   return (
     <nav
-      className="flex gap-1 mb-8"
+      className="flex gap-1 mb-6 border-b border-rule"
       aria-label={t("portfolio.tab.aria")}
     >
-      <Link
-        href="/portfolio?tab=table"
-        prefetch
-        className={cls(active === "table")}
-        aria-current={active === "table" ? "page" : undefined}
-      >
-        {t("portfolio.tab.table")}
-      </Link>
-      <Link
-        href="/portfolio?tab=calendar"
-        prefetch
-        className={cls(active === "calendar")}
-        aria-current={active === "calendar" ? "page" : undefined}
-      >
-        {t("portfolio.tab.calendar")}
-      </Link>
+      {TABS.map((tab) => {
+        const on = tab.key === active;
+        return (
+          <Link
+            key={tab.key}
+            href={`/portfolio?tab=${tab.key}`}
+            prefetch
+            aria-current={on ? "page" : undefined}
+            className={[
+              "relative px-3 py-2 text-sm transition-colors",
+              on ? "text-ink font-medium" : "text-quiet hover:text-ink",
+            ].join(" ")}
+          >
+            {t(tab.labelKey as Parameters<typeof t>[0])}
+            {on && (
+              <span
+                aria-hidden
+                className="absolute left-2 right-2 -bottom-px h-0.5 bg-[var(--accent-primary)]"
+              />
+            )}
+          </Link>
+        );
+      })}
     </nav>
   );
 }
