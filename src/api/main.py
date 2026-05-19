@@ -47,11 +47,15 @@ from api.routes import (
     holdings,
     insight,
     notes,
+    portfolio,
     prices,
     quotes,
     reddit,
+    returns,
     sentiment_insight,
+    snowflake,
     stream,
+    valuation,
     watchlist,
 )
 
@@ -105,6 +109,10 @@ app.include_router(sentiment_insight.router, prefix="/api")
 app.include_router(dividends.router, prefix="/api")
 app.include_router(dividends_insight.router, prefix="/api")
 app.include_router(daily_pnl.router, prefix="/api")
+app.include_router(snowflake.router, prefix="/api")
+app.include_router(returns.router, prefix="/api")
+app.include_router(portfolio.router, prefix="/api")
+app.include_router(valuation.router, prefix="/api")
 
 
 @app.get("/api/health")
