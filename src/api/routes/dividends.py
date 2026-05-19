@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
-from api import dividends
+from api import dividends, dividends_extended
 
 log = logging.getLogger(__name__)
 
@@ -23,6 +23,16 @@ router = APIRouter()
 def get_dividends() -> dict:
     response = dividends.get_portfolio()
     return dividends.response_to_dict(response)
+
+
+@router.get("/dividends/forecast")
+def get_forecast(horizon: str = Query("12m", pattern="^(12m|24m|36m)$")) -> dict:
+    return dividends_extended.get_forecast(horizon=horizon)
+
+
+@router.get("/dividends/quality-buckets")
+def get_quality_buckets() -> dict:
+    return dividends_extended.get_quality_buckets()
 
 
 @router.get("/dividends/{code}")
