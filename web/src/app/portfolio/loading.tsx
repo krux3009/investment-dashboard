@@ -4,7 +4,7 @@ import { BlockSkeleton } from "@/components/block-skeleton";
 export default function Loading() {
   return (
     <>
-      <PortfolioTabNav active="table" />
+      <PortfolioTabNav active="holdings" />
       <BlockSkeleton lines={6} />
       <div className="animate-pulse" aria-hidden>
         <div className="space-y-px">

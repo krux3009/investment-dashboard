@@ -715,3 +715,113 @@ export async function fetchDividendsInsight(
   }
   return { ok: true, data: (await res.json()) as DividendsInsightResponse };
 }
+
+// ── snowflake (P5) ───────────────────────────────────────────────────
+
+export interface SnowflakeScores {
+  past: number | null;
+  health: number | null;
+  dividends: number | null;
+  valuation: number | null;
+  future: number | null;
+}
+
+export interface SnowflakeStatement {
+  icon: "check" | "warn" | "neutral";
+  headline: string;
+  sub: string | null;
+}
+
+export interface PortfolioSnowflake {
+  scores: SnowflakeScores;
+  weights: Record<string, number>;
+  generated_at: string;
+  cached: boolean;
+}
+
+export interface SnowflakeResponse {
+  code: string;
+  ticker: string;
+  scores: SnowflakeScores;
+  statements: {
+    past: SnowflakeStatement[];
+    health: SnowflakeStatement[];
+    dividend: SnowflakeStatement[];
+  };
+  generated_at: string;
+  cached: boolean;
+  available: boolean;
+}
+
+export async function fetchPortfolioSnowflake(
+  locale: Locale = "en",
+): Promise<PortfolioSnowflake> {
+  const url = `${API_BASE}/api/snowflake/portfolio?locale=${locale}`;
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`/api/snowflake/portfolio ${res.status}: ${await res.text()}`);
+  }
+  return (await res.json()) as PortfolioSnowflake;
+}
+
+export async function fetchSnowflake(
+  code: string,
+  locale: Locale = "en",
+): Promise<SnowflakeResponse> {
+  const url = `${API_BASE}/api/snowflake/${encodeURIComponent(code)}?locale=${locale}`;
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`/api/snowflake/${code} ${res.status}: ${await res.text()}`);
+  }
+  return (await res.json()) as SnowflakeResponse;
+}
+
+// ── returns (P5) ─────────────────────────────────────────────────────
+
+export interface ReturnsSummary {
+  unrealized_usd: number;
+  realized_usd: number;
+  dividends_usd: number;
+  currency_impact_usd: number;
+  total_usd: number;
+  partial: boolean;
+  missing: string[];
+  as_of: string;
+}
+
+export interface ReturnsHolding {
+  code: string;
+  ticker: string;
+  name: string;
+  shares: number;
+  avg_price: number;
+  current_price: number;
+  value_usd: number;
+  cost_basis_usd: number;
+  unrealized_usd: number;
+  unrealized_pct: number;
+  dividends_ttm_usd: number;
+  total_gain_usd: number;
+  total_gain_pct: number;
+}
+
+export interface ReturnsDetail {
+  as_of: string;
+  holdings: ReturnsHolding[];
+}
+
+export async function fetchReturnsSummary(): Promise<ReturnsSummary> {
+  const res = await fetch(`${API_BASE}/api/returns/summary`, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`/api/returns/summary ${res.status}: ${await res.text()}`);
+  }
+  return (await res.json()) as ReturnsSummary;
+}
+
+export async function fetchReturnsDetail(): Promise<ReturnsDetail> {
+  const res = await fetch(`${API_BASE}/api/returns/detail`, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`/api/returns/detail ${res.status}: ${await res.text()}`);
+  }
+  return (await res.json()) as ReturnsDetail;
+}

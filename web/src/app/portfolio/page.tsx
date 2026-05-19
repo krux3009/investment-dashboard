@@ -6,7 +6,10 @@ import {
   fetchEarnings,
   fetchForesight,
   fetchHoldings,
+  fetchPortfolioSnowflake,
   fetchPrices,
+  fetchReturnsSummary,
+  fetchSnowflake,
 } from "@/lib/api";
 import type {
   BenchmarkResponse,
@@ -17,7 +20,10 @@ import type {
   EarningsResponse,
   ForesightResponse,
   HoldingDividend,
+  PortfolioSnowflake,
   PriceHistory,
+  ReturnsSummary,
+  SnowflakeScores,
 } from "@/lib/api";
 import { Suspense } from "react";
 import { HoldingsTable } from "@/components/holdings-table";
@@ -74,6 +80,37 @@ async function safeFetchDividends(): Promise<DividendsResponse | null> {
     console.warn("fetchDividends failed, hiding block:", e);
     return null;
   }
+}
+
+async function safeFetchPortfolioSnowflake(): Promise<PortfolioSnowflake | null> {
+  try {
+    return await fetchPortfolioSnowflake();
+  } catch (e) {
+    console.warn("fetchPortfolioSnowflake failed:", e);
+    return null;
+  }
+}
+
+async function safeFetchReturns(): Promise<ReturnsSummary | null> {
+  try {
+    return await fetchReturnsSummary();
+  } catch (e) {
+    console.warn("fetchReturnsSummary failed:", e);
+    return null;
+  }
+}
+
+async function fetchSnowflakeMap(
+  codes: string[],
+): Promise<Record<string, SnowflakeScores>> {
+  const results = await Promise.allSettled(codes.map((c) => fetchSnowflake(c)));
+  const map: Record<string, SnowflakeScores> = {};
+  results.forEach((r, i) => {
+    if (r.status === "fulfilled" && r.value.available) {
+      map[codes[i]] = r.value.scores;
+    }
+  });
+  return map;
 }
 
 async function safeFetchDailyPnl(
@@ -219,14 +256,21 @@ async function renderTabContent(
   }
 
   // ── Holdings tab (default) ──────────────────────────────────────
-  const [data, earnings, dividends, benchmark] = await Promise.all([
-    fetchHoldings(),
-    safeFetchEarnings(),
-    safeFetchDividends(),
-    safeFetchBenchmark(),
-  ]);
+  const [data, earnings, dividends, benchmark, portfolioSnowflake, returns] =
+    await Promise.all([
+      fetchHoldings(),
+      safeFetchEarnings(),
+      safeFetchDividends(),
+      safeFetchBenchmark(),
+      safeFetchPortfolioSnowflake(),
+      safeFetchReturns(),
+    ]);
 
-  const sparklines = await fetchSparklineMap(data.holdings.map((h) => h.code));
+  const codes = data.holdings.map((h) => h.code);
+  const [sparklines, snowflakeScores] = await Promise.all([
+    fetchSparklineMap(codes),
+    fetchSnowflakeMap(codes),
+  ]);
   const earningsByCode: Record<string, EarningsItem> = {};
   for (const e of earnings.items) earningsByCode[e.code] = e;
 
@@ -258,22 +302,30 @@ async function renderTabContent(
         />
         <SnowflakeCard
           heading="Portfolio Snowflake"
-          scores={{ valuation: null, future: null, past: 4, health: 3, dividends: 4 }}
-          summary="Snapshot pending — scores ship in P5 backend."
+          scores={
+            portfolioSnowflake?.scores ?? {
+              valuation: null, future: null, past: null, health: null, dividends: null,
+            }
+          }
+          summary={
+            portfolioSnowflake
+              ? "USD-weighted aggregate over current holdings."
+              : "Backend unreachable — scores will reload when /api/snowflake/portfolio responds."
+          }
           holdingsCount={data.holdings.length}
           holdingsCountLabel={`${data.holdings.length} holdings`}
         />
       </div>
 
-      {/* KPI strip — stubbed values until backend P5 */}
+      {/* KPI strip — wired to /api/returns/summary (realized + currency
+       *  stubbed until transaction-history layer ships). */}
       <KpiStrip
-        tiles={[
-          { label: "Unrealized Returns", value: "—", sub: "Pending P5" },
-          { label: "Realized Returns", value: "—", sub: "Pending P5" },
-          { label: "Dividends", value: "—", sub: "Pending P5" },
-          { label: "Currency Impact", value: "—", sub: "Pending P5" },
-        ]}
-        caption="Stubbed — /api/returns/summary wires up in P5."
+        tiles={buildPortfolioKpiTiles(returns)}
+        caption={
+          returns?.partial
+            ? "Realized P&L + currency-impact require transaction history. Unrealized + dividends are live."
+            : undefined
+        }
       />
 
       {/* Holdings table */}
@@ -282,6 +334,7 @@ async function renderTabContent(
         sparklines={sparklines}
         earningsByCode={earningsByCode}
         dividendsByCode={dividendsByCode}
+        snowflakeScoresByCode={snowflakeScores}
       />
 
       {/* Concentration kept here in P2; migrates to Analysis tab in P3 */}
@@ -295,6 +348,40 @@ async function renderTabContent(
 async function ConcentrationSection() {
   const concentration = await safeFetchConcentration();
   return concentration ? <ConcentrationBlock initial={concentration} /> : null;
+}
+
+function fmtUsd(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function fmtUsdSigned(value: number): string {
+  const sign = value > 0 ? "+" : value < 0 ? "−" : "";
+  return `${sign}${fmtUsd(Math.abs(value))}`;
+}
+
+function buildPortfolioKpiTiles(returns: ReturnsSummary | null) {
+  if (!returns) {
+    return [
+      { label: "Unrealized Returns", value: "—", sub: "Backend unreachable" },
+      { label: "Realized Returns", value: "—", sub: "Backend unreachable" },
+      { label: "Dividends (TTM)", value: "—", sub: "Backend unreachable" },
+      { label: "Currency Impact", value: "—", sub: "Backend unreachable" },
+    ];
+  }
+  return [
+    {
+      label: "Unrealized Returns",
+      value: fmtUsdSigned(returns.unrealized_usd),
+      sub: returns.unrealized_usd >= 0 ? "gain on paper" : "loss on paper",
+    },
+    { label: "Realized Returns", value: "—", sub: "Connect transactions for full detail" },
+    { label: "Dividends (TTM)", value: fmtUsd(returns.dividends_usd), sub: "trailing 12 months" },
+    { label: "Currency Impact", value: "—", sub: "Connect transactions for full detail" },
+  ];
 }
 
 function ComingSoonPanel({ tab, preview }: { tab: PortfolioTab; preview?: string }) {
