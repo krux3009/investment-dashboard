@@ -1,10 +1,14 @@
 // Hero block: USD-aggregated total + signed P&L + per-currency
-// breakdown on the left, allocation donut on the right.
+// breakdown on the left, portfolio-aggregate snowflake on the right.
 //
-// Receives an SSR-fetched HoldingsResponse. During US RTH the live SSE
-// store overrides the total + P&L + (when present) the donut slices,
-// without losing the SSR-rendered per-currency caption and FX rates.
-// Changed cells get a 600ms tick-pulse class.
+// Receives an SSR-fetched HoldingsResponse + optional snowflake scores.
+// During US RTH the live SSE store overrides the total + P&L without
+// losing the SSR-rendered per-currency caption and FX rates. Changed
+// cells get a 600ms tick-pulse class.
+//
+// v4: dropped the allocation Donut on the right in favor of a 96px
+// portfolio snowflake. Scores are stubbed until P5 wires
+// /api/snowflake/portfolio.
 
 "use client";
 
@@ -12,7 +16,7 @@ import type { HoldingsResponse } from "@/lib/api";
 import { directionClass, fmtPct, fmtUsd } from "@/lib/format";
 import { useLiveTotals } from "@/lib/live-store";
 import { useTickPulse } from "@/lib/use-tick-pulse";
-import { Donut } from "./donut";
+import { Snowflake, type SnowflakeScores } from "./snowflake";
 import { useT } from "@/lib/i18n/use-t";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { useTimeSince } from "@/lib/i18n/use-relative-time";
@@ -24,9 +28,10 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
 
 interface Props {
   data: HoldingsResponse;
+  snowflakeScores?: SnowflakeScores;
 }
 
-export function Hero({ data }: Props) {
+export function Hero({ data, snowflakeScores }: Props) {
   const t = useT();
   const { locale } = useLocale();
   const timeSince = useTimeSince();
@@ -148,11 +153,14 @@ export function Hero({ data }: Props) {
           </div>
         </div>
 
-        {/* Allocation donut — SSR-only. Slice weights drift slowly enough
-            that live ticking would be visual noise without value. */}
+        {/* Portfolio snowflake — SWS-faithful aggregate view. Scores stubbed
+            until P5 wires /api/snowflake/portfolio. */}
         {!empty && (
-          <div className="shrink-0">
-            <Donut holdings={data.holdings} size={210} />
+          <div className="shrink-0 flex flex-col items-center gap-1.5">
+            <Snowflake size={96} scores={snowflakeScores ?? {}} variant="portfolio" />
+            <span className="text-[10px] uppercase tracking-[0.08em] text-quiet">
+              {t("hero.snowflake_label")}
+            </span>
           </div>
         )}
       </div>

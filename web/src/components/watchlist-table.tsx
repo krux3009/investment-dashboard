@@ -7,6 +7,7 @@ import { useTickPulse } from "@/lib/use-tick-pulse";
 import { Fragment, useState } from "react";
 import { DrillIn } from "./drill-in";
 import { Sparkline } from "./sparkline";
+import { Snowflake, type SnowflakeScores } from "./snowflake";
 import { useT } from "@/lib/i18n/use-t";
 
 interface Props {
@@ -17,6 +18,9 @@ interface Props {
   // Map of code → live moomoo snapshot for today's intraday move.
   // Empty map (or missing code) collapses the Today column to "–".
   quotes?: Record<string, Quote>;
+  // Map of code → snowflake scores. Wired in P5 via /api/snowflake/{code}.
+  // Missing keys render a greyed ghost-pentagon mini.
+  snowflakeScoresByCode?: Record<string, SnowflakeScores>;
 }
 
 const tickerFromCode = (code: string) =>
@@ -31,6 +35,7 @@ interface WatchlistRowProps {
   liveQuote: LiveWatchlistQuote | undefined;
   isExpanded: boolean;
   onToggle: (code: string) => void;
+  snowflakeScores?: SnowflakeScores;
 }
 
 // Per-row pulse: hashes the live-tick fields the SSE stream mutates
@@ -43,6 +48,7 @@ function WatchlistRow({
   liveQuote,
   isExpanded,
   onToggle,
+  snowflakeScores,
 }: WatchlistRowProps) {
   const ticker = tickerFromCode(code);
   const market = marketFromCode(code);
@@ -135,11 +141,22 @@ function WatchlistRow({
             <Sparkline points={points} direction={direction} />
           </div>
         </td>
+
+        <td className="py-3 px-3 text-center align-top">
+          <div className="flex justify-center pt-1">
+            <Snowflake
+              size={28}
+              scores={snowflakeScores ?? {}}
+              showLabels={false}
+              showRings={false}
+            />
+          </div>
+        </td>
       </tr>
 
       {isExpanded && (
         <tr>
-          <td colSpan={6} className="p-0">
+          <td colSpan={7} className="p-0">
             <DrillIn code={code} direction={direction} />
           </td>
         </tr>
@@ -148,7 +165,12 @@ function WatchlistRow({
   );
 }
 
-export function WatchlistTable({ codes, sparklines, quotes = {} }: Props) {
+export function WatchlistTable({
+  codes,
+  sparklines,
+  quotes = {},
+  snowflakeScoresByCode = {},
+}: Props) {
   const t = useT();
   const [expandedCode, setExpandedCode] = useState<string | null>(null);
   const liveMap = useLiveWatchlistMap();
@@ -200,6 +222,11 @@ export function WatchlistTable({ codes, sparklines, quotes = {} }: Props) {
                 {t("watchlist.col.trend")}
               </span>
             </th>
+            <th className="text-center pb-3 px-3">
+              <span className="text-xs uppercase tracking-[0.04em] font-medium text-whisper">
+                Snow
+              </span>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -212,6 +239,7 @@ export function WatchlistTable({ codes, sparklines, quotes = {} }: Props) {
               liveQuote={liveMap.get(code)}
               isExpanded={expandedCode === code}
               onToggle={toggle}
+              snowflakeScores={snowflakeScoresByCode[code]}
             />
           ))}
         </tbody>

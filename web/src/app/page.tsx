@@ -5,6 +5,7 @@ import { Hero } from "@/components/hero";
 import { DailyDigest } from "@/components/daily-digest";
 import { ForesightBlock } from "@/components/foresight-block";
 import { BlockSkeleton } from "@/components/block-skeleton";
+import { KpiStrip } from "@/components/kpi-strip";
 
 async function safeFetchForesight(): Promise<ForesightResponse | null> {
   try {
@@ -25,7 +26,27 @@ export default async function Home() {
 
   return (
     <>
-      <Hero data={data} />
+      {/* Hero: total + signed P&L + per-currency caption + 96px snowflake.
+       *  Snowflake scores stubbed until P5 wires /api/snowflake/portfolio. */}
+      <Hero
+        data={data}
+        snowflakeScores={{ valuation: null, future: null, past: 4, health: 3, dividends: 4 }}
+      />
+
+      {/* KPI strip: Unrealized · Realized · Dividends · Currency Impact.
+       *  Stubbed until P5 wires /api/returns/summary. */}
+      <div className="mb-10">
+        <KpiStrip
+          tiles={[
+            { label: "Unrealized Returns", value: "—", sub: "Pending P5" },
+            { label: "Realized Returns",   value: "—", sub: "Pending P5" },
+            { label: "Dividends",          value: "—", sub: "Pending P5" },
+            { label: "Currency Impact",    value: "—", sub: "Pending P5" },
+          ]}
+          caption="Stubbed — /api/returns/summary wires up in P5."
+        />
+      </div>
+
       <DailyDigest />
       <Suspense fallback={<BlockSkeleton lines={5} />}>
         <ForesightSection />
