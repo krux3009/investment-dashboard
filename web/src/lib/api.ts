@@ -825,3 +825,170 @@ export async function fetchReturnsDetail(): Promise<ReturnsDetail> {
   }
   return (await res.json()) as ReturnsDetail;
 }
+
+// ── dividends forecast + buckets (P5/P3) ─────────────────────────────
+
+export interface DividendForecastHolding {
+  code: string;
+  ticker: string;
+  name: string;
+  payment_12m_usd: number;
+  yield_pct: number | null;
+  yield_on_cost_pct: number | null;
+  score: number | null;
+  growth_pct: number | null;
+}
+
+export interface DividendForecastResponse {
+  horizon: "12m" | "24m" | "36m";
+  total_usd: number;
+  monthly_avg_usd: number;
+  as_of: string;
+  holdings: DividendForecastHolding[];
+}
+
+export type Horizon = "12m" | "24m" | "36m";
+
+export async function fetchDividendForecast(horizon: Horizon = "12m"): Promise<DividendForecastResponse> {
+  const url = `${API_BASE}/api/dividends/forecast?horizon=${horizon}`;
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`/api/dividends/forecast ${res.status}: ${await res.text()}`);
+  }
+  return (await res.json()) as DividendForecastResponse;
+}
+
+export interface DividendBucketStats {
+  total_usd: number;
+  count: number;
+  pct: number;
+}
+
+export interface DividendQualityResponse {
+  as_of: string;
+  total_usd: number;
+  buckets: {
+    low: DividendBucketStats;
+    medium: DividendBucketStats;
+    high: DividendBucketStats;
+  };
+}
+
+export async function fetchDividendQualityBuckets(): Promise<DividendQualityResponse> {
+  const res = await fetch(`${API_BASE}/api/dividends/quality-buckets`, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`/api/dividends/quality-buckets ${res.status}: ${await res.text()}`);
+  }
+  return (await res.json()) as DividendQualityResponse;
+}
+
+// ── portfolio metrics + fair value (P5/P3) ───────────────────────────
+
+export interface SectorTicker {
+  code: string;
+  name: string;
+  weight_pct: number;
+  industry?: string | null;
+}
+
+export interface SectorBucket {
+  sector: string;
+  weight_pct: number;
+  tickers: SectorTicker[];
+}
+
+export async function fetchSectors(): Promise<SectorBucket[]> {
+  const res = await fetch(`${API_BASE}/api/portfolio/sectors`, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`/api/portfolio/sectors ${res.status}: ${await res.text()}`);
+  }
+  return (await res.json()) as SectorBucket[];
+}
+
+export interface GeographyTicker {
+  code: string;
+  name: string;
+  weight_pct: number;
+  country?: string | null;
+}
+
+export interface GeographyBucket {
+  region: string;
+  weight_pct: number;
+  tickers: GeographyTicker[];
+}
+
+export async function fetchGeography(): Promise<GeographyBucket[]> {
+  const res = await fetch(`${API_BASE}/api/portfolio/geography`, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`/api/portfolio/geography ${res.status}: ${await res.text()}`);
+  }
+  return (await res.json()) as GeographyBucket[];
+}
+
+export interface TopHolding {
+  code: string;
+  name: string;
+  weight_pct: number;
+  value_usd: number;
+}
+
+export async function fetchTopHoldings(n = 10): Promise<TopHolding[]> {
+  const res = await fetch(`${API_BASE}/api/portfolio/top-holdings?n=${n}`, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`/api/portfolio/top-holdings ${res.status}: ${await res.text()}`);
+  }
+  return (await res.json()) as TopHolding[];
+}
+
+export interface ValuationHolding {
+  code: string;
+  ticker: string;
+  current_usd: number;
+  fair_usd: number | null;
+  pct_diff: number | null;
+}
+
+export interface ValuationResponse {
+  cash_flow_value_usd: number;
+  total_value_usd: number;
+  pct_diff: number | null;
+  per_holding: ValuationHolding[];
+  coverage_count: number;
+  total_count: number;
+}
+
+export async function fetchValuation(): Promise<ValuationResponse> {
+  const res = await fetch(`${API_BASE}/api/portfolio/valuation`, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`/api/portfolio/valuation ${res.status}: ${await res.text()}`);
+  }
+  return (await res.json()) as ValuationResponse;
+}
+
+export interface GaugeResponse {
+  portfolio: number | null;
+  market: number;
+  scale_max: number;
+  excluded_count: number;
+  total_count: number;
+  label: string;
+}
+
+export async function fetchPeGauge(): Promise<GaugeResponse> {
+  const res = await fetch(`${API_BASE}/api/portfolio/pe-vs-market`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`/api/portfolio/pe-vs-market ${res.status}`);
+  return (await res.json()) as GaugeResponse;
+}
+
+export async function fetchPsGauge(): Promise<GaugeResponse> {
+  const res = await fetch(`${API_BASE}/api/portfolio/ps-vs-market`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`/api/portfolio/ps-vs-market ${res.status}`);
+  return (await res.json()) as GaugeResponse;
+}
+
+export async function fetchPegGauge(): Promise<GaugeResponse> {
+  const res = await fetch(`${API_BASE}/api/portfolio/peg-vs-market`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`/api/portfolio/peg-vs-market ${res.status}`);
+  return (await res.json()) as GaugeResponse;
+}
