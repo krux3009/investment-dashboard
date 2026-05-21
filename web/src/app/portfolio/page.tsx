@@ -35,6 +35,10 @@ import { CalendarView } from "@/components/calendar-view";
 import { PerformanceChartCard } from "@/components/performance-chart-card";
 import { SnowflakeCard } from "@/components/snowflake-card";
 import { KpiStrip } from "@/components/kpi-strip";
+import { ReturnsTab } from "@/components/returns-tab";
+import { UpdatesTab } from "@/components/updates-tab";
+import { DividendsTab } from "@/components/dividends-tab";
+import { AnalysisTab } from "@/components/analysis-tab";
 
 const TAB_KEYS: PortfolioTab[] = [
   "holdings", "returns", "updates", "dividends", "analysis", "calendar",
@@ -239,20 +243,20 @@ async function renderTabContent(
     );
   }
 
-  if (tab === "returns" || tab === "updates" || tab === "analysis") {
-    return <ComingSoonPanel tab={tab} />;
+  if (tab === "returns") {
+    return <ReturnsTab />;
+  }
+
+  if (tab === "updates") {
+    return <UpdatesTab />;
+  }
+
+  if (tab === "analysis") {
+    return <AnalysisTab />;
   }
 
   if (tab === "dividends") {
-    // P2 partial: render existing DividendLedgerBlock here (was on Holdings
-    // tab in v3). Full Dividends-tab content lands in P3.
-    const dividends = await safeFetchDividends();
-    return (
-      <div className="flex flex-col gap-10">
-        <ComingSoonPanel tab={tab} preview="DividendLedgerBlock kept from v3 below — full tab content in P3." />
-        {dividends ? <DividendLedgerBlock initial={dividends} /> : null}
-      </div>
-    );
+    return <DividendsTab />;
   }
 
   // ── Holdings tab (default) ──────────────────────────────────────
