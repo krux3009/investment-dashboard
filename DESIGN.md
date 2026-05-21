@@ -11,8 +11,12 @@ colors:
   quiet: "oklch(45% 0.008 60)"
   whisper: "oklch(58% 0.007 65)"
   rule: "oklch(86% 0.006 70)"
-  accent: "oklch(55% 0.12 28)"
-  accent-strong: "oklch(60% 0.13 28)"
+  accent: "#B89968"
+  accent-primary: "#B89968"
+  accent-strong: "oklch(58% 0.10 80)"
+  accent-success: "#009244"
+  accent-warn: "#C25F1F"
+  accent-danger: "#BC0024"
   gain: "oklch(48% 0.10 145)"
   loss: "oklch(48% 0.13 25)"
   slice-1: "oklch(28% 0.008 60)"
@@ -22,19 +26,30 @@ colors:
   slice-5: "oklch(68% 0.008 60)"
   slice-6: "oklch(76% 0.007 65)"
   slice-7: "oklch(82% 0.007 70)"
-  surface-dark: "oklch(18% 0.008 60)"
-  surface-raised-dark: "oklch(22% 0.008 60)"
-  surface-zebra-dark: "oklch(21.5% 0.008 60)"
-  surface-hover-dark: "oklch(24% 0.008 60)"
-  surface-expanded-dark: "oklch(26% 0.008 60)"
-  ink-dark: "oklch(92% 0.005 75)"
-  quiet-dark: "oklch(70% 0.008 60)"
-  whisper-dark: "oklch(58% 0.008 60)"
-  rule-dark: "oklch(30% 0.008 60)"
-  accent-dark: "oklch(68% 0.12 28)"
-  accent-strong-dark: "oklch(72% 0.13 28)"
+  surface-dark: "oklch(14% 0.01 240)"
+  surface-raised-dark: "oklch(18% 0.008 240)"
+  surface-zebra-dark: "oklch(19% 0.008 240)"
+  surface-hover-dark: "oklch(22% 0.008 240)"
+  surface-expanded-dark: "oklch(16% 0.008 240)"
+  ink-dark: "oklch(94% 0.005 75)"
+  quiet-dark: "oklch(72% 0.01 60)"
+  whisper-dark: "oklch(55% 0.01 60)"
+  rule-dark: "oklch(28% 0.005 240)"
+  accent-dark: "#D9B97A"
+  accent-primary-dark: "#D9B97A"
+  accent-strong-dark: "oklch(78% 0.12 80)"
+  accent-success-dark: "#00DA5A"
+  accent-warn-dark: "#EB7930"
+  accent-danger-dark: "#D6002A"
   gain-dark: "oklch(62% 0.11 145)"
   loss-dark: "oklch(62% 0.13 25)"
+  slice-1-dark: "oklch(85% 0.008 70)"
+  slice-2-dark: "oklch(75% 0.008 65)"
+  slice-3-dark: "oklch(65% 0.008 60)"
+  slice-4-dark: "oklch(55% 0.008 60)"
+  slice-5-dark: "oklch(45% 0.008 60)"
+  slice-6-dark: "oklch(36% 0.008 60)"
+  slice-7-dark: "oklch(28% 0.008 60)"
 typography:
   display:
     fontFamily: "var(--font-plex-sans), 'IBM Plex Sans', system-ui, sans-serif"
@@ -128,15 +143,17 @@ components:
 
 **Creative North Star: "The Quiet Ledger"**
 
-The dashboard is a paper-and-ink ledger for a long-horizon investor, a place for sitting with positions, not reacting to them. Warm graphite type rests on cream in light mode; in dark mode the same family inverts to paper-cream ink on a warm-graphite surface. The accent is rare on purpose. Numbers are reported with the same typographic gravity at 0.2% as at 5%; the data does the talking, not the chrome. Mercury for restraint, Linear for craft, Notion for the canvas-as-page feel; these references combine into a surface that scales from a 15-second phone glance to a 30-minute weekend study session without changing voice.
+The dashboard is a paper-and-ink ledger for a long-horizon investor, a place for sitting with positions, not reacting to them. Warm graphite type rests on cream in light mode; in dark mode (the v4 default) paper-cream ink rests on an SWS-style cool near-black. One rare gold accent carries interactive emphasis. Numbers are reported with the same typographic gravity at 0.2% as at 5%; the data does the talking, not the chrome. Mercury for restraint, Linear for craft, Notion for the canvas-as-page feel; these references combine into a surface that scales from a 15-second phone glance to a 30-minute weekend study session without changing voice.
 
 Explicitly not a Bloomberg full-clone: no twenty-widget overwhelm, no blinking tickers, no metric for the sake of having one. Explicitly not Robinhood: no gotcha-green, no candy gradients, no confetti, no big-number-flex hero. Explicitly not the generic LLM SaaS dashboard either: no Inter on slate-blue with cards-nested-in-cards. The reading room rejects all three by construction.
 
-The product surface is laid out as three thin server-component routes (`/`, `/portfolio`, `/watchlist`) sharing a single `max-w-6xl` column, a `NavBar` tab strip in `pb-1 border-b` underline form, and a `theme-toggle` that cycles `system → light → dark → system`. Tokens are defined as CSS custom properties in `web/src/app/globals.css`; light is the default, dark inverts under the `.dark` class. Both modes are first-class.
+The product surface is laid out as three thin server-component routes (`/`, `/portfolio`, `/watchlist`) sharing a single `max-w-6xl` column, a `NavBar` tab strip in `pb-1 border-b` underline form, and a `theme-toggle` that swaps dark ↔ light. Tokens are defined as CSS custom properties in `web/src/app/globals.css`; since v4 **dark is the default** (`defaultTheme="dark"`, `enableSystem={false}`), light applies under the `.dark` class being removed. Both modes are first-class.
+
+> **v4 drift note:** the Colors section + frontmatter are synced to the shipped v4 SWS system. The Typography and Components sections below still describe the v3 surface in places (the IBM Plex Serif h1 added in v4, the hero donut now replaced by a snowflake, and the new `snowflake` / `kpi-tile` / `statement-card` / `comparison-gauge` primitives are not yet documented here). Treat those two sections as pending a full `/impeccable document` re-capture.
 
 **Key Characteristics:**
 
-- Paper-cream surface, warm-graphite ink, one rare rust accent.
+- Paper-cream (light) / cool near-black (dark) surface, inverting ink, one rare SWS gold accent.
 - One humanist sans family (IBM Plex Sans + Plex Mono), tabular figures opt-in on numeric cells.
 - Flat by default; depth from spacing, hairline borders, and tonal contrast within the warm-neutral family.
 - Two densities (glance, study) sharing one visual vocabulary; drill-in not switch-of-surface is how density scales.
@@ -146,45 +163,59 @@ The product surface is laid out as three thin server-component routes (`/`, `/po
 
 ## Colors: The Restrained Palette
 
-Tinted neutrals carry the surface; one warm rust accent appears rarely and forcefully when it does. Both themes ship from the same chroma vocabulary, only the lightness inverts.
+> **v4 SWS rewrite (2026-05-19):** the accent moved from muted rust to a rare **SWS gold**, dark became the default surface (now a cool near-black, hue ~240), and a three-tone **status palette** (success / warn / danger) was added for chips and deltas. The chart strokes stayed muted forest / sienna. This section reflects the shipped v4 system; see *The Two-Tier Color Rule* below for how loud and quiet color now coexist.
+
+Tinted neutrals carry the surface; one rare gold accent appears forcefully when it does. The chart layer stays deliberately quiet (muted forest / sienna); the status layer (chips, KPI deltas, statement-card icons) is allowed to be loud (SWS green / red).
 
 ### Primary
 
-- **Muted Rust Accent** (`oklch(55% 0.12 28)` light · `oklch(68% 0.12 28)` dark): used only on focus rings, the textarea focus border, and any future single-element interactive emphasis. Never green. Never red. Never gold.
-- **Accent Strong** (`oklch(60% 0.13 28)` light · `oklch(72% 0.13 28)` dark): focus-visible ring escalation only.
+- **SWS Gold Accent** (`#B89968` light · `#D9B97A` dark, exposed as `--accent-primary`; `--accent` is an alias): the single shared accent. Used on the active nav-tab underline, focus rings, the tick-pulse halo, the snowflake pentagon fill/stroke, and the gold portfolio line in the benchmark chart. ≤10% of any screen. Replaces the v3 rust accent everywhere.
+- **Accent Strong** (`oklch(58% 0.10 80)` light · `oklch(78% 0.12 80)` dark): focus-visible ring escalation only.
+
+### Status palette (chips + deltas only — never chart strokes)
+
+- **Success** (`#009244` light · `#00DA5A` dark, `--accent-success`): positive `↑` KPI deltas, `check` statement-card icons, the "undervalued" framing in valuation cards.
+- **Warn** (`#C25F1F` light · `#EB7930` dark, `--accent-warn`): `warn` statement-card icons, "overvalued" framing.
+- **Danger** (`#BC0024` light · `#D6002A` dark, `--accent-danger`): negative `↓` KPI deltas, low-score dividend chips.
+
+These are intentionally brighter than the chart `gain`/`loss` tints. They live in small, bounded UI (a chip, a single delta number, a 7px icon), never in a chart stroke or a fill that occupies real estate. Each still pairs with a glyph or sign, so color is never the sole signal.
 
 ### Neutral
 
-- **Paper Cream** surface (`oklch(96% 0.005 75)` light · `oklch(18% 0.008 60)` dark): the surface tint. Warm enough to reject the white-paper SaaS reflex; in dark mode it becomes a warm graphite that visibly belongs to the same family.
-- **Surface Raised** (`oklch(98% 0.004 75)` light · `oklch(22% 0.008 60)` dark): the textarea fill in the notes block. The only place a panel "lifts" tonally.
-- **Surface Zebra** (`oklch(94.5% 0.006 75)` light · `oklch(20.5% 0.008 60)` dark): the subtle alternating-row tint applied to even rows of the holdings register. ~1.5% delta from `surface` in both modes. Reads as register pattern, not stripe; the alternation is the structural cue, not the color itself.
-- **Surface Hover** (`oklch(93% 0.008 75)` light · `oklch(24% 0.008 60)` dark): the 2-3% darken applied to hovered rows in the holdings + watchlist tables. No shadow, no shift.
-- **Surface Expanded** (`oklch(94% 0.008 75)` light · `oklch(26% 0.008 60)` dark): the drill-in fill when a row is open. A degree quieter than hover so the open state reads as anchored.
-- **Warm Graphite Ink** (`oklch(20% 0.008 60)` light · `oklch(92% 0.005 75)` dark): body and headings. Tinted toward the surface family; never `#000` and never `#fff`.
-- **Quiet Ink** (`oklch(45% 0.008 60)` light · `oklch(70% 0.008 60)` dark): secondary text, axis labels, navigation rest state, label captions.
-- **Whisper Ink** (`oklch(58% 0.007 65)` light · `oklch(58% 0.008 60)` dark): tertiary metadata, "since updated" stamps, save-state captions.
-- **Rule** (`oklch(86% 0.006 70)` light · `oklch(30% 0.008 60)` dark): hairline borders between table rows, between sections, around the textarea. Visible without shouting.
+- **Paper Cream** surface (`oklch(96% 0.005 75)` light · `oklch(14% 0.01 240)` dark): the surface tint. Light is warm cream; dark is an SWS-style cool near-black (hue ~240) — the one place the dark theme departs from the warm-graphite family, to match the SWS reading-room feel.
+- **Surface Raised** (`oklch(98% 0.004 75)` light · `oklch(18% 0.008 240)` dark): card lift — the notes textarea, KPI tiles, statement cards, snowflake card.
+- **Surface Zebra** (`oklch(94.5% 0.006 75)` light · `oklch(19% 0.008 240)` dark): the subtle alternating-row tint on even rows of the holdings register. Reads as register pattern, not stripe; the alternation is the structural cue, not the color itself.
+- **Surface Hover** (`oklch(93% 0.008 75)` light · `oklch(22% 0.008 240)` dark): the 2-3% shift applied to hovered rows. No shadow, no shift.
+- **Surface Expanded** (`oklch(94% 0.008 75)` light · `oklch(16% 0.008 240)` dark): the drill-in fill when a row is open. Quieter than hover so the open state reads as anchored.
+- **Ink** (`oklch(20% 0.008 60)` light · `oklch(94% 0.005 75)` dark): body and headings. Never `#000`, never `#fff`.
+- **Quiet Ink** (`oklch(45% 0.008 60)` light · `oklch(72% 0.01 60)` dark): secondary text, axis labels, navigation rest state, label captions.
+- **Whisper Ink** (`oklch(58% 0.007 65)` light · `oklch(55% 0.01 60)` dark): tertiary metadata, "since updated" stamps, save-state captions.
+- **Rule** (`oklch(86% 0.006 70)` light · `oklch(28% 0.005 240)` dark): hairline borders between rows, sections, and around cards. Visible without shouting.
 
-### Direction (paired, never sole signal)
+### Direction (chart strokes — paired, never sole signal)
 
-- **Gain** (`oklch(48% 0.10 145)` light · `oklch(62% 0.11 145)` dark): muted forest. Always paired with `↑` arrow and `+` sign.
+- **Gain** (`oklch(48% 0.10 145)` light · `oklch(62% 0.11 145)` dark): muted forest. Sparkline + price-chart stroke for an up window. Always paired with `↑` arrow and `+` sign on the numeric.
 - **Loss** (`oklch(48% 0.13 25)` light · `oklch(62% 0.13 25)` dark): muted sienna. Always paired with `↓` arrow and `−` sign.
+
+The chart layer keeps these muted tints rather than the loud status green/red, so a wall of sparklines reads calm at a glance — principle #2, calm-under-volatility.
 
 ### Sequential graphite (charts)
 
-`slice-1` through `slice-7` form a graphite ramp used by the donut, the concentration stacked bar, the currency exposure stacked bar, and any future ordinal series. Largest position renders darkest in light mode; the ramp inverts in dark so largest still reads heaviest.
+`slice-1` through `slice-7` form a graphite ramp used by the donut, the concentration stacked bar, and the currency exposure stacked bar. Largest position renders darkest in light mode; the ramp **inverts in dark** (largest = lightest) so the largest position still reads heaviest against the near-black surface.
 
 ### Named Rules
 
-**The OKLCH Doctrine.** Every color in the system is OKLCH, even where it triggers a Stitch linter warning on the frontmatter. The surface family lives in a narrow chroma band (`0.005-0.013`) so neutrals visibly belong to the warm cream rather than drift into cool gray.
+**The Two-Tier Color Rule.** Color works in two registers. The **quiet tier** — muted forest `gain` / sienna `loss` and the graphite slice ramp — owns everything that occupies chart real estate (sparklines, price chart, donut, stacked bars). The **loud tier** — SWS green `success` / red `danger` / orange `warn` — is confined to small bounded UI: chips, single KPI deltas, statement-card icons. **Gold** is the single shared interactive accent across both. A chart never uses the loud tier; a chip never uses gold for up/down. This is what lets the surface read calm while still flagging a 0/6 dividend score in red.
 
-**The One Voice Rule.** The accent is used on ≤10% of any screen. Its rarity is the message. Two accents on one view is one accent too many.
+**The OKLCH Doctrine (with v4 exception).** Surfaces, ink, rule, gain/loss, and slices are OKLCH in a narrow chroma band so neutrals belong to one family. The v4 accent + status tokens (`accent-primary`, `success`, `warn`, `danger`) ship as **hex**, matched from the SWS palette; this is the one sanctioned departure from the all-OKLCH doctrine.
 
-**The No-Green-On-Red Rule.** Gain and loss are never communicated by color alone. Every up/down value carries an arrow (↑/↓), explicit sign (+/−), or positional cue. Color is reinforcement, never the signal. See `~/.claude/projects/-Users-tanlixuan-Me-Vault/memory/feedback_financial_framing.md` for the matching copy posture (no buy/sell/hold/target/recommend language anywhere in advisor surfaces).
+**The One Voice Rule.** The gold accent is used on ≤10% of any screen. Its rarity is the message. Two accents on one view is one accent too many.
 
-**The Tinted-Neutral Rule.** Pure black and pure white are forbidden. Every neutral is tinted toward the warm surface family with chroma `0.005-0.01`. The graphite must visibly belong to the cream, in either mode.
+**The No-Sole-Signal Rule.** Up/down is never communicated by color alone — in either tier. Every up/down value carries an arrow (↑/↓), explicit sign (+/−), or positional cue; every statement-card sentiment carries a check/warn/neutral glyph. Color is reinforcement, never the signal. See `~/.claude/projects/-Users-tanlixuan-Me-Vault/memory/feedback_financial_framing.md` for the matching copy posture (no buy/sell/hold/target/recommend language anywhere in advisor surfaces).
 
-**The Dark-Mode Parity Rule.** Dark is not a reskin and not an afterthought. Every token has a paired dark value, every component reads on both surfaces, and the theme toggle cycles `system → light → dark → system` so ambient context, not category reflex, picks the mode.
+**The Tinted-Neutral Rule.** Pure black and pure white are forbidden. Light neutrals tint warm (hue ~60-75); dark neutrals tint cool (hue ~240). Never `#000`, never `#fff`.
+
+**The Dark-Mode Parity Rule.** Dark is the **default** since v4 (`defaultTheme="dark"`, `enableSystem={false}`). Every token has a paired dark value; the theme toggle is a 2-state dark ↔ light swap (the v3 `system → light → dark` cycle was retired with the dark-default flip).
 
 ## Typography: One Voice
 
@@ -268,7 +299,7 @@ The closest thing to a card in the system, and even it does not float. `bg-surfa
 
 ### Theme toggle (`theme-toggle.tsx`)
 
-A text button, no icon. Cycles `system (light)` → `light` → `dark` → `system (dark)` and renders the current label in `text-xs uppercase tracking-wider text-quiet`. Hover lifts to `text-ink`. The label always shows the *effective* theme; click swaps to the next. No animation on theme change beyond the global `transition-colors`.
+A text button, no icon. Since v4 it is a 2-state swap: `dark` ↔ `light` (the v3 `system → light → dark → system` cycle was retired with the dark-default flip and `enableSystem={false}`). Renders the current label in `text-xs uppercase tracking-wider text-quiet`; hover lifts to `text-ink`. No animation on theme change beyond the global `transition-colors`.
 
 ### Sparkline (`sparkline.tsx`)
 
@@ -284,7 +315,7 @@ Hand-rolled SVG horizontal stacked bars for top-N share and currency exposure. S
 
 ### Line chart (`benchmark-chart.tsx`)
 
-Hand-rolled SVG line chart for portfolio vs benchmark, with a tabular-figure legend below. 30D / 90D / 1Y window toggle in `text-xs uppercase` text buttons. Drawn in two strokes (portfolio `var(--ink)`, benchmark `var(--quiet)`); direction tints not used here because relative path is the message.
+Hand-rolled SVG line chart for portfolio vs benchmark, with a tabular-figure legend below. 30D / 90D / 1Y window toggle in `text-xs uppercase` text buttons. Since v4 the portfolio line is drawn in **gold** (`var(--accent-primary)`, `strokeWidth` 1.75) over gray benchmark strokes (`var(--quiet)`), matching the SWS portfolio chart; direction tints are not used here because relative path is the message.
 
 ### Price chart (`price-chart.tsx`)
 

@@ -57,23 +57,15 @@
       },
       "accent": {
         "role": "primary",
-        "displayName": "Muted Rust Accent",
-        "canonical": "oklch(55% 0.12 28)",
-        "tonalRamp": [
-          "oklch(20% 0.06 28)",
-          "oklch(30% 0.09 28)",
-          "oklch(40% 0.11 28)",
-          "oklch(50% 0.12 28)",
-          "oklch(55% 0.12 28)",
-          "oklch(65% 0.11 28)",
-          "oklch(80% 0.07 28)",
-          "oklch(94% 0.025 28)"
-        ]
+        "displayName": "SWS Gold Accent",
+        "canonical": "#D9B97A",
+        "note": "v4 SWS rewrite (2026-05-19): replaced the v3 muted rust accent. Dark #D9B97A, light #B89968. Exposed as --accent-primary; --accent is an alias. Hex, not OKLCH — the sanctioned v4 exception. Single shared accent: nav underline, focus rings, tick-pulse, snowflake fill/stroke, gold portfolio line."
       },
       "accent-strong": {
         "role": "primary",
         "displayName": "Accent Strong",
-        "canonical": "oklch(60% 0.13 28)"
+        "canonical": "oklch(78% 0.12 80)",
+        "note": "Focus-visible ring escalation only. Light pair oklch(58% 0.10 80)."
       },
       "gain": {
         "role": "tertiary",
@@ -88,7 +80,8 @@
           "oklch(70% 0.08 145)",
           "oklch(85% 0.05 145)",
           "oklch(94% 0.02 145)"
-        ]
+        ],
+        "note": "Chart strokes only (sparkline, price chart). Muted forest; quiet tier. Always paired with up arrow + sign. Distinct from the loud accent-success used in chips. Dark pair oklch(62% 0.11 145)."
       },
       "loss": {
         "role": "tertiary",
@@ -103,7 +96,8 @@
           "oklch(70% 0.09 25)",
           "oklch(85% 0.05 25)",
           "oklch(94% 0.02 25)"
-        ]
+        ],
+        "note": "Chart strokes only. Muted sienna; quiet tier. Always paired with down arrow + sign. Distinct from the loud accent-danger used in chips. Dark pair oklch(62% 0.13 25)."
       },
       "slice-1": {
         "role": "secondary",
@@ -117,7 +111,26 @@
           "oklch(68% 0.008 60)",
           "oklch(76% 0.007 65)",
           "oklch(82% 0.007 70)"
-        ]
+        ],
+        "note": "Sequential graphite ramp (slice-1..7) for donut + concentration/currency stacks. Largest = darkest in light; ramp INVERTS in dark (largest = lightest) so the largest position still reads heaviest on the near-black surface."
+      },
+      "accent-success": {
+        "role": "status",
+        "displayName": "Success",
+        "canonical": "#00DA5A",
+        "note": "v4. Positive KPI deltas, check statement-card icons, 'undervalued' framing. Light #009244. Loud tier — never a chart stroke."
+      },
+      "accent-warn": {
+        "role": "status",
+        "displayName": "Warn",
+        "canonical": "#EB7930",
+        "note": "v4. warn statement-card icons, 'overvalued' framing. Light #C25F1F. Loud tier."
+      },
+      "accent-danger": {
+        "role": "status",
+        "displayName": "Danger",
+        "canonical": "#D6002A",
+        "note": "v4. Negative KPI deltas, low-score dividend chips. Light #BC0024. Loud tier."
       }
     },
     "typographyMeta": {
@@ -164,8 +177,14 @@
       }
     ],
     "breakpoints": [
-      { "name": "md", "value": "768px" },
-      { "name": "lg", "value": "1024px" }
+      {
+        "name": "md",
+        "value": "768px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px"
+      }
     ]
   },
   "components": [
@@ -236,9 +255,9 @@
   ],
   "narrative": {
     "northStar": "The Quiet Ledger",
-    "overview": "The dashboard is a paper-and-ink ledger for a long-horizon investor, a place for sitting with positions, not reacting to them. Warm graphite type rests on cream in light mode; in dark mode the same family inverts to paper-cream ink on a warm-graphite surface. The accent is rare on purpose. Numbers are reported with the same typographic gravity at 0.2% as at 5%; the data does the talking, not the chrome. Mercury for restraint, Linear for craft, Notion for the canvas-as-page feel.\n\nExplicitly not a Bloomberg full-clone, not Robinhood, not the generic LLM SaaS dashboard. The reading room rejects all three by construction.\n\nThree thin server-component routes (/, /portfolio, /watchlist) share a single max-w-6xl column, a NavBar tab strip in pb-1 border-b underline form, and a theme toggle that cycles system → light → dark → system. Tokens are CSS custom properties in web/src/app/globals.css; light is default, dark inverts under the .dark class. Both modes are first-class.",
+    "overview": "The dashboard is a paper-and-ink ledger for a long-horizon investor, a place for sitting with positions, not reacting to them. Warm graphite type rests on cream in light mode; in dark mode (the v4 default) paper-cream ink rests on an SWS-style cool near-black (hue ~240). One rare gold accent carries interactive emphasis. Numbers are reported with the same typographic gravity at 0.2% as at 5%; the data does the talking, not the chrome. Mercury for restraint, Linear for craft, Notion for the canvas-as-page feel.\n\nExplicitly not a Bloomberg full-clone, not Robinhood, not the generic LLM SaaS dashboard. The reading room rejects all three by construction.\n\nThree thin server-component routes (/, /portfolio, /watchlist) share a single max-w-6xl column, a NavBar tab strip in pb-1 border-b underline form, and a theme toggle that swaps dark <-> light. Tokens are CSS custom properties in web/src/app/globals.css; since v4 dark is the default (defaultTheme=\"dark\", enableSystem=false). Both modes are first-class.",
     "keyCharacteristics": [
-      "Paper-cream surface, warm-graphite ink, one rare rust accent.",
+      "Paper-cream (light) / cool near-black (dark) surface, inverting ink, one rare SWS gold accent.",
       "One humanist sans family (IBM Plex Sans + Plex Mono), tabular figures opt-in on numeric cells.",
       "Flat by default; depth from spacing, hairline borders, and tonal contrast within the warm-neutral family.",
       "Two densities (glance, study) sharing one visual vocabulary; drill-in not switch-of-surface is how density scales.",
@@ -247,21 +266,86 @@
       "Restrained motion: state changes only; prefers-reduced-motion: reduce zeroes all transitions and animations globally."
     ],
     "rules": [
-      { "name": "The OKLCH Doctrine", "body": "Every color in the system is OKLCH, even where it triggers a Stitch linter warning on the frontmatter. The surface family lives in a narrow chroma band (0.005-0.013) so neutrals visibly belong to the warm cream rather than drift into cool gray.", "section": "colors" },
-      { "name": "The One Voice Rule", "body": "The accent is used on ≤10% of any screen. Its rarity is the message. Two accents on one view is one accent too many.", "section": "colors" },
-      { "name": "The No-Green-On-Red Rule", "body": "Gain and loss are never communicated by color alone. Every up/down value carries an arrow (↑/↓), explicit sign (+/−), or positional cue. Color is reinforcement, never the signal.", "section": "colors" },
-      { "name": "The Tinted-Neutral Rule", "body": "Pure black and pure white are forbidden. Every neutral is tinted toward the warm surface family with chroma 0.005-0.01.", "section": "colors" },
-      { "name": "The Dark-Mode Parity Rule", "body": "Dark is not a reskin and not an afterthought. Every token has a paired dark value, every component reads on both surfaces, and the theme toggle cycles system → light → dark → system.", "section": "colors" },
-      { "name": "The One Family Rule", "body": "Every glyph in the interface comes from IBM Plex Sans (or Plex Mono for inline code) at varying weights.", "section": "typography" },
-      { "name": "The Tabular-Numbers Rule", "body": "All numeric data uses tabular figures. Body text keeps tabular off so prose reads naturally; the .tabular class is opt-in on every numeric cell, header, and data caption.", "section": "typography" },
-      { "name": "The Same-Gravity Rule", "body": "A 0.2% move and a 5% move share the same typographic treatment. Magnitude is read from the digits, not from size.", "section": "typography" },
-      { "name": "The Lowercase-Chrome Rule", "body": "Navigation tabs and chrome labels render lowercase. The label cap above each block is the only uppercase element in the system.", "section": "typography" },
-      { "name": "The Flat-By-Default Rule", "body": "Surfaces have no shadow at rest. If a hover state ever introduces shadow, it is hairline and reserved for genuinely interactive elements.", "section": "elevation" },
-      { "name": "The No-Floating-Cards Rule", "body": "Cards are not the default container. Most things are sections divided by spacing and a hairline rule. The drill-in is the closest thing to a card and is full-bleed within the row it expands from.", "section": "elevation" },
-      { "name": "The Color-Only Transitions Rule", "body": "Transitions animate color and opacity. Never transform, never layout properties. Numbers do not animate in or out; they update.", "section": "elevation" },
-      { "name": "The Hand-Rolled-SVG Rule", "body": "Charts that ship in SSR HTML are hand-rolled SVG (sparkline, donut, concentration stack, currency stack, benchmark line). Recharts is reserved for lazy-mounted drill-in surfaces.", "section": "elevation" },
-      { "name": "The Same-Caption Rule", "body": "Every block opens with the text-xs uppercase tracking-[0.06em] text-quiet caption. Recurrence is the affordance.", "section": "elevation" },
-      { "name": "The Drill-In-Not-Modal Rule", "body": "A row's depth is reached by expanding inline, not by opening a modal or navigating to a sub-page.", "section": "elevation" }
+      {
+        "name": "The Two-Tier Color Rule",
+        "body": "Color works in two registers. The quiet tier (muted forest gain / sienna loss + the graphite slice ramp) owns everything occupying chart real estate (sparklines, price chart, donut, stacked bars). The loud tier (SWS green success / red danger / orange warn) is confined to small bounded UI: chips, single KPI deltas, statement-card icons. Gold is the single shared interactive accent across both. A chart never uses the loud tier; a chip never uses gold for up/down.",
+        "section": "colors"
+      },
+      {
+        "name": "The OKLCH Doctrine (with v4 exception)",
+        "body": "Surfaces, ink, rule, gain/loss, and slices are OKLCH in a narrow chroma band so neutrals belong to one family. The v4 accent + status tokens (accent-primary, success, warn, danger) ship as hex matched from the SWS palette — the one sanctioned departure from the all-OKLCH doctrine.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Voice Rule",
+        "body": "The gold accent is used on <=10% of any screen. Its rarity is the message. Two accents on one view is one accent too many.",
+        "section": "colors"
+      },
+      {
+        "name": "The No-Sole-Signal Rule",
+        "body": "Up/down is never communicated by color alone, in either tier. Every up/down value carries an arrow, explicit sign, or positional cue; every statement-card sentiment carries a check/warn/neutral glyph. Color is reinforcement, never the signal.",
+        "section": "colors"
+      },
+      {
+        "name": "The Tinted-Neutral Rule",
+        "body": "Pure black and pure white are forbidden. Light neutrals tint warm (hue ~60-75); dark neutrals tint cool (hue ~240). Never #000, never #fff.",
+        "section": "colors"
+      },
+      {
+        "name": "The Dark-Mode Parity Rule",
+        "body": "Dark is the default since v4 (defaultTheme=dark, enableSystem=false). Every token has a paired dark value; the theme toggle is a 2-state dark <-> light swap (the v3 system->light->dark cycle was retired).",
+        "section": "colors"
+      },
+      {
+        "name": "The One Family Rule",
+        "body": "Every glyph in the interface comes from IBM Plex Sans (or Plex Mono for inline code) at varying weights.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular-Numbers Rule",
+        "body": "All numeric data uses tabular figures. Body text keeps tabular off so prose reads naturally; the .tabular class is opt-in on every numeric cell, header, and data caption.",
+        "section": "typography"
+      },
+      {
+        "name": "The Same-Gravity Rule",
+        "body": "A 0.2% move and a 5% move share the same typographic treatment. Magnitude is read from the digits, not from size.",
+        "section": "typography"
+      },
+      {
+        "name": "The Lowercase-Chrome Rule",
+        "body": "Navigation tabs and chrome labels render lowercase. The label cap above each block is the only uppercase element in the system.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat-By-Default Rule",
+        "body": "Surfaces have no shadow at rest. If a hover state ever introduces shadow, it is hairline and reserved for genuinely interactive elements.",
+        "section": "elevation"
+      },
+      {
+        "name": "The No-Floating-Cards Rule",
+        "body": "Cards are not the default container. Most things are sections divided by spacing and a hairline rule. The drill-in is the closest thing to a card and is full-bleed within the row it expands from.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Color-Only Transitions Rule",
+        "body": "Transitions animate color and opacity. Never transform, never layout properties. Numbers do not animate in or out; they update.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Hand-Rolled-SVG Rule",
+        "body": "Charts that ship in SSR HTML are hand-rolled SVG (sparkline, donut, concentration stack, currency stack, benchmark line). Recharts is reserved for lazy-mounted drill-in surfaces.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Same-Caption Rule",
+        "body": "Every block opens with the text-xs uppercase tracking-[0.06em] text-quiet caption. Recurrence is the affordance.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Drill-In-Not-Modal Rule",
+        "body": "A row's depth is reached by expanding inline, not by opening a modal or navigating to a sub-page.",
+        "section": "elevation"
+      }
     ],
     "dos": [
       "Do keep the accent under 10% of any screen. Its rarity is the point.",
@@ -293,5 +377,6 @@
       "Don't use em dashes in copy. Use commas, colons, semicolons, periods, or parentheses.",
       "Don't introduce a second sans family. One Plex Sans for everything; Plex Mono only for inline code."
     ]
-  }
+  },
+  "lastManualSync": "2026-05-21: v4 colorMeta + narrative hand-synced (gold accent, status palette, two-tier rule, dark default). Component CSS samples + tonal ramps are still v3 2026-05-13 captures — regenerate via /impeccable document for a full v4 sidecar."
 }
