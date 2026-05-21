@@ -177,7 +177,7 @@ export function PerformanceChartCard({
         {subTab === "value" ? (
           <ValueOverTimePlaceholder />
         ) : data ? (
-          <BenchmarkChart data={data} />
+          <BenchmarkChart data={data} portfolioLabel={t("benchmark.legend.portfolio")} />
         ) : (
           <div className="text-sm text-whisper italic h-[200px] flex items-center justify-center">
             no benchmark series

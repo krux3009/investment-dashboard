@@ -438,7 +438,7 @@ export function HoldingsTable({
               <span className="text-xs uppercase tracking-[0.04em] font-medium text-whisper">{t("holdings.col.30d")}</span>
             </th>
             <th className="text-center pb-3 px-3">
-              <span className="text-xs uppercase tracking-[0.04em] font-medium text-whisper">Snow</span>
+              <span className="text-xs uppercase tracking-[0.04em] font-medium text-whisper">{t("holdings.col.snow")}</span>
             </th>
             <th className="text-right pb-3 px-4">
               <SortableHeader label={t("holdings.col.value_usd")} sortKey="market_value_usd" sort={sort} onSort={handleSort} className="text-right" />

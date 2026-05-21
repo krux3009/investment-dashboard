@@ -4,6 +4,9 @@ interface Props {
   data: BenchmarkResponse;
   width?: number;
   height?: number;
+  // Legend label for the portfolio line. Defaults to English; the client
+  // caller (performance-chart-card) passes a translated value.
+  portfolioLabel?: string;
 }
 
 const W = 600;
@@ -40,7 +43,7 @@ function lastPoint(points: SeriesPoint[], minPct: number, range: number) {
   };
 }
 
-export function BenchmarkChart({ data }: Props) {
+export function BenchmarkChart({ data, portfolioLabel = "Portfolio" }: Props) {
   const allPcts = [
     ...data.portfolio.map((p) => p.pct),
     ...data.benchmarks.flatMap((b) => b.points.map((p) => p.pct)),
@@ -124,7 +127,7 @@ export function BenchmarkChart({ data }: Props) {
         fontWeight={500}
         dominantBaseline="middle"
       >
-        Portfolio {(portfolioLast.pct * 100).toFixed(1)}%
+        {portfolioLabel} {(portfolioLast.pct * 100).toFixed(1)}%
       </text>
     </svg>
   );

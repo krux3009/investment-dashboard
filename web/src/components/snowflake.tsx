@@ -11,7 +11,11 @@
  *   VALUE → FUTURE → PAST → HEALTH → DIVIDEND
  */
 
+"use client";
+
 import type { SVGProps } from "react";
+import { useT } from "@/lib/i18n/use-t";
+import type { StringKey } from "@/lib/i18n/strings";
 
 export type SnowflakeScores = {
   valuation?: number | null;
@@ -49,6 +53,15 @@ const AXES = [
 
 type AxisKey = (typeof AXES)[number]["key"];
 
+// Axis display labels reuse the drill-in axis keys so EN/ZH stay in one place.
+const AXIS_LABEL_KEY: Record<AxisKey, StringKey> = {
+  valuation: "drillin.axis.valuation",
+  future: "drillin.axis.future",
+  past: "drillin.axis.past",
+  health: "drillin.axis.health",
+  dividends: "drillin.axis.dividend",
+};
+
 // Convert (radius, angleDeg) → SVG (x, y) with y-axis flipped so 0° points up.
 function point(radius: number, angleDeg: number): { x: number; y: number } {
   const rad = (angleDeg * Math.PI) / 180;
@@ -74,6 +87,7 @@ export function Snowflake({
   className,
   ...rest
 }: SnowflakeProps) {
+  const t = useT();
   const isMini = size === 28;
   // Sensible defaults: mini hides chrome; ≥96 shows it.
   const wantsLabels = showLabels ?? !isMini;
@@ -81,10 +95,11 @@ export function Snowflake({
 
   // Resolve scores into clamped data points; null = greyed axis.
   const axisData = AXES.map((axis) => {
+    const label = t(AXIS_LABEL_KEY[axis.key as AxisKey]);
     const raw = scores[axis.key as AxisKey];
-    if (raw == null || Number.isNaN(raw)) return { ...axis, value: null as null };
+    if (raw == null || Number.isNaN(raw)) return { ...axis, label, value: null as null };
     const clamped = Math.max(0, Math.min(MAX_SCORE, raw));
-    return { ...axis, value: clamped };
+    return { ...axis, label, value: clamped };
   });
 
   const allNull = axisData.every((a) => a.value === null);

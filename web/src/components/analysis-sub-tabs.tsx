@@ -8,15 +8,17 @@
  */
 
 import { useState, type ReactNode } from "react";
+import { useT } from "@/lib/i18n/use-t";
+import type { StringKey } from "@/lib/i18n/strings";
 
 type AxisKey = "valuation" | "future" | "past" | "health" | "dividends";
 
-const TABS: { key: AxisKey; label: string }[] = [
-  { key: "valuation", label: "Valuation" },
-  { key: "future", label: "Future" },
-  { key: "past", label: "Past" },
-  { key: "health", label: "Health" },
-  { key: "dividends", label: "Dividends" },
+const TABS: { key: AxisKey; labelKey: StringKey }[] = [
+  { key: "valuation", labelKey: "analysis.tab.valuation" },
+  { key: "future", labelKey: "analysis.tab.future" },
+  { key: "past", labelKey: "analysis.tab.past" },
+  { key: "health", labelKey: "analysis.tab.health" },
+  { key: "dividends", labelKey: "analysis.tab.dividends" },
 ];
 
 interface Props {
@@ -24,33 +26,30 @@ interface Props {
 }
 
 export function AnalysisSubTabs({ valuationCards }: Props) {
+  const t = useT();
   const [active, setActive] = useState<AxisKey>("valuation");
 
   return (
     <section className="rounded-xl border border-rule bg-surface-raised p-6 flex flex-col gap-5">
       <header className="flex flex-col gap-2">
-        <h2 className="text-lg font-medium text-ink">Key Metrics & Benchmarks</h2>
-        <p className="text-xs text-quiet">
-          Five snowflake axes. Valuation has portfolio-wide gauges below;
-          the other four surface per-holding statement cards inside the
-          row drill-ins.
-        </p>
+        <h2 className="text-lg font-medium text-ink">{t("analysis.subtabs.heading")}</h2>
+        <p className="text-xs text-quiet">{t("analysis.subtabs.subhead")}</p>
       </header>
 
       <nav className="flex items-baseline gap-5 border-b border-rule">
-        {TABS.map((t) => {
-          const isActive = t.key === active;
+        {TABS.map((tab) => {
+          const isActive = tab.key === active;
           return (
             <button
-              key={t.key}
+              key={tab.key}
               type="button"
-              onClick={() => setActive(t.key)}
+              onClick={() => setActive(tab.key)}
               className={
                 "relative text-sm font-medium py-2 transition-colors " +
                 (isActive ? "text-ink" : "text-quiet hover:text-ink")
               }
             >
-              {t.label}
+              {t(tab.labelKey)}
               {isActive ? (
                 <span className="absolute -bottom-px left-0 right-0 h-0.5 bg-[var(--accent-primary)]" />
               ) : null}
@@ -71,34 +70,33 @@ export function AnalysisSubTabs({ valuationCards }: Props) {
 }
 
 function PlaceholderAxis({ axis }: { axis: AxisKey }) {
-  const LABELS: Record<AxisKey, { title: string; explain: string }> = {
-    valuation: { title: "Valuation", explain: "" },
+  const t = useT();
+  const LABELS: Record<AxisKey, { titleKey: StringKey; explainKey: StringKey | null }> = {
+    valuation: { titleKey: "analysis.tab.valuation", explainKey: null },
     future: {
-      title: "Future Growth",
-      explain:
-        "Forecasted earnings + revenue growth land here once an analyst-forecast feed is wired (P5+).",
+      titleKey: "analysis.placeholder.future.title",
+      explainKey: "analysis.placeholder.future.explain",
     },
     past: {
-      title: "Past Performance",
-      explain:
-        "Per-axis statements live in each row's drill-in: expand a holding from Holdings to read its past statements.",
+      titleKey: "analysis.placeholder.past.title",
+      explainKey: "analysis.placeholder.past.explain",
     },
     health: {
-      title: "Financial Health",
-      explain:
-        "Per-axis statements live in each row's drill-in: expand a holding from Holdings to read its health statements.",
+      titleKey: "analysis.placeholder.health.title",
+      explainKey: "analysis.placeholder.health.explain",
     },
     dividends: {
-      title: "Dividends",
-      explain:
-        "Portfolio-wide dividend metrics live in the Dividends tab; per-holding score lands in the Holdings row drill-in.",
+      titleKey: "analysis.placeholder.dividends.title",
+      explainKey: "analysis.placeholder.dividends.explain",
     },
   };
   const meta = LABELS[axis];
   return (
     <div className="rounded-lg border border-dashed border-rule bg-surface p-8 text-center flex flex-col gap-2">
-      <p className="text-sm font-medium text-ink">{meta.title}</p>
-      <p className="text-xs text-quiet max-w-[48ch] mx-auto">{meta.explain}</p>
+      <p className="text-sm font-medium text-ink">{t(meta.titleKey)}</p>
+      <p className="text-xs text-quiet max-w-[48ch] mx-auto">
+        {meta.explainKey ? t(meta.explainKey) : ""}
+      </p>
     </div>
   );
 }

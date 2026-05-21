@@ -11,11 +11,13 @@ import {
   type DividendForecastResponse,
   type Horizon,
 } from "@/lib/api";
+import { useT } from "@/lib/i18n/use-t";
+import type { StringKey } from "@/lib/i18n/strings";
 
-const HORIZONS: { key: Horizon; label: string }[] = [
-  { key: "12m", label: "Next 12m" },
-  { key: "24m", label: "+2 years" },
-  { key: "36m", label: "+3 years" },
+const HORIZONS: { key: Horizon; labelKey: StringKey }[] = [
+  { key: "12m", labelKey: "dividends.forecast.horizon.12m" },
+  { key: "24m", labelKey: "dividends.forecast.horizon.24m" },
+  { key: "36m", labelKey: "dividends.forecast.horizon.36m" },
 ];
 
 function fmtUsd(value: number, fractionDigits = 0): string {
@@ -44,6 +46,7 @@ interface Props {
 }
 
 export function DividendsForecastSwitcher({ initial }: Props) {
+  const t = useT();
   const [horizon, setHorizon] = useState<Horizon>("12m");
   const [data, setData] = useState<DividendForecastResponse>(initial);
   const [loading, setLoading] = useState(false);
@@ -66,10 +69,8 @@ export function DividendsForecastSwitcher({ initial }: Props) {
     <section className="rounded-xl border border-rule bg-surface-raised p-6 flex flex-col gap-4">
       <header className="flex items-baseline justify-between gap-4 flex-wrap">
         <div>
-          <h2 className="text-lg font-medium text-ink">Forward Dividend Forecast</h2>
-          <p className="text-xs text-quiet">
-            Per-holding projection. Naive TTM scaling — yfinance doesn't expose forward forecasts.
-          </p>
+          <h2 className="text-lg font-medium text-ink">{t("dividends.forecast.heading")}</h2>
+          <p className="text-xs text-quiet">{t("dividends.forecast.subhead")}</p>
         </div>
         <div className="flex items-baseline gap-3 text-xs">
           {HORIZONS.map((h) => {
@@ -86,7 +87,7 @@ export function DividendsForecastSwitcher({ initial }: Props) {
                     : "text-quiet hover:text-ink")
                 }
               >
-                {h.label}
+                {t(h.labelKey)}
               </button>
             );
           })}
@@ -94,20 +95,30 @@ export function DividendsForecastSwitcher({ initial }: Props) {
       </header>
 
       <p className={"text-[11px] " + (loading ? "text-quiet" : "text-whisper")}>
-        Total {fmtUsd(data.total_usd, 0)} · Monthly avg {fmtUsd(data.monthly_avg_usd, 2)}
-        {loading ? " · loading…" : ""}
+        {t("dividends.forecast.summary", {
+          total: fmtUsd(data.total_usd, 0),
+          monthly: fmtUsd(data.monthly_avg_usd, 2),
+        })}
+        {loading ? t("dividends.forecast.loading_suffix") : ""}
       </p>
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-rule text-quiet">
-              {["Ticker", "Payment", "Yield", "YoC", "Score", "Growth (YoY)"].map((h) => (
+              {([
+                "dividends.forecast.col.ticker",
+                "dividends.forecast.col.payment",
+                "dividends.forecast.col.yield",
+                "dividends.forecast.col.yoc",
+                "dividends.forecast.col.score",
+                "dividends.forecast.col.growth",
+              ] as StringKey[]).map((h) => (
                 <th
                   key={h}
                   className="py-2 px-3 text-right text-[10px] uppercase tracking-[0.06em] font-medium first:text-left"
                 >
-                  {h}
+                  {t(h)}
                 </th>
               ))}
             </tr>

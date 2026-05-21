@@ -19,6 +19,7 @@ export interface ComparisonGaugeProps {
   scaleMax: number;
   scaleMin?: number;
   unit?: string;
+  portfolioLabel?: ReactNode; // row label for the portfolio marker (default "portfolio")
   referenceLabel?: string;   // e.g. "US Market", "Tech sector"
   sub?: ReactNode;           // small caption below the table
   className?: string;
@@ -36,6 +37,7 @@ export function ComparisonGauge({
   scaleMax,
   scaleMin = 0,
   unit = "",
+  portfolioLabel = "portfolio",
   referenceLabel = "Market",
   sub,
   className,
@@ -97,7 +99,7 @@ export function ComparisonGauge({
       <table className="w-full text-xs">
         <tbody>
           <tr>
-            <td className="text-quiet py-0.5">portfolio</td>
+            <td className="text-quiet py-0.5">{portfolioLabel}</td>
             <td className="text-ink py-0.5 tabular text-right font-medium">
               {formatValue(portfolio, unit)}
             </td>

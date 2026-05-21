@@ -31,10 +31,11 @@ import { BlockSkeleton } from "@/components/block-skeleton";
 import { ConcentrationBlock } from "@/components/concentration-block";
 import { DividendLedgerBlock } from "@/components/dividend-ledger-block";
 import { PortfolioTabNav, type PortfolioTab } from "@/components/portfolio-tab-nav";
+import { PortfolioHeading } from "@/components/portfolio-heading";
 import { CalendarView } from "@/components/calendar-view";
 import { PerformanceChartCard } from "@/components/performance-chart-card";
-import { SnowflakeCard } from "@/components/snowflake-card";
-import { KpiStrip } from "@/components/kpi-strip";
+import { PortfolioSnowflakeCard } from "@/components/portfolio-snowflake-card";
+import { HoldingsKpiStrip } from "@/components/holdings-kpi-strip";
 import { ReturnsTab } from "@/components/returns-tab";
 import { UpdatesTab } from "@/components/updates-tab";
 import { DividendsTab } from "@/components/dividends-tab";
@@ -214,7 +215,7 @@ export default async function Portfolio({ searchParams }: PageProps) {
   return (
     <>
       <header className="mb-6">
-        <h1 className="font-serif text-3xl font-medium text-ink">My Portfolio</h1>
+        <PortfolioHeading />
       </header>
       <PortfolioTabNav active={tab} />
       {await renderTabContent(tab, sp)}
@@ -304,32 +305,25 @@ async function renderTabContent(
           todayPnlAbsUsd={data.total_today_change_abs_usd}
           todayPnlPct={data.total_today_change_pct}
         />
-        <SnowflakeCard
-          heading="Portfolio Snowflake"
+        <PortfolioSnowflakeCard
           scores={
             portfolioSnowflake?.scores ?? {
               valuation: null, future: null, past: null, health: null, dividends: null,
             }
           }
-          summary={
-            portfolioSnowflake
-              ? "USD-weighted aggregate over current holdings."
-              : "Backend unreachable — scores will reload when /api/snowflake/portfolio responds."
-          }
+          available={portfolioSnowflake != null}
           holdingsCount={data.holdings.length}
-          holdingsCountLabel={`${data.holdings.length} holdings`}
         />
       </div>
 
       {/* KPI strip — wired to /api/returns/summary (realized + currency
        *  stubbed until transaction-history layer ships). */}
-      <KpiStrip
-        tiles={buildPortfolioKpiTiles(returns)}
-        caption={
-          returns?.partial
-            ? "Realized P&L + currency-impact require transaction history. Unrealized + dividends are live."
-            : undefined
-        }
+      <HoldingsKpiStrip
+        available={returns != null}
+        unrealizedValue={returns ? fmtUsdSigned(returns.unrealized_usd) : "—"}
+        unrealizedSign={returns ? (returns.unrealized_usd >= 0 ? "pos" : "neg") : null}
+        dividendsValue={returns ? fmtUsd(returns.dividends_usd) : "—"}
+        partial={returns?.partial ?? false}
       />
 
       {/* Holdings table */}
@@ -367,46 +361,3 @@ function fmtUsdSigned(value: number): string {
   return `${sign}${fmtUsd(Math.abs(value))}`;
 }
 
-function buildPortfolioKpiTiles(returns: ReturnsSummary | null) {
-  if (!returns) {
-    return [
-      { label: "Unrealized Returns", value: "—", sub: "Backend unreachable" },
-      { label: "Realized Returns", value: "—", sub: "Backend unreachable" },
-      { label: "Dividends (TTM)", value: "—", sub: "Backend unreachable" },
-      { label: "Currency Impact", value: "—", sub: "Backend unreachable" },
-    ];
-  }
-  return [
-    {
-      label: "Unrealized Returns",
-      value: fmtUsdSigned(returns.unrealized_usd),
-      sub: returns.unrealized_usd >= 0 ? "gain on paper" : "loss on paper",
-    },
-    { label: "Realized Returns", value: "—", sub: "Connect transactions for full detail" },
-    { label: "Dividends (TTM)", value: fmtUsd(returns.dividends_usd), sub: "trailing 12 months" },
-    { label: "Currency Impact", value: "—", sub: "Connect transactions for full detail" },
-  ];
-}
-
-function ComingSoonPanel({ tab, preview }: { tab: PortfolioTab; preview?: string }) {
-  const TITLE: Record<PortfolioTab, string> = {
-    holdings: "Holdings",
-    returns: "Returns",
-    updates: "Updates",
-    dividends: "Dividends",
-    analysis: "Analysis",
-    calendar: "Calendar",
-  };
-  return (
-    <section className="rounded-xl border border-dashed border-rule bg-surface-raised p-10 flex flex-col items-center gap-2 text-center">
-      <p className="text-sm font-medium text-ink">{TITLE[tab]} tab</p>
-      <p className="text-xs text-quiet max-w-[44ch]">
-        Coming in P3 — wired up next phase. The SWS-faithful surface design is
-        approved; backend aggregators land first.
-      </p>
-      {preview ? (
-        <p className="text-[11px] text-whisper italic mt-2">{preview}</p>
-      ) : null}
-    </section>
-  );
-}

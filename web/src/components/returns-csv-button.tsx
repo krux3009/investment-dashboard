@@ -11,6 +11,7 @@ import type { ReturnsHolding } from "@/lib/api";
 interface Props {
   rows: ReturnsHolding[];
   asOf: string;
+  label?: string;
 }
 
 const HEADERS = [
@@ -35,7 +36,7 @@ function buildCsv(rows: ReturnsHolding[]): string {
   return lines.join("\n");
 }
 
-export function ReturnsCsvButton({ rows, asOf }: Props) {
+export function ReturnsCsvButton({ rows, asOf, label }: Props) {
   function onClick() {
     const csv = buildCsv(rows);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
@@ -55,7 +56,7 @@ export function ReturnsCsvButton({ rows, asOf }: Props) {
       onClick={onClick}
       className="text-xs uppercase tracking-[0.06em] text-quiet hover:text-ink underline-offset-2 hover:underline"
     >
-      Download CSV
+      {label ?? "Download CSV"}
     </button>
   );
 }

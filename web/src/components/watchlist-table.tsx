@@ -224,7 +224,7 @@ export function WatchlistTable({
             </th>
             <th className="text-center pb-3 px-3">
               <span className="text-xs uppercase tracking-[0.04em] font-medium text-whisper">
-                Snow
+                {t("watchlist.col.snow")}
               </span>
             </th>
           </tr>
