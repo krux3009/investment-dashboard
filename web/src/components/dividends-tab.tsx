@@ -179,23 +179,27 @@ function DividendHistoryBars({ ledger }: { ledger: DividendsResponse }) {
           No dividend payments recorded in the last 16 months.
         </p>
       ) : (
-      <div className="flex items-end gap-1.5 h-32">
+      <div className="flex items-end gap-1.5">
         {months.map((m) => {
           const h = (m.total / max) * 100;
           return (
             <div
               key={m.ym}
-              className="flex-1 flex flex-col items-center justify-end gap-1"
+              className="flex-1 flex flex-col items-center gap-1"
               title={`${m.ym}: ${fmtUsd(m.total, 2)}`}
             >
-              <div
-                className="w-full rounded-sm"
-                style={{
-                  height: `${Math.max(2, h)}%`,
-                  background: m.total > 0 ? "var(--accent-primary)" : "var(--rule)",
-                  opacity: m.total > 0 ? 1 : 0.4,
-                }}
-              />
+              {/* Fixed-height track so the bar's % height has a definite
+                  parent to resolve against (a bare flex column collapses). */}
+              <div className="w-full h-32 flex items-end">
+                <div
+                  className="w-full rounded-sm"
+                  style={{
+                    height: `${Math.max(2, h)}%`,
+                    background: m.total > 0 ? "var(--accent-primary)" : "var(--rule)",
+                    opacity: m.total > 0 ? 1 : 0.4,
+                  }}
+                />
+              </div>
               <span className="text-[9px] uppercase tracking-[0.04em] text-whisper">
                 {m.ym.slice(5)}
               </span>
