@@ -87,13 +87,13 @@ def _ensure_table() -> None:
         )
 
 
-def _load_cached(code: str) -> list[CompanyEvent] | None:
+def _load_cached(code: str, prompt_version: str) -> list[CompanyEvent] | None:
     _ensure_table()
     with prices._DB_LOCK:
         row = prices._db().execute(
             "SELECT payload, generated_at FROM company_events_cache "
             "WHERE code = ? AND prompt_version = ?",
-            [code, _PROMPT_VERSION],
+            [code, prompt_version],
         ).fetchone()
     if not row:
         return None
@@ -107,14 +107,14 @@ def _load_cached(code: str) -> list[CompanyEvent] | None:
     return [CompanyEvent(**i) for i in items]
 
 
-def _save_cache(code: str, events: list[CompanyEvent]) -> None:
+def _save_cache(code: str, events: list[CompanyEvent], prompt_version: str) -> None:
     _ensure_table()
     with prices._DB_LOCK:
         prices._db().execute(
             "INSERT OR REPLACE INTO company_events_cache VALUES (?, ?, ?, ?)",
             [
                 code,
-                _PROMPT_VERSION,
+                prompt_version,
                 json.dumps([asdict(e) for e in events]),
                 datetime.now(),
             ],
@@ -175,17 +175,30 @@ def _parse(body: str) -> list[CompanyEvent]:
     return out
 
 
-def get_for_ticker(code: str, ticker: str, name: str, days_window: int = 30) -> list[CompanyEvent]:
-    cached = _load_cached(code)
+def get_for_ticker(
+    code: str, ticker: str, name: str, days_window: int = 30, locale: str = "en"
+) -> list[CompanyEvent]:
+    # Cache per locale: zh + en `label`/`description` are generated separately
+    # and must not collide. Dates/kinds are locale-independent but stored
+    # alongside the localized text, so a per-locale row is simplest.
+    prompt_version = f"{_PROMPT_VERSION}-{locale}"
+    cached = _load_cached(code, prompt_version)
     if cached is not None:
         return cached
 
     today = date.today()
     horizon = today + timedelta(days=days_window)
+    lang_note = (
+        "\nWrite the `label` and `description` values in Simplified Chinese "
+        "(简体中文); keep the JSON keys, `date`, and `kind` values unchanged."
+        if locale == "zh"
+        else ""
+    )
     user_message = (
         f"Stock: {ticker} ({code}, {name})\n"
         f"Window: {today.isoformat()} to {horizon.isoformat()}\n"
         "List confirmed publicly-announced events in this window."
+        f"{lang_note}"
     )
     try:
         body = _call_claude(user_message)
@@ -193,9 +206,9 @@ def get_for_ticker(code: str, ticker: str, name: str, days_window: int = 30) -> 
         raise
     except Exception as exc:
         log.warning("company_events Claude call failed for %s: %s", code, exc)
-        _save_cache(code, [])
+        _save_cache(code, [], prompt_version)
         return []
 
     events = _parse(body)
-    _save_cache(code, events)
+    _save_cache(code, events, prompt_version)
     return events

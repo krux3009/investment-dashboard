@@ -47,20 +47,21 @@ def _days_until(date_str: str) -> int:
     return (date.fromisoformat(date_str) - date.today()).days
 
 
-def get_foresight(days: int) -> tuple[list[ForesightEvent], list[str]]:
+def get_foresight(days: int, locale: str = "en") -> tuple[list[ForesightEvent], list[str]]:
     """Returns (events sorted by date, holdings_covered tickers)."""
     today = date.today()
-    return get_foresight_window(today, today + timedelta(days=days))
+    return get_foresight_window(today, today + timedelta(days=days), locale=locale)
 
 
 def get_foresight_window(
-    start: date, end: date
+    start: date, end: date, locale: str = "en"
 ) -> tuple[list[ForesightEvent], list[str]]:
     """Returns (events sorted by date, holdings_covered tickers) for an
     explicit date window. Past dates are honoured — trailing-month cells in
     the calendar pass a `start` earlier than today.
     """
     out: list[ForesightEvent] = []
+    zh = locale == "zh"
     start_str = start.isoformat()
     end_str = end.isoformat()
 
@@ -76,19 +77,31 @@ def get_foresight_window(
         for e in earnings.get_all():
             if not _in_window(e.date):
                 continue
-            label = f"{e.ticker} earnings"
+            en_label = f"{e.ticker} earnings"
+            label = f"{e.ticker} 财报" if zh else en_label
             description_bits: list[str] = []
             if e.eps_avg is not None:
-                description_bits.append(f"EPS estimate ~${e.eps_avg:.2f}")
+                description_bits.append(
+                    f"EPS 预期 ~${e.eps_avg:.2f}" if zh else f"EPS estimate ~${e.eps_avg:.2f}"
+                )
             if e.revenue_avg is not None:
-                description_bits.append(f"revenue estimate ~${e.revenue_avg / 1e9:.2f}B")
-            description = (
-                f"Quarterly results for {e.name}."
-                + (f" {' · '.join(description_bits)}." if description_bits else "")
-            )
+                rev_b = e.revenue_avg / 1e9
+                description_bits.append(
+                    f"营收预期 ~${rev_b:.2f}B" if zh else f"revenue estimate ~${rev_b:.2f}B"
+                )
+            if zh:
+                description = (
+                    f"{e.name} 季度业绩。"
+                    + (f"{' · '.join(description_bits)}。" if description_bits else "")
+                )
+            else:
+                description = (
+                    f"Quarterly results for {e.name}."
+                    + (f" {' · '.join(description_bits)}." if description_bits else "")
+                )
             out.append(
                 ForesightEvent(
-                    event_id=_make_event_id("earnings", e.code, e.date, label),
+                    event_id=_make_event_id("earnings", e.code, e.date, en_label),
                     date=e.date,
                     days_until=_days_until(e.date),
                     kind="earnings",
@@ -104,16 +117,19 @@ def get_foresight_window(
     # Macro — static JSON.
     try:
         for m in macro_events.get_between(start, end):
+            m_label, m_desc = m.localized(locale)
             out.append(
                 ForesightEvent(
+                    # event_id keys on the English label so it stays stable
+                    # across locales (foresight-insight cache, deep links).
                     event_id=_make_event_id("macro", None, m.date, m.label),
                     date=m.date,
                     days_until=_days_until(m.date),
                     kind="macro",
                     code=None,
                     ticker=None,
-                    label=m.label,
-                    description=m.description,
+                    label=m_label,
+                    description=m_desc,
                 )
             )
     except Exception as exc:
@@ -127,7 +143,8 @@ def get_foresight_window(
     for p in summary.positions:
         try:
             ticker_events = company_events.get_for_ticker(
-                code=p.code, ticker=p.ticker, name=p.name, days_window=days_window
+                code=p.code, ticker=p.ticker, name=p.name,
+                days_window=days_window, locale=locale,
             )
         except RuntimeError:
             continue
@@ -143,7 +160,9 @@ def get_foresight_window(
                 continue
             out.append(
                 ForesightEvent(
-                    event_id=_make_event_id("company_event", p.code, ev.date, ev.label),
+                    # Slug on the locale-independent kind (label is localized;
+                    # a zh label would slug to empty and collide).
+                    event_id=_make_event_id("company_event", p.code, ev.date, ev.kind),
                     date=ev.date,
                     days_until=du,
                     kind="company_event",
@@ -163,19 +182,27 @@ def get_foresight_window(
                 du = _days_until(item.next_ex_date)
             except ValueError:
                 continue
-            label = f"{item.ticker} ex-div"
+            en_label = f"{item.ticker} ex-div"
+            label = f"{item.ticker} 除息" if zh else en_label
             per_share = item.next_amount_per_share_native
-            if per_share is not None:
+            if zh:
+                description = (
+                    f"{item.name} 除息日。预计每股约 {item.currency} {per_share:.4f}"
+                    f"（按历史节奏推算）。"
+                    if per_share is not None
+                    else f"{item.name} 除息日。"
+                )
+            else:
                 description = (
                     f"Ex-dividend date for {item.name}. "
                     f"Estimated ~{item.currency} {per_share:.4f}/share "
                     f"based on prior cadence."
+                    if per_share is not None
+                    else f"Ex-dividend date for {item.name}."
                 )
-            else:
-                description = f"Ex-dividend date for {item.name}."
             out.append(
                 ForesightEvent(
-                    event_id=_make_event_id("exdiv", item.code, item.next_ex_date, label),
+                    event_id=_make_event_id("exdiv", item.code, item.next_ex_date, en_label),
                     date=item.next_ex_date,
                     days_until=du,
                     kind="exdiv",
@@ -192,13 +219,13 @@ def get_foresight_window(
     return out, held_tickers
 
 
-def find_event(event_id: str, days: int) -> ForesightEvent | None:
-    events, _ = get_foresight(days)
+def find_event(event_id: str, days: int, locale: str = "en") -> ForesightEvent | None:
+    events, _ = get_foresight(days, locale=locale)
     return next((e for e in events if e.event_id == event_id), None)
 
 
 def find_event_window(
-    event_id: str, start: date, end: date
+    event_id: str, start: date, end: date, locale: str = "en"
 ) -> ForesightEvent | None:
-    events, _ = get_foresight_window(start, end)
+    events, _ = get_foresight_window(start, end, locale=locale)
     return next((e for e in events if e.event_id == event_id), None)

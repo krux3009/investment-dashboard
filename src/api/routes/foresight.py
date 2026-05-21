@@ -17,7 +17,9 @@ def get_foresight(
     days: int = Query(7, ge=1, le=400),
     start: date | None = Query(None),
     end: date | None = Query(None),
+    locale: str = Query("en"),
 ) -> ForesightResponse:
+    loc = "zh" if locale.lower().startswith("zh") else "en"
     if (start is None) != (end is None):
         raise HTTPException(
             status_code=400,
@@ -28,10 +30,10 @@ def get_foresight(
             raise HTTPException(
                 status_code=400, detail="`end` must be on or after `start`."
             )
-        events, held = foresight.get_foresight_window(start=start, end=end)
+        events, held = foresight.get_foresight_window(start=start, end=end, locale=loc)
         window_days = (end - start).days
     else:
-        events, held = foresight.get_foresight(days=days)
+        events, held = foresight.get_foresight(days=days, locale=loc)
         window_days = days
 
     return ForesightResponse(

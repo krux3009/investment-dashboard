@@ -482,6 +482,7 @@ export type ForesightFetchOpts =
 
 export async function fetchForesight(
   opts: ForesightFetchOpts | number = 7,
+  locale: Locale = "en",
 ): Promise<ForesightResponse> {
   const normalized: ForesightFetchOpts =
     typeof opts === "number" ? { days: opts } : opts;
@@ -489,7 +490,7 @@ export async function fetchForesight(
     "start" in normalized
       ? `start=${normalized.start}&end=${normalized.end}`
       : `days=${normalized.days ?? 7}`;
-  const res = await fetch(`${API_BASE}/api/foresight?${qs}`, {
+  const res = await fetch(`${API_BASE}/api/foresight?${qs}&locale=${locale}`, {
     cache: "no-store",
   });
   if (!res.ok) {

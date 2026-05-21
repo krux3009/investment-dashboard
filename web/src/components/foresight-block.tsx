@@ -106,7 +106,10 @@ export function ForesightBlock({ initial }: Props) {
   const [insightById, setInsightById] = useState<Record<string, InsightState>>({});
 
   useEffect(() => {
-    if (days === initial.days) {
+    // `initial` is server-rendered in English (server can't read the client
+    // locale). Use it only for the default window in English; otherwise
+    // refetch with the active locale so event labels/descriptions localize.
+    if (days === initial.days && locale === "en") {
       setData(initial);
       return;
     }
@@ -114,7 +117,7 @@ export function ForesightBlock({ initial }: Props) {
     setLoading(true);
     (async () => {
       try {
-        const next = await fetchForesight(days);
+        const next = await fetchForesight(days, locale);
         if (!cancelled) setData(next);
       } finally {
         if (!cancelled) setLoading(false);
@@ -123,7 +126,7 @@ export function ForesightBlock({ initial }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [days, initial]);
+  }, [days, locale, initial]);
 
   useEffect(() => {
     setExpanded({});
