@@ -8,6 +8,7 @@ import { InsightBlock } from "./insight-block";
 import { NotesBlock } from "./notes-block";
 import { PriceChart } from "./price-chart";
 import { SentimentBlock } from "./sentiment-block";
+import { SnowflakeStatements } from "./snowflake-statements";
 import { useT } from "@/lib/i18n/use-t";
 import { useLocale } from "@/lib/i18n/locale-provider";
 
@@ -95,6 +96,10 @@ export function DrillIn({ code, direction }: Props) {
             />
           </div>
         </div>
+      </div>
+
+      <div className="mt-8 pt-8 border-t border-rule">
+        <SnowflakeStatements code={code} />
       </div>
     </div>
   );

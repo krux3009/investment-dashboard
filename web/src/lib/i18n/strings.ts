@@ -164,6 +164,15 @@ export const STRINGS = {
     "drillin.heading": "Last 90 days",
     "drillin.price_load_failed": "could not load price history: {detail}",
     "drillin.loading_chart": "loading chart…",
+    "drillin.snowflake_heading": "Snowflake",
+    "drillin.snowflake_loading": "scoring snowflake…",
+    "drillin.snowflake_unavailable": "Snowflake scores unavailable.",
+    "drillin.axis_pending": "Data not yet available",
+    "drillin.axis.valuation": "Value",
+    "drillin.axis.future": "Future",
+    "drillin.axis.past": "Past",
+    "drillin.axis.health": "Health",
+    "drillin.axis.dividend": "Dividend",
 
     // ── anomaly ─────────────────────────────────────────────────────
     "anomaly.loading": "loading anomalies…",
@@ -412,6 +421,15 @@ export const STRINGS = {
     "drillin.heading": "近 90 天",
     "drillin.price_load_failed": "价格历史加载失败：{detail}",
     "drillin.loading_chart": "图表加载中…",
+    "drillin.snowflake_heading": "雪花图",
+    "drillin.snowflake_loading": "雪花评分生成中…",
+    "drillin.snowflake_unavailable": "雪花评分暂不可用。",
+    "drillin.axis_pending": "数据暂未提供",
+    "drillin.axis.valuation": "估值",
+    "drillin.axis.future": "未来",
+    "drillin.axis.past": "过往",
+    "drillin.axis.health": "财务健康",
+    "drillin.axis.dividend": "股息",
 
     // ── anomaly ─────────────────────────────────────────────────────
     "anomaly.loading": "异动加载中…",
