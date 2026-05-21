@@ -165,6 +165,7 @@ function DividendHistoryBars({ ledger }: { ledger: DividendsResponse }) {
     months.push({ ym, total: byMonth[ym] ?? 0 });
   }
   const max = Math.max(...months.map((m) => m.total), 1);
+  const total16 = months.reduce((s, m) => s + m.total, 0);
 
   return (
     <section className="rounded-xl border border-rule bg-surface-raised p-6 flex flex-col gap-4">
@@ -173,6 +174,11 @@ function DividendHistoryBars({ ledger }: { ledger: DividendsResponse }) {
         <p className="text-xs text-quiet">Rolling 16 months · USD</p>
       </header>
 
+      {total16 === 0 ? (
+        <p className="text-sm text-quiet italic py-8 text-center">
+          No dividend payments recorded in the last 16 months.
+        </p>
+      ) : (
       <div className="flex items-end gap-1.5 h-32">
         {months.map((m) => {
           const h = (m.total / max) * 100;
@@ -197,6 +203,7 @@ function DividendHistoryBars({ ledger }: { ledger: DividendsResponse }) {
           );
         })}
       </div>
+      )}
     </section>
   );
 }

@@ -46,7 +46,11 @@ log = logging.getLogger(__name__)
 
 _TTL = timedelta(hours=24)
 _TTM_WINDOW = timedelta(days=365)
-_HISTORY_LIMIT = 8
+# Per-payment history rows returned to the UI. Sized for the Dividends-tab
+# rolling-16-month history chart: a monthly-paying REIT needs 16 rows to fill
+# the window, so 24 leaves headroom for any cadence (and ~6 years quarterly).
+# Only the returned list is sliced — TTM + history_count use full history.
+_HISTORY_LIMIT = 24
 
 
 @dataclass(frozen=True)
