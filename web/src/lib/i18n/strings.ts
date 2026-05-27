@@ -19,6 +19,8 @@ export const STRINGS = {
     "nav.watchlist": "watchlist",
 
     "toggle.theme.label": "theme",
+    "toggle.theme.value.dark": "dark",
+    "toggle.theme.value.light": "light",
     "toggle.theme.aria": "Theme: {label}. Click to cycle.",
     "toggle.locale.aria": "Language: {label}. Click to toggle.",
 
@@ -438,6 +440,8 @@ export const STRINGS = {
     "nav.watchlist": "观察列表",
 
     "toggle.theme.label": "主题",
+    "toggle.theme.value.dark": "深色",
+    "toggle.theme.value.light": "浅色",
     "toggle.theme.aria": "主题：{label}。点击切换。",
     "toggle.locale.aria": "语言：{label}。点击切换。",
 

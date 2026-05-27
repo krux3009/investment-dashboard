@@ -23,6 +23,7 @@ export function ThemeToggle() {
   }
 
   const current = theme === "light" ? "light" : "dark";
+  const label = t(current === "dark" ? "toggle.theme.value.dark" : "toggle.theme.value.light");
   const cycle = () => setTheme(current === "dark" ? "light" : "dark");
 
   return (
@@ -30,9 +31,9 @@ export function ThemeToggle() {
       type="button"
       onClick={cycle}
       className="text-xs uppercase tracking-wider text-quiet hover:text-ink transition-colors"
-      aria-label={t("toggle.theme.aria", { label: current })}
+      aria-label={t("toggle.theme.aria", { label })}
     >
-      {current}
+      {label}
     </button>
   );
 }
