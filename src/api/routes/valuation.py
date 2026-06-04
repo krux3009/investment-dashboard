@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from api import fair_value
+from api import fair_value, fundamentals
 
 router = APIRouter()
 
@@ -17,6 +17,26 @@ router = APIRouter()
 @router.get("/portfolio/valuation")
 def get_valuation() -> dict:
     return fair_value.get_valuation()
+
+
+# ── Analysis axis sub-tabs (v5): Future / Past / Health ───────────────────────
+# Dividends axis reuses the existing /api/dividends* endpoints. Same first-call
+# cache-warm caveat as the gauges — yfinance frames may be empty on cold cache.
+
+
+@router.get("/portfolio/future")
+def get_future() -> dict:
+    return fundamentals.get_future()
+
+
+@router.get("/portfolio/past")
+def get_past() -> dict:
+    return fundamentals.get_past()
+
+
+@router.get("/portfolio/health")
+def get_health() -> dict:
+    return fundamentals.get_health()
 
 
 @router.get("/portfolio/pe-vs-market")

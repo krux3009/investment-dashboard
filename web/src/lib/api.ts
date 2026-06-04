@@ -993,3 +993,76 @@ export async function fetchPegGauge(): Promise<GaugeResponse> {
   if (!res.ok) throw new Error(`/api/portfolio/peg-vs-market ${res.status}`);
   return (await res.json()) as GaugeResponse;
 }
+
+// ── Analysis axis sub-tabs (v5): Future / Past / Health ──────────────────────
+// Growth + ratio fields are fractions (0.20 = +20%); the view multiplies ×100.
+
+export interface FutureHolding {
+  code: string;
+  ticker: string;
+  name: string;
+  weight_pct: number | null;
+  eps_growth: number | null;
+  rev_growth: number | null;
+}
+
+export interface FutureResponse {
+  portfolio_eps_growth: number | null;
+  portfolio_rev_growth: number | null;
+  index_growth: number | null;
+  per_holding: FutureHolding[];
+  covered_count: number;
+  total_count: number;
+}
+
+export async function fetchFuture(): Promise<FutureResponse> {
+  const res = await fetch(`${API_BASE}/api/portfolio/future`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`/api/portfolio/future ${res.status}`);
+  return (await res.json()) as FutureResponse;
+}
+
+export interface PastHolding {
+  code: string;
+  ticker: string;
+  name: string;
+  weight_pct: number | null;
+  rev_cagr: number | null;
+  earnings_cagr: number | null;
+}
+
+export interface PastResponse {
+  portfolio_rev_cagr: number | null;
+  portfolio_earnings_cagr: number | null;
+  per_holding: PastHolding[];
+  covered_count: number;
+  total_count: number;
+}
+
+export async function fetchPast(): Promise<PastResponse> {
+  const res = await fetch(`${API_BASE}/api/portfolio/past`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`/api/portfolio/past ${res.status}`);
+  return (await res.json()) as PastResponse;
+}
+
+export interface HealthHolding {
+  code: string;
+  ticker: string;
+  name: string;
+  weight_pct: number | null;
+  debt_to_equity: number | null;
+  current_ratio: number | null;
+}
+
+export interface HealthResponse {
+  portfolio_debt_to_equity: number | null;
+  portfolio_current_ratio: number | null;
+  per_holding: HealthHolding[];
+  covered_count: number;
+  total_count: number;
+}
+
+export async function fetchHealth(): Promise<HealthResponse> {
+  const res = await fetch(`${API_BASE}/api/portfolio/health`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`/api/portfolio/health ${res.status}`);
+  return (await res.json()) as HealthResponse;
+}

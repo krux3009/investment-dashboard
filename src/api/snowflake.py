@@ -43,7 +43,7 @@ from api.i18n import DEFAULT_LOCALE, Locale, prompt_version_with_locale
 log = logging.getLogger(__name__)
 
 _TTL = timedelta(hours=6)
-_PROMPT_VERSION = "v1-snowflake"
+_PROMPT_VERSION = "v2-snowflake-future"
 
 # Per-axis cap so the UI's vertical real estate stays bounded.
 _MAX_BULLETS = 5
@@ -83,6 +83,48 @@ def _bucket_past(avg_pct: float) -> int:
         if avg_pct < threshold:
             return i
     return 6
+
+
+# future: bucket the analyst-forecast next-year EPS growth into 0..6.
+#
+# Six ascending cut points; the score is the count of thresholds the
+# value clears (below the first → 0, above all six → 6), same shape as
+# `_PAST_THRESHOLDS`. Growth is a fraction (0.20 = +20%). Calibrated
+# 2026-06-04 against the live book (MU +80%, INTC +42%, ANET +23%,
+# K71U +5%, NBIS -45%) with the US index forecast ~+16.5%, so the bands
+# spread the real holdings across the range:
+#     < -10%  → 0   (a genuine forecast decline, e.g. NBIS)
+#     -10..5% → 1
+#     5..12%  → 2   (flat-to-modest, e.g. K71U)
+#     12..18% → 3   (around the market rate)
+#     18..28% → 4   (e.g. ANET)
+#     28..45% → 5   (e.g. INTC)
+#     ≥ 45%   → 6   (a standout grower, e.g. MU)
+# Observational bands, not a verdict — retune freely.
+_FUTURE_THRESHOLDS: tuple[float, ...] | None = (-0.10, 0.05, 0.12, 0.18, 0.28, 0.45)
+
+
+def _bucket_future(fwd_eps_growth: float | None) -> int | None:
+    """0..6 score from forecast next-year EPS growth, or None when no
+    forecast exists or the thresholds are unset. Mirrors _bucket_past."""
+    if fwd_eps_growth is None or _FUTURE_THRESHOLDS is None:
+        return None
+    for i, threshold in enumerate(_FUTURE_THRESHOLDS):
+        if fwd_eps_growth < threshold:
+            return i
+    return 6
+
+
+def _safe_fwd_eps(code: str) -> float | None:
+    """Forecast next-year EPS growth for `code`, defensively — a
+    fundamentals/yfinance hiccup must never break the snowflake. Cached
+    24h in fundamentals_cache so this is a no-op after the first warm."""
+    try:
+        from api import fundamentals
+        return fundamentals.get_fundamentals(code).fwd_eps_growth
+    except Exception as exc:  # noqa: BLE001
+        log.debug("snowflake: fwd_eps fetch failed for %s: %s", code, exc)
+        return None
 
 
 # health: count net positive vs negative anomaly signals. moomoo's
@@ -243,12 +285,15 @@ def _compute_scores(code: str, total_pnl_pct: float, current_price: float, curre
     past = _bucket_past((total_pnl_pct + delta_30d) / 2.0)
     health = _bucket_health(code)
     dividends_score = _bucket_dividends(code, current_price, currency)
+    # Skip the fundamentals fetch entirely until thresholds are set, so an
+    # unconfigured Future axis costs nothing on the hot snowflake path.
+    future = _bucket_future(_safe_fwd_eps(code)) if _FUTURE_THRESHOLDS is not None else None
     return SnowflakeScores(
         past=past,
         health=health,
         dividends=dividends_score,
         valuation=None,
-        future=None,
+        future=future,
     )
 
 
@@ -512,8 +557,8 @@ def get_for_portfolio(locale: Locale = DEFAULT_LOCALE) -> PortfolioSnowflake:
     response = build_holdings_response(summary)
     total = response.total_market_value_usd or 1.0
     weights: dict[str, float] = {}
-    weighted = {"past": 0.0, "health": 0.0, "dividends": 0.0}
-    counts = {"past": 0.0, "health": 0.0, "dividends": 0.0}
+    weighted = {"past": 0.0, "health": 0.0, "dividends": 0.0, "future": 0.0}
+    counts = {"past": 0.0, "health": 0.0, "dividends": 0.0, "future": 0.0}
 
     for holding in response.holdings:
         weight = (holding.market_value_usd or 0.0) / total
@@ -525,6 +570,7 @@ def get_for_portfolio(locale: Locale = DEFAULT_LOCALE) -> PortfolioSnowflake:
             ("past", snow.scores.past),
             ("health", snow.scores.health),
             ("dividends", snow.scores.dividends),
+            ("future", snow.scores.future),
         ):
             if value is not None:
                 weighted[axis] += value * weight
@@ -541,7 +587,7 @@ def get_for_portfolio(locale: Locale = DEFAULT_LOCALE) -> PortfolioSnowflake:
             health=_round("health"),
             dividends=_round("dividends"),
             valuation=None,
-            future=None,
+            future=_round("future"),
         ),
         generated_at=datetime.now(),
         weights=weights,

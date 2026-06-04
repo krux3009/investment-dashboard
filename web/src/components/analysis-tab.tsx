@@ -19,7 +19,11 @@
  */
 
 import {
+  fetchDividends,
+  fetchFuture,
   fetchGeography,
+  fetchHealth,
+  fetchPast,
   fetchPegGauge,
   fetchPeGauge,
   fetchPsGauge,
@@ -39,11 +43,17 @@ async function safe<T>(fn: () => Promise<T>, label: string): Promise<T | null> {
 }
 
 export async function AnalysisTab() {
-  const [valuation, pe, ps, peg, sectors, geography, topHoldings] = await Promise.all([
+  const [
+    valuation, pe, ps, peg, future, past, health, dividends, sectors, geography, topHoldings,
+  ] = await Promise.all([
     safe(() => fetchValuation(), "valuation"),
     safe(() => fetchPeGauge(), "pe-vs-market"),
     safe(() => fetchPsGauge(), "ps-vs-market"),
     safe(() => fetchPegGauge(), "peg-vs-market"),
+    safe(() => fetchFuture(), "future"),
+    safe(() => fetchPast(), "past"),
+    safe(() => fetchHealth(), "health"),
+    safe(() => fetchDividends(), "dividends"),
     safe(() => fetchSectors(), "sectors"),
     safe(() => fetchGeography(), "geography"),
     safe(() => fetchTopHoldings(10), "top-holdings"),
@@ -55,6 +65,10 @@ export async function AnalysisTab() {
       pe={pe}
       ps={ps}
       peg={peg}
+      future={future}
+      past={past}
+      health={health}
+      dividends={dividends}
       sectors={sectors}
       geography={geography}
       topHoldings={topHoldings}

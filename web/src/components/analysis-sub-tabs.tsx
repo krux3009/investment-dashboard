@@ -2,9 +2,9 @@
 
 /**
  * 5 axis sub-tabs for /portfolio Analysis: Valuation (default) /
- * Future / Past / Health / Dividends. Only Valuation has data right
- * now — the other four route the reader to drill-in statement cards
- * via the per-row snowflake (P6).
+ * Future / Past / Health / Dividends. All five carry portfolio-level
+ * content as of v5 — the per-axis card sets are built in
+ * analysis-view.tsx and passed in as slots.
  */
 
 import { useState, type ReactNode } from "react";
@@ -23,11 +23,29 @@ const TABS: { key: AxisKey; labelKey: StringKey }[] = [
 
 interface Props {
   valuationCards: ReactNode;
+  futureCards: ReactNode;
+  pastCards: ReactNode;
+  healthCards: ReactNode;
+  dividendsCards: ReactNode;
 }
 
-export function AnalysisSubTabs({ valuationCards }: Props) {
+export function AnalysisSubTabs({
+  valuationCards,
+  futureCards,
+  pastCards,
+  healthCards,
+  dividendsCards,
+}: Props) {
   const t = useT();
   const [active, setActive] = useState<AxisKey>("valuation");
+
+  const slots: Record<AxisKey, ReactNode> = {
+    valuation: valuationCards,
+    future: futureCards,
+    past: pastCards,
+    health: healthCards,
+    dividends: dividendsCards,
+  };
 
   return (
     <section className="rounded-xl border border-rule bg-surface-raised p-6 flex flex-col gap-5">
@@ -58,45 +76,7 @@ export function AnalysisSubTabs({ valuationCards }: Props) {
         })}
       </nav>
 
-      <div>
-        {active === "valuation" ? (
-          valuationCards
-        ) : (
-          <PlaceholderAxis axis={active} />
-        )}
-      </div>
+      <div>{slots[active]}</div>
     </section>
-  );
-}
-
-function PlaceholderAxis({ axis }: { axis: AxisKey }) {
-  const t = useT();
-  const LABELS: Record<AxisKey, { titleKey: StringKey; explainKey: StringKey | null }> = {
-    valuation: { titleKey: "analysis.tab.valuation", explainKey: null },
-    future: {
-      titleKey: "analysis.placeholder.future.title",
-      explainKey: "analysis.placeholder.future.explain",
-    },
-    past: {
-      titleKey: "analysis.placeholder.past.title",
-      explainKey: "analysis.placeholder.past.explain",
-    },
-    health: {
-      titleKey: "analysis.placeholder.health.title",
-      explainKey: "analysis.placeholder.health.explain",
-    },
-    dividends: {
-      titleKey: "analysis.placeholder.dividends.title",
-      explainKey: "analysis.placeholder.dividends.explain",
-    },
-  };
-  const meta = LABELS[axis];
-  return (
-    <div className="rounded-lg border border-dashed border-rule bg-surface p-8 text-center flex flex-col gap-2">
-      <p className="text-sm font-medium text-ink">{t(meta.titleKey)}</p>
-      <p className="text-xs text-quiet max-w-[48ch] mx-auto">
-        {meta.explainKey ? t(meta.explainKey) : ""}
-      </p>
-    </div>
   );
 }
