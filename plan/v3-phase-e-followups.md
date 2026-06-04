@@ -19,6 +19,25 @@ ships.
 
 ---
 
+## DESIGN doc re-capture
+
+- ✅ **#2 DESIGN.md v4 re-capture** (2026-06-04). Typography (added
+  IBM Plex Serif display type + Sans-working/Serif-display rule),
+  Elevation (reconciled the `rounded-xl` shadowless SWS cards), and
+  Components (portfolio 6-tab architecture + snowflake / kpi-tile /
+  statement-card / comparison-gauge / dividend-ledger / performance-
+  chart / calendar / returns primitives) brought current with the
+  shipped v4 SWS surface. Frontmatter gained the serif role, extended
+  `rounded` scale, and the new component tokens. CLAUDE.md refreshed
+  alongside (Architecture tree, Surfaces, advisor endpoints + prompt
+  versions, Verification).
+- ⬜ **DESIGN.json sidecar re-sync** (new, spun out of #2). The
+  machine-readable sidecar still carries the v3 component CSS
+  specimens + the retired "One Family Rule" typography rule. Lower
+  priority than the human doc; do when the JSON is actually consumed.
+- ⬜ **#5 re-baseline Playwright** — still pending; no visual change
+  this pass (docs only), baselines remain valid.
+
 ## Related shipped follow-ups
 
 - PR #11 (`fix/warm-cache-retry`) — `warm_cache` retry-with-backoff

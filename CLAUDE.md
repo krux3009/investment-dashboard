@@ -2,15 +2,15 @@
 
 ## Design Context
 
-This project uses [Impeccable](https://impeccable.style) for design fluency. Strategic context lives in [PRODUCT.md](./PRODUCT.md); visual system in [DESIGN.md](./DESIGN.md) and [DESIGN.json](./DESIGN.json) sidecar (captured 2026-05-05 via `/impeccable document` against the v3 React surface — frontmatter tokens, six-section body, hand-rolled-SVG + label-cap rules, dark/light parity tables, drill-in / textarea / nav-tab component primitives).
+This project uses [Impeccable](https://impeccable.style) for design fluency. Strategic context lives in [PRODUCT.md](./PRODUCT.md); visual system in [DESIGN.md](./DESIGN.md) and the [DESIGN.json](./DESIGN.json) sidecar. DESIGN.md was first captured 2026-05-05 via `/impeccable document` against the v3 React surface, then re-captured for v4 SWS: Colors + frontmatter 2026-05-19, Typography + Elevation + Components 2026-06-04 (IBM Plex Serif display type, `rounded-xl` shadowless SWS cards, the portfolio tab architecture, and the snowflake / kpi-tile / statement-card / comparison-gauge / dividend-ledger / performance-chart primitives). **`DESIGN.json` still mirrors the v3 component CSS specimens — the one remaining stale design artifact; re-sync is tracked in `plan/v3-phase-e-followups.md`.**
 
 **Quick read:**
 - **Register:** product (dashboard, app UI). Design serves the data.
 - **Personality:** Quiet · Precise · Considered.
 - **North Star:** "The Quiet Ledger" — paper-and-ink ledger for a long-horizon investor.
-- **Color:** Restrained — paper cream + warm graphite ink + one rare accent (≤10% of any screen). No `#000`, no `#fff`, no green/red as sole signal.
-- **Type:** IBM Plex Sans + Plex Mono. Tabular figures.
-- **Motion:** Restrained — state changes only. Flat by default.
+- **Color:** Restrained — paper cream + warm graphite ink + one rare **SWS gold** accent (≤10% of any screen). A loud status tier (success/warn/danger) is confined to chips + KPI deltas + statement icons, never chart strokes. No `#000`, no `#fff`, no green/red as sole signal.
+- **Type:** IBM Plex Sans (working) + Plex Mono (code/tickers) + Plex Serif (display only: portfolio h1, dividend hero, `ƒ` glyph). Tabular figures.
+- **Motion:** Restrained — state changes only. Flat by default (v4 SWS cards are bordered + `rounded-xl` but shadowless).
 - **Anti-references:** Bloomberg full-clone, crypto-neon, Robinhood gamification, generic LLM SaaS gray-blue.
 - **5 principles:** information-first · calm-under-volatility · two-modes-one-vocabulary · long-horizon-not-trading · signals-not-commands.
 
@@ -20,14 +20,15 @@ Personal investment dashboard sitting on top of moomoo OpenD (the local brokerag
 
 See [moomoo-opend-setup.md](./moomoo-opend-setup.md) for the data-layer foundation.
 
-## Status: Phase D + foresight + D5 SSE + Reddit sentiment shipped (2026-05-06)
+## Status: v4 SWS rewrite + full en/zh i18n + portfolio study-tabs shipped (last feature ship 2026-05-27; doc refreshed 2026-06-04)
 
-End-to-end on **FastAPI + Next.js + Tailwind 4 + Recharts + Anthropic SDK** with USD home currency. Three routes: `/` home (daily glance), `/portfolio` (weekend study), `/watchlist`. Phase D D1+D2+D3 layered position notes, portfolio-vs-benchmark performance, and concentration shape; D5 (2026-05-06) added a Server-Sent-Events live-tick stream so hero / holdings / watchlist update silently every 20s during US RTH without a page reload. The home page's tomorrow's-preview block was retired in favour of a 7/30-day foresight section combining earnings + macro releases (FOMC/CPI/NFP/PPI) + Claude-curated company events. Mobile responsive (D4) remains parked at `plan/v3-phase-d.md` (deferred 2026-05-06).
+End-to-end on **FastAPI + Next.js + Tailwind 4 + Recharts + Anthropic SDK** with USD home currency. Three top-level routes: `/` home (daily glance), `/portfolio` (weekend study), `/watchlist`. The v4 **Simply-Wall-St-style (SWS) rewrite** made dark the default, swapped the accent to gold, added a status palette + Plex Serif display type, and **split `/portfolio` into six query-param tabs** (`holdings` / `returns` / `updates` / `dividends` / `analysis` / `calendar`) — the snowflake hero, KPI strips, dividend ledger, valuation gauges, returns breakdown, and a month calendar. The whole surface is **fully localized en/zh** (client-only locale, `EN`/`中` toggle; backend advisor prose takes a `?locale=` param). The home digest moved from a single LEAD-line to a per-ticker four-tile analyst grid (Fundamentals/News/Sentiment/Technical). Earlier phases still hold: D5 SSE live ticks (20s during US RTH), Reddit sentiment in drill-ins, the 7/30-day foresight feed (now also surfaced as the portfolio `updates` + `calendar` tabs). Mobile responsive (D4) remains parked at `plan/v3-phase-d.md`.
 
 **Stack:** `uv` + Python 3.14 + FastAPI 0.136 + Pydantic 2.13 + DuckDB
 1.5 + yfinance 1.3 + moomoo-api 10.4.6408 + anthropic 0.97 on the
-backend; Next.js 16.2 + React 19.2 + Tailwind 4 + IBM Plex Sans +
-next-themes + Recharts on the frontend.
+backend; Next.js 16.2 + React 19.2 + Tailwind 4 + IBM Plex Sans /
+Mono / Serif + next-themes + Recharts + a hand-rolled client-only
+i18n layer (`web/src/lib/i18n/`, `LocaleProvider`) on the frontend.
 
 **Run with two terminals:**
 
@@ -51,9 +52,12 @@ Three routes, layered for the two reading modes from PRODUCT.md.
    breakdown caption + FX rates used. Allocation donut on the right
    with labels-on-slices.
 2. **Daily digest.** Always-on (no toggle) — auto-fetches on mount.
-   LEAD line + per-ticker one-sentence summaries in plain English.
-   Server-cached 6h. Footer hint points to per-stock drill-ins on
-   `/portfolio`.
+   A per-ticker **four-tile analyst grid** (Fundamentals · News ·
+   Sentiment · Technical), one Claude call per tile, server-cached
+   6h in `digest_tiles_cache`. No top-level `prose` field anymore
+   (the v4 digest response is `{generated_at, cached, holdings:[…]}`
+   with per-holding tile fields). Footer hint points to per-stock
+   drill-ins on `/portfolio`.
 3. **Foresight (7/30 days).** Chronological timeline of upcoming
    events combining three sources: per-holding earnings dates +
    macro releases (FOMC/CPI/NFP/PPI from a static JSON) +
@@ -65,26 +69,39 @@ Three routes, layered for the two reading modes from PRODUCT.md.
 
 ### `/portfolio` (weekend study)
 
-1. **Portfolio vs benchmark.** Hand-rolled SVG line chart comparing
-   portfolio's cumulative %Δ against SPY (default,
-   `MOOMOO_BENCHMARKS` env-overridable) over 30D / 90D / 1Y windows.
-   Tabular legend below; [learn more] expands a Claude commentary.
-   Caveat caption: path uses current weights projected backward.
-2. **Holdings table.** Sortable column headers (localStorage-
-   persisted), 30-day SVG sparklines, calendar mark next to tickers
-   reporting in ≤14 days, click-to-expand drill-in. Drill-in shows:
-   90-day price chart, "What this means" (per-stock Meaning + Watch),
-   freeform position notes (debounced auto-save to DuckDB), Reddit
-   discussion · past 7 days (counts + single-ink stacked bar + top-3
-   posts + lazy [learn more] What/Meaning/Watch), then plain-English
-   Technical + Capital-flow anomaly prose. The earnings-strip section
-   was retired — its [learn more] depth moved into the unified
-   foresight insight on home.
-3. **Concentration shape.** Top-1/3/5 USD share + holdings count,
-   stacked-bar SVG by descending position weight, currency exposure
-   stacked bar, single-name max line. [learn more] toggle expands
-   a Claude What/Meaning/Watch trio. Observational only — no
-   thresholds, no rebalance language.
+Six tabs selected by the `?tab=` query param (parsed server-side in
+`app/portfolio/page.tsx`, default `holdings`, `?tab=table` aliases to
+`holdings`). The tab strip is `portfolio-tab-nav.tsx` (gold active
+underline). Each tab SSRs its own content.
+
+1. **`holdings`** (default). Leads with a two-column hero: a
+   `performance-chart-card` (portfolio cumulative %Δ vs SPY —
+   `MOOMOO_BENCHMARKS` env-overridable — over a range strip, hand-
+   rolled SVG `benchmark-chart`) beside a `portfolio-snowflake-card`
+   (5-axis SWS snowflake). Then a `holdings-kpi-strip`
+   (unrealized / realized / dividends / currency) and the **register
+   table**: sortable headers (localStorage), 30-day sparklines, a
+   mini snowflake + calendar/ƒ glyph column, click-to-expand drill-in
+   (90-day Recharts price chart, per-stock Meaning + Watch, debounced
+   notes, Reddit · past 7 days, plain-English Technical + Capital-flow
+   anomaly prose). Concentration shape lives under the `analysis` tab
+   now.
+2. **`returns`.** Breakdown stacked bar (unrealized + realized +
+   dividends + currency) over a five-tile KPI grid, highest/lowest-5
+   contributors, a scrollable 13-column detail table with CSV export.
+3. **`updates`.** The foresight feed (per-holding earnings + macro
+   releases + Claude-curated company events) with per-event [learn
+   more] What/Meaning/Watch.
+4. **`dividends`.** Income hero (serif 12m forecast total + YoY) +
+   16-month history bars + largest/smallest contributors + quality
+   buckets + a 12m/24m/36m forecast switcher.
+5. **`analysis`.** Five client-state sub-tabs (the snowflake axes:
+   Valuation / Future / Past / Health / Dividend; only Valuation is
+   live — fair-value card + PE/PS/PEG comparison gauges) plus the
+   diversification block (sector / geography / top-10 stacked bars).
+6. **`calendar`.** A `grid-cols-7` month grid (`?month=YYYY-MM`) with
+   daily P&L + event chips (earnings / macro / ex-div / company); a
+   selected event opens a lazy foresight What/Meaning/Watch panel.
 
 ### `/watchlist`
 
@@ -92,9 +109,12 @@ Same drill-in pattern as holdings (notes included). Codes resolved
 from MOOMOO_WATCHLIST env > `get_user_security('All')` > hardcoded
 fallback.
 
-Theme cycles `system → light → dark → system` via next-themes.
-warm-graphite tokens defined as CSS variables in `web/src/app/globals.css`,
-mirroring the v2 oklch palette in both modes.
+Theme is a 2-state `dark ↔ light` swap via next-themes since v4
+(`defaultTheme="dark"`, `enableSystem={false}`; the v3 3-state cycle
+was retired). A `locale-toggle` (`EN`/`中`) sits beside it in the nav.
+v4 SWS tokens (warm cream light / cool near-black dark, gold accent,
+status palette) defined as CSS variables in `web/src/app/globals.css`,
+paired for both modes.
 
 ### Live tick stream (D5)
 
@@ -131,9 +151,11 @@ for a longer horizon).
 ## Advisor pattern
 
 Surfaces that include Claude-generated commentary share a common
-shape: digest, per-stock insight, benchmark commentary, concentration
-commentary, foresight per-event, plus the company-events fetcher
-that feeds foresight.
+shape: the digest tiles (via `analysts/{fundamentals,news,sentiment,
+technical}.py` over `analysts/_base.py`), per-stock insight, benchmark
+commentary, concentration commentary, dividends commentary, the
+snowflake per-axis statements, foresight per-event, plus the
+company-events fetcher that feeds foresight.
 
 - **Static plain-English baseline** — every surface is useful even
   without an Anthropic key. Tables, charts, ratios, and event
@@ -141,9 +163,18 @@ that feeds foresight.
 - **Optional Claude depth** — [learn more] / drill-in toggles fetch
   a `What / Meaning / Watch` block lazily. Endpoints are paired
   (`/api/digest`, `/api/insight/{code}`, `/api/benchmark-insight`,
-  `/api/concentration-insight`, `/api/foresight-insight/{event_id}`)
-  and each caches in DuckDB keyed on `(dimension, _PROMPT_VERSION)`
-  so prompt edits invalidate cleanly.
+  `/api/concentration-insight`, `/api/dividends-insight`,
+  `/api/sentiment-insight/{code}`, `/api/foresight-insight/{event_id}`,
+  `/api/snowflake`) and each caches in DuckDB keyed on
+  `(dimension, prompt_version_with_locale(_PROMPT_VERSION, locale))`
+  so a prompt edit **or** a locale switch invalidates cleanly. Current
+  prompt versions: digest `v6`, insight `v5-source-edit`, benchmark /
+  concentration / foresight `v4-source-edit`, sentiment `v2`,
+  dividends `v1-no-em-dash`, snowflake `v1-snowflake`, company-events
+  `v1`, anomaly-translator `v3-no-em-dash`. Locale resolved via
+  `api.i18n.parse_locale`; advisor prose accepts `?locale=en|zh`.
+  When editing any prompt copy / FORBIDDEN list / schema, bump its
+  `_PROMPT_VERSION` (use `/prompt-bump`) and run `/forbidden-framing-check`.
 - **Educational framing only** — every prompt forbids buy / sell /
   hold / trim / add / target / forecast / predict / expect /
   recommend / "you should" / rally / surge / soar / crash / etc.
@@ -155,64 +186,91 @@ that feeds foresight.
 
 ## Architecture
 
+Retired since the v3 doc: `earnings_insight.py`, `preview.py`,
+`preview_insight.py` (the tomorrow's-preview block + per-report
+earnings depth folded into the unified foresight surface).
+
 ```
 src/api/
 ├── main.py                  ← FastAPI app + uvicorn cli + lifespan (broadcaster)
 ├── models.py                ← Pydantic Holding / HoldingsResponse
+├── i18n.py                  ← parse_locale + prompt_version_with_locale (en/zh)
+├── _advisor_guard.py        ← shared FORBIDDEN framing guard for advisor prose
 ├── fx.py                    ← yfinance + 1h in-process cache
 ├── holdings_payload.py      ← shared USD-aggregation builder (REST + SSE)
 ├── market_hours.py          ← is_us_rth / next_open + NYSE holiday list (D5)
 ├── realtime.py              ← SSE Broadcaster (20s tick during RTH) (D5)
-├── digest.py                ← daily LEAD + ticker summaries (Phase C.1)
-├── insight.py               ← per-stock Meaning + Watch (Phase C.1)
-├── anomaly_translator.py    ← moomoo prose → plain English (Phase C.1)
-├── earnings.py              ← yfinance Ticker.calendar per holding (C.2)
-├── earnings_insight.py      ← per-report What / Meaning / Watch (C.2)
-├── preview.py               ← futures + Asia close fetcher (C.3)
-├── preview_insight.py       ← per-symbol What / Meaning / Watch (C.3)
-├── reddit_sentiment.py      ← praw + VADER + aggregator (v3)
-├── sentiment_insight.py     ← per-stock What/Meaning/Watch (v3)
+│   ── advisor prose (Claude; each defines _PROMPT_VERSION) ──
+├── digest.py                ← per-ticker 4-tile analyst grid orchestrator
+├── analysts/                ← one tile each: _base + fundamentals/news/sentiment/technical
+├── insight.py               ← per-stock Meaning + Watch
+├── anomaly_translator.py    ← moomoo prose → plain English
+├── benchmark_insight.py     ← portfolio-vs-benchmark commentary
+├── concentration_insight.py ← concentration-shape commentary
+├── dividends_insight.py     ← dividend commentary
+├── sentiment_insight.py     ← Reddit per-stock What/Meaning/Watch
+├── foresight_insight.py     ← per-event What/Meaning/Watch
+├── company_events.py        ← Claude-curated company events (feeds foresight)
+│   ── data prep (no Claude) ──
+├── earnings.py              ← yfinance Ticker.calendar per holding
+├── foresight.py             ← merges earnings + macro_events + company_events
+├── macro_events.py          ← static FOMC/CPI/NFP/PPI release calendar
+├── benchmark.py             ← cumulative %Δ vs SPY series
+├── concentration.py         ← top-N share + currency exposure
+├── dividends.py             ← dividend ledger; dividends_extended.py ← forecast/quality
+├── returns.py               ← realized/unrealized/dividend/currency breakdown
+├── portfolio_metrics.py     ← shared portfolio math
+├── daily_pnl.py             ← per-day P&L history (calendar tab)
+├── snowflake.py             ← 5-axis SWS scores + per-axis statements
+├── fair_value.py            ← valuation (PE/PS/PEG, fair-value gauges)
+├── reddit_sentiment.py      ← praw + VADER + aggregator
 ├── data/                    ← live moomoo data layer
 │   ├── positions.py         ← Position dataclass + formatters
 │   ├── moomoo_client.py     ← OpenSecTradeContext wrapper, dedupe-by-code
 │   ├── prices.py            ← DuckDB-cached daily bars (data/prices.duckdb)
+│   ├── quotes.py            ← snapshot quotes
 │   ├── anomalies.py         ← OpenQuoteContext.get_*_unusual + fetch_all_plain
-│   └── reddit_cache.py      ← DuckDB-cached Reddit mentions (24h TTL) (v3)
-└── routes/
-    ├── holdings.py          ← /api/holdings        (USD-aggregated)
-    ├── prices.py            ← /api/prices/{code}   (N-day close series)
-    ├── anomalies.py         ← /api/anomalies/{code} (plain-English)
-    ├── watchlist.py         ← /api/watchlist       (env > moomoo > default)
-    ├── digest.py            ← /api/digest
-    ├── insight.py           ← /api/insight/{code}
-    ├── earnings.py          ← /api/earnings
-    ├── earnings_insight.py  ← /api/earnings-insight/{code}
-    ├── preview.py           ← /api/preview
-    ├── preview_insight.py   ← /api/preview-insight/{symbol}
-    ├── reddit.py            ← /api/reddit/{code} (v3)
-    ├── sentiment_insight.py ← /api/sentiment-insight/{code} (v3)
-    └── stream.py            ← /api/stream/prices (SSE live ticks) (D5)
+│   ├── notes.py             ← DuckDB-backed position notes store
+│   └── reddit_cache.py      ← DuckDB-cached Reddit mentions (24h TTL)
+└── routes/                  ← thin FastAPI routers, all under /api
+    ├── holdings · prices · quotes · anomalies · watchlist · notes · stream
+    ├── digest · insight · benchmark(+_insight) · concentration(+_insight)
+    ├── dividends(+_insight) · sentiment_insight · foresight(+_insight)
+    ├── earnings · daily_pnl · returns · portfolio · valuation · snowflake
+    └── reddit
 
 web/
-├── src/app/             ← Next.js App Router
-├── src/components/      ← Hero, HoldingsTable, WatchlistTable, Donut,
-│                          Sparkline, PriceChart, DrillIn, AnomalyBlock,
-│                          ThemeProvider, ThemeToggle, DailyDigest,
-│                          InsightBlock, EarningsStrip, PreviewBlock,
-│                          LivePricesProvider, LiveIndicator (D5),
-│                          SentimentBlock (v3)
+├── src/app/             ← App Router; /portfolio/page.tsx fans the ?tab= router
+├── src/components/      ← ~50 components. Clusters:
+│     glance: Hero, Donut, DailyDigest, Sparkline, ForesightBlock
+│     register: HoldingsTable, WatchlistTable, DrillIn, PriceChart,
+│               InsightBlock, AnomalyBlock, SentimentBlock, NotesBlock
+│     SWS portfolio: PortfolioTabNav, PerformanceChartCard, Snowflake(+Card/
+│               Statements), StatementCard, KpiTile/Strip, ComparisonGauge,
+│               AnalysisView(+SubTabs), DividendsView, DividendLedgerBlock,
+│               ReturnsView, CalendarView, ConcentrationBlock, BenchmarkChart
+│     chrome: NavBar, ThemeToggle, LocaleToggle, ThemeProvider, LiveIndicator,
+│               LivePricesProvider
 └── src/lib/             ← api client, utils (cn), formatters,
-                           live-store + use-live-prices + use-tick-pulse (D5)
+      live-store + use-live-prices + use-tick-pulse (D5), i18n/ (LocaleProvider,
+      strings, use-t)
 ```
 
 ## Conventions to remember
 
-- **Charts that ship in SSR HTML are hand-rolled SVG.** Sparklines and
-  the donut are SVG paths computed at render time. Recharts is used
-  only inside lazy-rendered drill-ins (PriceChart) where SSR isn't a
-  concern. Recharts' ResponsiveContainer doesn't measure cleanly during
-  SSR and emits "-1 dimension" warnings; we sidestep that everywhere
-  it matters for first paint.
+- **Charts that ship in SSR HTML are hand-rolled SVG.** Sparklines,
+  donut, concentration/currency/dividend stacked bars, the benchmark
+  line, and the 5-axis snowflake are all SVG paths computed at render
+  time. `price-chart.tsx` (the drill-in 90-day chart) is the **only**
+  Recharts surface; the v4 `performance-chart-card` embeds the hand-
+  rolled `benchmark-chart`, not Recharts. Recharts' ResponsiveContainer
+  doesn't measure cleanly during SSR and emits "-1 dimension" warnings;
+  we sidestep that everywhere it matters for first paint.
+- **i18n is client-only.** No locale cookie; `LocaleProvider`'s storage
+  key is `dashboard-locale` (not `locale`). A server tab that needs
+  translated content does a server-fetch + a `"use client"` view;
+  backend advisor prose translates via `?locale=`. See the
+  `project_i18n_architecture` memory.
 - **`prices.duckdb` is single-writer.** Only the FastAPI process
   writes to it. (v2's parallel-writer arrangement was retired with
   Dash; see commit history if you need archaeology.)
@@ -239,24 +297,36 @@ web/
 
 ## Verification
 
+Advisor-prose endpoints time out at the holdings fetch unless **OpenD
+`:11111` is running**. `?locale=zh&refresh=true` forces a fresh zh
+generation past the cache.
+
 - `curl -s localhost:8000/api/health` → `{"status":"ok"}`
 - `curl -s localhost:8000/api/holdings | jq '.holdings | length'` → 5
-- `curl -s localhost:8000/api/digest | jq -r .prose` → LEAD + per-ticker
-  summaries in plain English (no jargon, no action verbs).
-- `curl -s localhost:8000/api/earnings | jq '.items | length'` →
-  upcoming reports for held positions (4 today; K71U has past data).
-- `curl -s localhost:8000/api/preview | jq` → futures + Asia close
-  rows with `in_window` flag.
+- `curl -s localhost:8000/api/digest | jq '.holdings[0] | {fundamentals,news,sentiment,technical}'`
+  → the four analyst-tile fields (no top-level `.prose`). Add
+  `?locale=zh&refresh=true` and they return Chinese.
+- `curl -s localhost:8000/api/snowflake/portfolio | jq '.scores'` →
+  the 5-axis SWS scores (`/api/snowflake/{code}` for one holding).
+- `curl -s localhost:8000/api/returns/summary | jq` → realized /
+  unrealized / dividends / currency breakdown (`/detail`,
+  `/contributors` are siblings).
+- `curl -s localhost:8000/api/dividends | jq 'keys'` → dividend ledger
+  (`/dividends/forecast?horizon=`, `/dividends/quality-buckets` siblings).
+- `curl -s localhost:8000/api/foresight | jq '.events | length'` →
+  upcoming earnings + macro + company events (may be 0 on a quiet
+  horizon — verify a per-event `/api/foresight-insight/{id}` is alive
+  before assuming the surface is healthy).
 - `curl -sN localhost:8000/api/stream/prices` opens an SSE stream:
   one `event: tick` every 20s during US RTH, otherwise SSE
   keepalive comments every 15s; emits `event: market_status` on
   RTH transitions.
 - `curl -s localhost:8000/api/reddit/US.NVDA | jq '.total_mentions'` →
   non-negative integer when Reddit creds present; 503 with
-  `"Reddit not configured…"` when missing. See `reddit-setup.md`
-  for cred setup.
-- `localhost:3000` renders hero + digest + earnings strip + holdings
-  (with calendar marks) + watchlist + tomorrow's preview; sort +
-  expand work; theme toggle cycles cleanly. Footer LiveIndicator
+  `"Reddit not configured…"` when missing. See `reddit-setup.md`.
+- `localhost:3000` renders hero + 4-tile digest + foresight + holdings
+  (calendar/ƒ marks) + watchlist; `/portfolio` tabs (holdings / returns /
+  updates / dividends / analysis / calendar) all SSR; sort + expand work;
+  the `EN`/`中` + dark/light toggles flip cleanly. Footer LiveIndicator
   shows `Live · last tick HH:MM:SS SGT` during RTH and
   `Market closed · next open …` outside.

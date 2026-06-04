@@ -58,6 +58,11 @@ typography:
     lineHeight: 1.05
     letterSpacing: "-0.01em"
     fontFeature: "'tnum' 1"
+  display-serif:
+    fontFamily: "var(--font-plex-serif), 'IBM Plex Serif', ui-serif, Georgia, serif"
+    fontSize: "1.875rem"
+    fontWeight: 500
+    lineHeight: 1.2
   headline:
     fontFamily: "var(--font-plex-sans), 'IBM Plex Sans', system-ui, sans-serif"
     fontSize: "1.5rem"
@@ -92,6 +97,9 @@ typography:
 rounded:
   none: "0"
   sm: "2px"
+  lg: "8px"
+  xl: "12px"
+  full: "9999px"
 components:
   row:
     backgroundColor: "{colors.surface}"
@@ -135,6 +143,41 @@ components:
   text-button-hover:
     textColor: "{colors.ink}"
     typography: "{typography.label}"
+  sws-card:
+    backgroundColor: "{colors.surface-raised}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.xl}"
+    padding: "1.25rem 1.25rem"
+  kpi-tile:
+    backgroundColor: "{colors.surface-raised}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.xl}"
+    padding: "1rem 1rem"
+  kpi-delta-up:
+    textColor: "{colors.accent-success}"
+  kpi-delta-down:
+    textColor: "{colors.accent-danger}"
+  kpi-delta-flat:
+    textColor: "{colors.quiet}"
+  statement-card:
+    backgroundColor: "{colors.surface-raised}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.xl}"
+    padding: "1rem 1rem"
+  snowflake-fill:
+    backgroundColor: "{colors.accent-primary}"
+  comparison-gauge-marker:
+    backgroundColor: "{colors.accent-primary}"
+  comparison-gauge-track:
+    backgroundColor: "{colors.surface-zebra}"
+  portfolio-tab-active:
+    textColor: "{colors.ink}"
+    typography: "{typography.label}"
+  portfolio-tab-inactive:
+    textColor: "{colors.quiet}"
+    typography: "{typography.label}"
+  portfolio-tab-underline:
+    backgroundColor: "{colors.accent-primary}"
 ---
 
 # Design System: Quiet Ledger
@@ -147,18 +190,18 @@ The dashboard is a paper-and-ink ledger for a long-horizon investor, a place for
 
 Explicitly not a Bloomberg full-clone: no twenty-widget overwhelm, no blinking tickers, no metric for the sake of having one. Explicitly not Robinhood: no gotcha-green, no candy gradients, no confetti, no big-number-flex hero. Explicitly not the generic LLM SaaS dashboard either: no Inter on slate-blue with cards-nested-in-cards. The reading room rejects all three by construction.
 
-The product surface is laid out as three thin server-component routes (`/`, `/portfolio`, `/watchlist`) sharing a single `max-w-6xl` column, a `NavBar` tab strip in `pb-1 border-b` underline form, and a `theme-toggle` that swaps dark ↔ light. Tokens are defined as CSS custom properties in `web/src/app/globals.css`; since v4 **dark is the default** (`defaultTheme="dark"`, `enableSystem={false}`), light applies under the `.dark` class being removed. Both modes are first-class.
+The product surface is laid out as three top-level routes (`/`, `/portfolio`, `/watchlist`) sharing a single `max-w-6xl px-8 py-12` column and a single `NavBar` header: a lowercase masthead, a three-tab route strip in `pb-1 border-b border-ink` underline form, and a right-aligned pair of chrome toggles (`LocaleToggle` `EN`/`中` + `ThemeToggle` dark ↔ light). `/` and `/watchlist` stay thin; **`/portfolio` is itself split into six query-param tabs** (`?tab=holdings|returns|updates|dividends|analysis|calendar`, parsed server-side, default `holdings`) — the weekend-study surface where the SWS-faithful primitives live. Tokens are defined as CSS custom properties in `web/src/app/globals.css`; since v4 **dark is the default** (`defaultTheme="dark"`, `enableSystem={false}`), light applies under the `.dark` class being removed. Both modes are first-class.
 
-> **v4 drift note:** the Colors section + frontmatter are synced to the shipped v4 SWS system. The Typography and Components sections below still describe the v3 surface in places (the IBM Plex Serif h1 added in v4, the hero donut now replaced by a snowflake, and the new `snowflake` / `kpi-tile` / `statement-card` / `comparison-gauge` primitives are not yet documented here). Treat those two sections as pending a full `/impeccable document` re-capture.
+> **Re-capture stamp (2026-06-04):** Colors + frontmatter were synced to v4 SWS on 2026-05-19; this pass brings the **Typography**, **Elevation**, and **Components** sections current with the same shipped v4 SWS surface — IBM Plex Serif display type, `rounded-xl` bordered SWS cards, the portfolio tab architecture, and the `snowflake` / `kpi-tile` / `statement-card` / `comparison-gauge` / `dividend-ledger` / `performance-chart-card` primitives are now documented. The machine-readable `DESIGN.json` sidecar still mirrors the v3 component CSS specimens and is the one remaining stale artifact (see `plan/v3-phase-e-followups.md`).
 
 **Key Characteristics:**
 
 - Paper-cream (light) / cool near-black (dark) surface, inverting ink, one rare SWS gold accent.
-- One humanist sans family (IBM Plex Sans + Plex Mono), tabular figures opt-in on numeric cells.
-- Flat by default; depth from spacing, hairline borders, and tonal contrast within the warm-neutral family.
-- Two densities (glance, study) sharing one visual vocabulary; drill-in not switch-of-surface is how density scales.
-- Color never carries meaning alone; gain/loss always paired with arrow + sign.
-- Charts that ship in SSR HTML are hand-rolled SVG (sparklines, donut, concentration stack, benchmark line); Recharts only inside lazy-mounted drill-ins.
+- One humanist sans family (IBM Plex Sans + Plex Mono) for the working surface; IBM Plex Serif reserved for display h1s + the dividend income hero. Tabular figures opt-in on numeric cells.
+- Flat by default; depth from spacing, hairline borders, and tonal contrast within the warm-neutral family. v4 adds bordered `rounded-xl` SWS cards (`bg-surface-raised`) for the study-mode primitives — still shadowless.
+- Two densities (glance, study) sharing one visual vocabulary; drill-in / portfolio-tab, not switch-of-surface, is how density scales.
+- Color never carries meaning alone; gain/loss always paired with arrow + sign; statement sentiment always paired with a check/warn/neutral glyph.
+- Charts that ship in SSR HTML are hand-rolled SVG (sparklines, donut, concentration stack, benchmark line, snowflake radar, dividend stacked bar); Recharts only inside lazy-mounted drill-ins + the performance-chart card.
 - Restrained motion: state changes only; `prefers-reduced-motion: reduce` zeroes all transitions and animations globally.
 
 ## Colors: The Restrained Palette
@@ -217,27 +260,30 @@ The chart layer keeps these muted tints rather than the loud status green/red, s
 
 **The Dark-Mode Parity Rule.** Dark is the **default** since v4 (`defaultTheme="dark"`, `enableSystem={false}`). Every token has a paired dark value; the theme toggle is a 2-state dark ↔ light swap (the v3 `system → light → dark` cycle was retired with the dark-default flip).
 
-## Typography: One Voice
+## Typography: One Working Voice, One Display Voice
 
-**Display & Body Font:** IBM Plex Sans, loaded via `next/font/google` with weights `300, 400, 500, 600`. Exposed as `--font-plex-sans` and consumed through `var(--font-sans)`.
+**Display & Body Font:** IBM Plex Sans, loaded via `next/font/google` with weights `300, 400, 500, 600`. Exposed as `--font-plex-sans` and consumed through `var(--font-sans)`. Carries the whole working surface — totals, tables, prose, label caps.
 
-**Mono Font:** IBM Plex Mono, loaded via `next/font/google` with weights `400, 500`. Exposed as `--font-plex-mono`. Reserved for inline code samples in the hero's empty-state hint and any future hash-style identifier.
+**Display Serif (v4):** IBM Plex Serif, loaded via `next/font/google` with weights `400, 500, 600`, `display: "swap"`. Exposed as `--font-plex-serif` and consumed through `var(--font-serif)` (Tailwind `font-serif`). Added in the v4 SWS rewrite and **deliberately rare**: it appears on exactly three things — the portfolio masthead h1 (`portfolio-heading.tsx`, `font-serif text-3xl font-medium`), the dividend income hero number (`dividends-view.tsx`, `font-serif text-4xl font-medium text-[var(--accent-primary)]`), and the small italic `ƒ` ex-dividend glyph in the holdings register + calendar (`font-serif italic`). Nowhere else. It is a serif accent for the one or two "this is the headline of the page" moments, matching the SWS editorial feel, not a body face.
 
-**Character:** A single humanist family carries the whole system. The same family handles the 5xl USD total in the hero and the 11px label cap above each section, distinguished only by weight, size, and tracking. Plex is warm enough to feel considered, restrained enough not to flag itself as a design choice.
+**Mono Font:** IBM Plex Mono, loaded via `next/font/google` with weights `400, 500`. Exposed as `--font-plex-mono`. Reserved for inline code samples in the hero's empty-state hint, the macro-event ticker labels in the calendar (`font-mono uppercase`), and any future hash-style identifier.
+
+**Character:** A single humanist sans carries the working surface — the same Plex Sans handles the 5xl USD total in the hero and the 11px label cap above each section, distinguished only by weight, size, and tracking. Plex Serif sits above it for display only: warm and editorial where the page wants a masthead, then it steps back out. Plex is warm enough to feel considered, restrained enough not to flag itself as a design choice.
 
 ### Hierarchy
 
-- **Display** (Light 300, `text-5xl` ≈ 3rem, `tracking-tight`, `tabular`): the USD total in the hero. One per page. Used sparingly.
-- **Headline** (Medium 500, `text-base` to `text-lg` ≈ 1rem to 1.125rem): section anchors when prose introduces a block. The dashboard rarely needs this; most sections lead with a label cap instead.
-- **Title** (Medium 500, `text-base` ≈ 1rem): card headings, ticker names in the holdings table, drill-in subheaders.
-- **Body** (Regular 400, `text-sm` ≈ 0.875rem, line-height 1.55-1.65): default reading text. Insight prose, anomaly translations, position notes. Cap at 65-75ch where prose runs long.
-- **Label cap** (Medium 500, `text-xs` ≈ 0.75rem, tracking `0.06em`, uppercase, `text-quiet`): the recurring `Portfolio` / `Holdings` / `Watchlist` / `Last 90 days` / `What this means` chrome. The single most-used type role in the system.
-- **Numeric** (Regular 400 with `.tabular` class applying `font-feature-settings: 'tnum' 1`): every number that lives in a column. Body has tabular off by default; numeric cells opt in. Document this, it is non-obvious.
-- **Mono** (Regular 400, `text-xs` to `text-sm`): inline `<code>` only. Numbers do not switch to mono; tabular figures handle alignment.
+- **Display** (Plex Sans, Light 300, `text-5xl` ≈ 3rem, `tracking-tight`, `tabular`): the USD total in the home + portfolio hero. One per page. Used sparingly.
+- **Display Serif** (Plex Serif, Medium 500, `text-3xl` ≈ 1.875rem): the portfolio masthead h1. The `dividends` income hero reuses this role at `text-4xl` in `--accent-primary` gold. The only serif headings in the system.
+- **Headline** (Plex Sans, Medium 500, `text-base` to `text-lg` ≈ 1rem to 1.125rem): section anchors when prose introduces a block. The dashboard rarely needs this; most sections lead with a label cap instead.
+- **Title** (Plex Sans, Medium 500, `text-base` ≈ 1rem): card headings, ticker names in the holdings table, drill-in + tab subheaders, KPI-tile values lift to `text-2xl`.
+- **Body** (Plex Sans, Regular 400, `text-sm` ≈ 0.875rem, line-height 1.55-1.65): default reading text. Insight prose, anomaly translations, position notes. Cap at 65-75ch where prose runs long.
+- **Label cap** (Plex Sans, Medium 500, `text-xs` ≈ 0.75rem, tracking `0.06em`, uppercase, `text-quiet`): the recurring `Portfolio` / `Holdings` / `Watchlist` / `Last 90 days` / `What this means` chrome, plus KPI-tile + statement-card labels (tracking widens to `0.08em` on some tiles). The single most-used type role in the system.
+- **Numeric** (Plex Sans, Regular 400 with `.tabular` class applying `font-feature-settings: 'tnum' 1`): every number that lives in a column or a KPI tile. Body has tabular off by default; numeric cells opt in. Document this, it is non-obvious.
+- **Mono** (Plex Mono, Regular 400, `text-xs` to `text-sm`): inline `<code>` and macro-event ticker labels in the calendar. Numbers do not switch to mono; tabular figures handle alignment.
 
 ### Named Rules
 
-**The One Family Rule.** Every glyph in the interface comes from IBM Plex Sans (or Plex Mono for inline code) at varying weights. No serif/sans pairing, no display fonts, no specimen flexing.
+**The Sans-Working, Serif-Display Rule (v4).** The working surface is one humanist sans (IBM Plex Sans), with Plex Mono for inline code. IBM Plex Serif is the **only** sanctioned second family, and only for display: the portfolio masthead h1, the dividend income hero, and the `ƒ` ex-div glyph. This replaces the v3 "One Family Rule." A serif heading anywhere outside those three roles, or a serif paragraph anywhere, is a regression. No third family, no display specimen fonts, no specimen flexing.
 
 **The Tabular-Numbers Rule.** All numeric data uses tabular figures. Always. Body text keeps tabular off so prose reads naturally; the `.tabular` class is opt-in on every numeric cell, header, and data caption. A column of prices that does not align vertically is a bug.
 
@@ -249,6 +295,8 @@ The chart layer keeps these muted tints rather than the loud status green/red, s
 
 The system is flat. Depth comes from spacing, hairline rules, and tonal contrast within the warm-neutral family, not shadows. A panel sits on the surface because of its margin and its border, not because it floats.
 
+**The v4 SWS card.** v4 introduced a genuine card primitive for the study-mode portfolio tabs: `bg-surface-raised border border-rule rounded-xl` with `p-4`/`p-5`/`p-6` padding (snowflake card, KPI tile, statement card, comparison gauge, dividend-forecast switcher, performance-chart card). This is a real container, not a section divider — but it stays inside the elevation doctrine because it carries **no shadow and no z-axis lift**. Depth still reads from the `surface` → `surface-raised` tonal step and the hairline `border-rule`, never from a drop-shadow. Rounded corners (`rounded-xl` = 12px; `rounded-full` for chips, snowflake dots, and gauge markers) are the one visual concession to the SWS look; the v3 `rounded-sm` 2px still applies to the notes textarea and drill-in inner frames.
+
 State changes happen in color and weight, not in z-axis. Hovering a holdings row darkens it from `surface` to `surface-hover` with a `transition-colors` only, no transform. Expanding a row shifts it to `surface-expanded` and reveals a drill-in panel inset by `border-t border-rule`, again with no shadow.
 
 The single global motion guarantee is `@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }`. Default transitions are color-only, ≤200ms, and never animate layout properties.
@@ -257,7 +305,7 @@ The single global motion guarantee is `@media (prefers-reduced-motion: reduce) {
 
 **The Flat-By-Default Rule.** Surfaces have no shadow at rest. If a hover state ever introduces shadow, it is hairline (`0 1px 0` ambient at most) and reserved for genuinely interactive elements; never decorative cards.
 
-**The No-Floating-Cards Rule.** Cards are not the default container. Most things are sections divided by spacing and a hairline `border-b border-rule`. The drill-in is the closest thing to a card in the system, and it is full-bleed within the table row it expands from rather than a floating tile.
+**The No-Floating-Cards Rule.** Cards are allowed (v4 added bordered `rounded-xl` SWS cards for the portfolio study tabs) but they never *float*: no shadow, no z-lift, no blur backdrop. The glance surfaces (`/`, `/watchlist`, the holdings register) still default to sections divided by spacing and a hairline `border-b border-rule`, not a card grid. A card earns its border by holding a self-contained SWS primitive (snowflake, KPI strip, gauge cluster); it does not become the wrapper-of-everything. The drill-in remains full-bleed within the table row it expands from rather than a floating tile.
 
 **The Color-Only Transitions Rule.** Transitions animate color and opacity. Never `transform`, never layout properties. Numbers do not animate in or out; they update.
 
@@ -271,7 +319,11 @@ Every block opens with the same caption: `text-xs uppercase tracking-[0.06em] te
 
 ### Hero (`hero.tsx`)
 
-The home and portfolio routes both lead with a hero section: `border-b border-rule pb-10 mb-10`, `flex flex-col md:flex-row` so the donut wraps under the totals on narrow viewports. Display number left, allocation donut right. No card. No shadow. The only "huge number" in the system is the USD total, in `text-5xl font-light`.
+The home route leads with this hero section: `border-b border-rule pb-10 mb-10`, `flex flex-col md:flex-row` so the donut wraps under the totals on narrow viewports. Display number left, allocation donut right. No card. No shadow. The only "huge number" in the system is the USD total, in `text-5xl font-light`. The portfolio route opens differently since v4 — see *Portfolio hero (holdings tab)* below — but reuses the same `text-5xl` display total inside its performance card.
+
+### Portfolio hero (holdings tab — `performance-chart-card.tsx` + `portfolio-snowflake-card.tsx`)
+
+The portfolio `holdings` tab leads with a two-column grid (`lg:grid-cols-[2fr_1fr]`): a **performance card** (2/3) beside a **snowflake card** (1/3), with the masthead `portfolio-heading` h1 (serif) above and the `holdings-kpi-strip` + register below. This replaces the v3 "donut hero on every route" — the donut now lives only on the home hero; the portfolio's at-a-glance signal is the SWS snowflake instead.
 
 ### Tables (`holdings-table.tsx`, `watchlist-table.tsx`)
 
@@ -291,7 +343,7 @@ The closest thing to a card in the system, and even it does not float. `bg-surfa
 
 ### Notes textarea (`notes-block.tsx`)
 
-`bg-surface-raised border border-rule rounded-sm px-3 py-2`. Focus state shifts the border to `border-accent` (the muted rust); no glow, no ring escalation in the current build (a `focus-visible:ring` would be a future accessibility-only refinement). Save-state caption sits below in `text-xs text-whisper` and reports `saving…`, `Last saved · 30s ago`, or an inline error in `text-loss`. Empty placeholder is italic `text-whisper`: "Thesis, triggers, risks…"
+`bg-surface-raised border border-rule rounded-sm px-3 py-2`. Focus state shifts the border to `border-accent` (the SWS gold since v4, no longer the v3 rust); no glow, no ring escalation in the current build (a `focus-visible:ring` would be a future accessibility-only refinement). Save-state caption sits below in `text-xs text-whisper` and reports `saving…`, `Last saved · 30s ago`, or an inline error in `text-loss`. Empty placeholder is italic `text-whisper`: "Thesis, triggers, risks…"
 
 ### Navigation tabs (`nav-bar.tsx`)
 
@@ -329,9 +381,61 @@ The single Recharts surface in the system. Lazy-mounted inside the drill-in (so 
 
 12px outlined-stroke calendar glyph next to a ticker name when earnings is within 14 days. `currentColor` so it follows theme. Title attribute carries `Earnings May 13 · in 8 days` for hover; `aria-label` mirrors. No badge, no pill, no dot. The glyph itself is the cue.
 
+### Locale toggle (`locale-toggle.tsx`)
+
+A text button beside the theme toggle in the nav: renders `EN` / `中` in `text-xs uppercase tracking-wider text-quiet`, hover lifts to `text-ink`. Two-state swap, mirrors the theme-toggle's chrome. Client-only locale (no cookie); renders the `EN` default until mount to keep SSR HTML stable. See `project_i18n_architecture` memory.
+
+### Portfolio tab nav (`portfolio-tab-nav.tsx`)
+
+The six-tab strip on `/portfolio` (`holdings` / `returns` / `updates` / `dividends` / `analysis` / `calendar`). `flex gap-1 mb-6 border-b border-rule`; each tab is a prefetching `<Link href="?tab=…">` in `relative px-3 py-2 text-sm transition-colors`. Active: `text-ink font-medium` with an absolute gold underline (`absolute left-2 right-2 -bottom-px h-0.5 bg-[var(--accent-primary)]`) — note the underline is **gold here**, distinct from the top-level `NavBar`'s ink underline. Inactive: `text-quiet hover:text-ink`. Tab state is the URL query param, parsed server-side, so each tab is shareable and SSR's its own content.
+
+### Analysis sub-tabs (`analysis-sub-tabs.tsx`)
+
+A nested second-level tab strip inside the `analysis` tab (Valuation / Future / Past / Health / Dividend — the five snowflake axes). `flex items-baseline gap-5 border-b border-rule`; active `text-ink` with the same absolute gold underline, inactive `text-quiet hover:text-ink`, each `relative text-sm font-medium py-2`. Unlike the route-level tabs this is **client state** (not URL): only Valuation renders live data today; the other four show dashed-border placeholder cards.
+
+### Snowflake (`snowflake.tsx`)
+
+Hand-rolled SVG 5-axis radar (the SWS signature), `130×120` viewBox, three sizes (28px mini in the holdings register, 96px strip, 240px card). Axes counter-clockwise from top: Value · Future · Past · Health · Dividend. Six concentric rings + spokes in `var(--rule)`; data polygon stroked + dotted in `var(--accent-primary)` gold with a `color-mix(in oklch, var(--accent-primary) 28%, transparent)` fill; null axes render a dashed spoke + dashed outline in `var(--quiet)` (a structural signal, not a color one); axis labels in `var(--quiet)`. No delta glyph — the polygon shape *is* the read. SSR-renderable.
+
+### Snowflake card / statements (`snowflake-card.tsx`, `portfolio-snowflake-card.tsx`, `snowflake-statements.tsx`)
+
+`snowflake-card` wraps the 240px snowflake in an SWS card (`bg-surface-raised border border-rule rounded-xl p-5 flex flex-col gap-4`) with a heading, optional summary, and two footer chips: a **risks** chip (`●` glyph, `text-[var(--accent-danger)]` on an 18%-mix danger tint) and a **rewards** chip (`★` glyph, `text-[var(--accent-success)]` on a success tint). `snowflake-statements` lays the 240px snowflake beside a `md:grid-cols-2` grid of statement cards (`grid-cols-1 lg:grid-cols-[240px_1fr] gap-8`) with a per-axis score chip (`rounded-full border-rule`).
+
+### Statement card (`statement-card.tsx`)
+
+Small SWS tile: a 7×7px `rounded-full border` icon badge + headline + optional subtext, `bg-surface-raised border border-rule rounded-xl p-4 flex gap-3 items-start`. The badge glyph is the sentiment signal — hand-rolled SVG check (✓) on an `--accent-success` 18%-mix tint, warn (⚠) on `--accent-warn`, or hollow neutral (◯) on `border-rule`. The glyph carries the meaning; color only reinforces it (no-sole-signal). This is the loud-tier status palette's main home.
+
+### KPI tile / strip (`kpi-tile.tsx`, `kpi-strip.tsx`, `holdings-kpi-strip.tsx`)
+
+`kpi-tile` is a single-metric SWS card: uppercase label (`text-quiet`, tracking `0.08em`) + `text-2xl font-medium tabular text-ink` value + an optional delta row. The delta pairs a glyph with a status color: `↑` + `text-[var(--accent-success)]` (pos), `↓` + `text-[var(--accent-danger)]` (neg), `·` + `text-quiet` (flat), with the percent in `text-quiet`. `kpi-strip` is a `grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3` of four tiles (Unrealized · Realized · Dividends · Currency impact) + an italic `text-[11px] text-whisper` caption. `holdings-kpi-strip` is the client wrapper that i18n's labels and degrades to `—` when the backend is unreachable.
+
+### Comparison gauge (`comparison-gauge.tsx`)
+
+A horizontal valuation gauge in an SWS card (`rounded-xl border-rule bg-surface-raised p-5`). A `h-1 rounded-full bg-[var(--surface-zebra)]` track with 5 tick labels (0–100%, `text-quiet tabular`); a gold portfolio marker (`bg-[var(--accent-primary)]` dot, `border-2 border-surface-raised`) and a quiet reference line (`bg-quiet`); out-of-range values show a gold `+`/`−` overflow caret. A two-row table below gives the portfolio value (`text-ink tabular font-medium`) vs reference (`text-quiet tabular`). Position + glyph + color all carry the signal. Used for PE / PS / PEG in the analysis Valuation sub-tab.
+
+### Dividend ledger block (`dividend-ledger-block.tsx`)
+
+Multi-section block (`my-12`): heading + summary (TTM total + next ex-date) + a hand-rolled SVG horizontal stacked bar (`600×16` viewBox, segments fill `var(--slice-1…6)` with `stroke=var(--surface)` separators) + a per-ticker legend + an expandable holdings table + a lazy [learn more] insight panel (`bg-surface-raised border-rule rounded-sm p-4`). Same graphite slice ramp as the donut — chart layer stays quiet-tier.
+
+### Dividends forecast switcher (`dividends-forecast-switcher.tsx`)
+
+SWS card (`bg-surface-raised border-rule rounded-xl p-6`) with a 12m / 24m / 36m horizon toggle (`text-xs uppercase tracking-[0.06em]`; active tab `border-b border-[var(--accent-primary)] text-ink`) + summary line + a per-ticker table (Payment · Yield · YoC · Score · Growth). The Score cell is the loud tier: `≤2` danger, `≤4` warn, `>4` success, always shown as `n/6` so the number carries the signal alongside the color.
+
+### Performance chart card (`performance-chart-card.tsx`)
+
+The portfolio `holdings` hero's left card (`bg-surface-raised border-rule rounded-xl p-5`). Holds a Value-Over-Time / Perf-vs-Market sub-toggle + a range strip (1M / 3M / 1Y, others disabled `text-whisper cursor-not-allowed`), a four-metric tile row (Total Value · Total Returns · 1D · IRR stub), and the hand-rolled-SVG `benchmark-chart` with a legend whose dots are gold portfolio (`var(--accent-primary)`) vs quiet benchmark (`var(--quiet)`). Tab groups sit in `bg-surface-zebra p-1 rounded-lg` pill containers, active pill `bg-surface text-ink`.
+
+### Returns view (`returns-view.tsx`, `returns-csv-button.tsx`)
+
+The `returns` tab: a breakdown stacked bar (unrealized + realized + dividends + currency) over a five-tile KPI grid, a highest/lowest-5 contributors row, and a scrollable 13-column detail table with a client-side CSV export button. Fails to a centered dashed-border `border-rule` "unavailable" card if the summary/detail fetch fails — the standard tab empty-state.
+
+### Calendar view (`calendar-view.tsx`)
+
+The `calendar` tab: a `grid-cols-7` 42-cell month grid (`?month=YYYY-MM` query param). Each cell carries the day number, an optional `TODAY` badge (today's cell gets `ring-1 ring-rule ring-inset`), the day's signed P&L, and up to four event chips with a `+N more` overflow; out-of-month cells dim to `opacity-60 text-whisper`. Event kinds read by glyph: earnings (calendar glyph + ticker), macro (`font-mono uppercase`), ex-div (serif `ƒ` + ticker), company event (bullet + label). Selecting an event opens a bottom panel (`border-t border-rule`) with a lazy `foresight-insight-body` What/Meaning/Watch trio; ESC clears.
+
 ### Named Rules
 
-**The Hand-Rolled-SVG Rule.** Charts that ship in SSR HTML are hand-rolled SVG (sparkline, donut, concentration stack, currency stack, benchmark line). Recharts is reserved for lazy-mounted drill-in surfaces (`price-chart.tsx`) where SSR measurement is not a concern. This is captured in `CLAUDE.md §Conventions`; preserve it.
+**The Hand-Rolled-SVG Rule.** Charts that ship in SSR HTML are hand-rolled SVG (sparkline, donut, concentration stack, currency stack, benchmark line, **snowflake radar**, **dividend stacked bar**, comparison-gauge track). `price-chart.tsx` (the 90-day drill-in price chart) remains the **only** Recharts surface in the system, lazy-mounted where SSR measurement is not a concern. The v4 `performance-chart-card` embeds the hand-rolled `benchmark-chart`, not Recharts, so it stays SSR-safe. This is captured in `CLAUDE.md §Conventions`; preserve it.
 
 **The Same-Caption Rule.** Every block opens with the `text-xs uppercase tracking-[0.06em] text-quiet` caption. Recurrence is the affordance.
 
@@ -362,6 +466,7 @@ The single Recharts surface in the system. Lazy-mounted inside the drill-in (so 
 - **Don't** use `border-left` greater than 1px as a colored accent stripe on cards or alerts. Side-stripe borders are forbidden.
 - **Don't** apply `background-clip: text` with a gradient. Use a single solid color, with emphasis through weight.
 - **Don't** apply `backdrop-filter: blur` decoratively. No glassmorphism unless it is purposeful and rare.
+- **Don't** give the v4 `rounded-xl` SWS cards a `box-shadow`, hover-lift, or z-translate. They earn depth from the `surface-raised` tonal step + `border-rule` hairline only. A floating card is a regression.
 - **Don't** build a hero-metric template (huge number, small label, supporting stats, gradient accent). The classic SaaS cliché is exactly the urgency theater this dashboard rejects.
 - **Don't** repeat identical card grids. Same-sized cards with icon + heading + text endlessly is a layout failure.
 - **Don't** reach for a modal as the first thought. Exhaust inline and progressive (drill-in) alternatives first.
@@ -369,4 +474,4 @@ The single Recharts surface in the system. Lazy-mounted inside the drill-in (so 
 - **Don't** animate transform or layout. Color and opacity only, ≤200ms.
 - **Don't** use bounce or elastic easing. Ease out with exponential curves (ease-out-quart / quint / expo).
 - **Don't** use em dashes in copy. Use commas, colons, semicolons, periods, or parentheses.
-- **Don't** introduce a second sans family. One Plex Sans for everything; Plex Mono only for inline code.
+- **Don't** introduce a second sans family, or use IBM Plex Serif beyond its three display roles (portfolio h1, dividend income hero, `ƒ` ex-div glyph). Plex Sans is the working voice, Plex Mono is for inline code + macro tickers, Plex Serif is a rare display accent. No fourth family, no serif paragraphs.
