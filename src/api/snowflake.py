@@ -43,7 +43,7 @@ from api.i18n import DEFAULT_LOCALE, Locale, prompt_version_with_locale
 log = logging.getLogger(__name__)
 
 _TTL = timedelta(hours=6)
-_PROMPT_VERSION = "v2-snowflake-future"
+_PROMPT_VERSION = "v3-snowflake-valuation"
 
 # Per-axis cap so the UI's vertical real estate stays bounded.
 _MAX_BULLETS = 5
@@ -124,6 +124,39 @@ def _safe_fwd_eps(code: str) -> float | None:
         return fundamentals.get_fundamentals(code).fwd_eps_growth
     except Exception as exc:  # noqa: BLE001
         log.debug("snowflake: fwd_eps fetch failed for %s: %s", code, exc)
+        return None
+
+
+# valuation: score forward PE relative to the ~18x US market PE — cheaper
+# than the market reads as better value (SWS "Value" posture). Ascending
+# PE-ratio (forward_pe / market_pe) cut points; UNLIKE the other axes a
+# higher ratio scores LOWER, so the score counts DOWN from 6 as the ratio
+# clears each band. ~market (ratio 1.0) lands at 3, < 0.6× → 6 (cheap),
+# ≥ 2× → 0 (expensive). Null for HK/SG + ETFs lacking a forward PE.
+_VALUATION_PE_RATIO_BANDS = (0.6, 0.85, 1.0, 1.3, 1.7, 2.0)
+
+
+def _bucket_valuation(forward_pe: float | None, market_pe: float | None) -> int | None:
+    if forward_pe is None or forward_pe <= 0 or market_pe is None or market_pe <= 0:
+        return None
+    ratio = forward_pe / market_pe
+    score = 6
+    for threshold in _VALUATION_PE_RATIO_BANDS:
+        if ratio >= threshold:
+            score -= 1
+    return max(0, score)
+
+
+def _safe_valuation_score(code: str) -> int | None:
+    """0..6 forward-PE-vs-market score for `code`, defensively. fair_value
+    caches both the per-holding PE and the SPY market PE (24h), so this is
+    a no-op after warm."""
+    try:
+        from api import fair_value
+        metrics = fair_value.get_metrics(code)
+        return _bucket_valuation(metrics.forward_pe, fair_value._market_pe_fallback())
+    except Exception as exc:  # noqa: BLE001
+        log.debug("snowflake: valuation score failed for %s: %s", code, exc)
         return None
 
 
@@ -288,11 +321,12 @@ def _compute_scores(code: str, total_pnl_pct: float, current_price: float, curre
     # Skip the fundamentals fetch entirely until thresholds are set, so an
     # unconfigured Future axis costs nothing on the hot snowflake path.
     future = _bucket_future(_safe_fwd_eps(code)) if _FUTURE_THRESHOLDS is not None else None
+    valuation = _safe_valuation_score(code)
     return SnowflakeScores(
         past=past,
         health=health,
         dividends=dividends_score,
-        valuation=None,
+        valuation=valuation,
         future=future,
     )
 
@@ -557,8 +591,8 @@ def get_for_portfolio(locale: Locale = DEFAULT_LOCALE) -> PortfolioSnowflake:
     response = build_holdings_response(summary)
     total = response.total_market_value_usd or 1.0
     weights: dict[str, float] = {}
-    weighted = {"past": 0.0, "health": 0.0, "dividends": 0.0, "future": 0.0}
-    counts = {"past": 0.0, "health": 0.0, "dividends": 0.0, "future": 0.0}
+    weighted = {"past": 0.0, "health": 0.0, "dividends": 0.0, "future": 0.0, "valuation": 0.0}
+    counts = {"past": 0.0, "health": 0.0, "dividends": 0.0, "future": 0.0, "valuation": 0.0}
 
     for holding in response.holdings:
         weight = (holding.market_value_usd or 0.0) / total
@@ -571,6 +605,7 @@ def get_for_portfolio(locale: Locale = DEFAULT_LOCALE) -> PortfolioSnowflake:
             ("health", snow.scores.health),
             ("dividends", snow.scores.dividends),
             ("future", snow.scores.future),
+            ("valuation", snow.scores.valuation),
         ):
             if value is not None:
                 weighted[axis] += value * weight
@@ -586,7 +621,7 @@ def get_for_portfolio(locale: Locale = DEFAULT_LOCALE) -> PortfolioSnowflake:
             past=_round("past"),
             health=_round("health"),
             dividends=_round("dividends"),
-            valuation=None,
+            valuation=_round("valuation"),
             future=_round("future"),
         ),
         generated_at=datetime.now(),
