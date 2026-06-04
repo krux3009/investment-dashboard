@@ -136,7 +136,11 @@
     "typographyMeta": {
       "display": {
         "displayName": "Display",
-        "purpose": "Hero USD total only. One per page."
+        "purpose": "Plex Sans Light 300, text-5xl. Hero USD total only. One per page."
+      },
+      "display-serif": {
+        "displayName": "Display Serif (v4)",
+        "purpose": "IBM Plex Serif Medium 500. The only serif type in the system, display-only: portfolio masthead h1 (text-3xl) + dividend income hero (text-4xl, gold) + the ƒ ex-div glyph (serif italic). Added in the v4 SWS rewrite."
       },
       "headline": {
         "displayName": "Headline",
@@ -160,7 +164,7 @@
       },
       "mono": {
         "displayName": "Mono",
-        "purpose": "Inline <code> only. Numbers do not switch to mono."
+        "purpose": "Inline <code> + macro-event ticker labels in the calendar (font-mono uppercase). Numbers do not switch to mono."
       }
     },
     "shadows": [],
@@ -224,17 +228,17 @@
       "name": "Notes textarea",
       "kind": "input",
       "refersTo": "textarea-notes",
-      "description": "The only input in the system. Debounced auto-save (800ms idle). Empty placeholder is italic whisper text. Focus shifts the border to the muted rust accent.",
+      "description": "The only input in the system. Debounced auto-save (800ms idle). Empty placeholder is italic whisper text. Focus shifts the border to the SWS gold accent (v4; was the v3 muted rust).",
       "html": "<div><div class=\"ds-label-cap\">Notes</div><textarea class=\"ds-textarea-notes\" rows=\"4\" placeholder=\"Thesis, triggers, risks…\" aria-label=\"Notes for US.NVDA\"></textarea><div class=\"ds-textarea-status\">Last saved · 30s ago</div></div>",
-      "css": ".ds-label-cap { font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 0.75rem; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: oklch(45% 0.008 60); margin-bottom: 0.75rem; } .ds-textarea-notes { width: 100%; background: oklch(98% 0.004 75); border: 1px solid oklch(86% 0.006 70); border-radius: 2px; padding: 0.5rem 0.75rem; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 0.875rem; line-height: 1.55; color: oklch(20% 0.008 60); resize: vertical; transition: border-color 200ms; } .ds-textarea-notes::placeholder { color: oklch(58% 0.007 65); font-style: italic; } .ds-textarea-notes:focus { outline: none; border-color: oklch(55% 0.12 28); } .ds-textarea-status { font-size: 0.75rem; color: oklch(58% 0.007 65); margin-top: 0.375rem; height: 1rem; }"
+      "css": ".ds-label-cap { font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 0.75rem; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: oklch(45% 0.008 60); margin-bottom: 0.75rem; } .ds-textarea-notes { width: 100%; background: oklch(98% 0.004 75); border: 1px solid oklch(86% 0.006 70); border-radius: 2px; padding: 0.5rem 0.75rem; font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 0.875rem; line-height: 1.55; color: oklch(20% 0.008 60); resize: vertical; transition: border-color 200ms; } .ds-textarea-notes::placeholder { color: oklch(58% 0.007 65); font-style: italic; } .ds-textarea-notes:focus { outline: none; border-color: #B89968; } .ds-textarea-status { font-size: 0.75rem; color: oklch(58% 0.007 65); margin-top: 0.375rem; height: 1rem; }"
     },
     {
       "name": "Navigation tab strip",
       "kind": "nav",
       "refersTo": "nav-tab-active",
-      "description": "Single header row across all routes. Lowercase tabs with a pb-1 border-b underline; active tab inks both the text and the underline.",
-      "html": "<header class=\"ds-nav\"><div class=\"ds-nav-group\"><div class=\"ds-nav-masthead\">quiet ledger</div><nav class=\"ds-nav-tabs\"><a class=\"ds-nav-tab ds-nav-tab-active\" href=\"/\">home</a><a class=\"ds-nav-tab\" href=\"/portfolio\">portfolio</a><a class=\"ds-nav-tab\" href=\"/watchlist\">watchlist</a></nav></div><button class=\"ds-theme-toggle\" type=\"button\">system (light)</button></header>",
-      "css": ".ds-nav { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 3rem; font-family: 'IBM Plex Sans', system-ui, sans-serif; } .ds-nav-group { display: flex; align-items: baseline; gap: 2rem; } .ds-nav-masthead { font-size: 0.875rem; font-weight: 500; letter-spacing: 0.025em; color: oklch(45% 0.008 60); } .ds-nav-tabs { display: flex; align-items: baseline; gap: 1.25rem; font-size: 0.75rem; } .ds-nav-tab { padding-bottom: 0.25rem; border-bottom: 1px solid transparent; color: oklch(45% 0.008 60); text-decoration: none; transition: color 200ms; } .ds-nav-tab:hover { color: oklch(20% 0.008 60); } .ds-nav-tab-active { color: oklch(20% 0.008 60); border-bottom-color: oklch(20% 0.008 60); } .ds-theme-toggle { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: oklch(45% 0.008 60); background: none; border: 0; cursor: pointer; transition: color 200ms; } .ds-theme-toggle:hover { color: oklch(20% 0.008 60); }"
+      "description": "Single header row across all routes. Lowercase tabs with a pb-1 border-b underline; active tab inks both text and underline. Right side pairs a locale toggle (EN/中) with the 2-state theme toggle (dark<->light, v4). The top-level NavBar underline is INK; the inner portfolio tab strip's underline is GOLD — see the Portfolio tab strip component.",
+      "html": "<header class=\"ds-nav\"><div class=\"ds-nav-group\"><div class=\"ds-nav-masthead\">quiet ledger</div><nav class=\"ds-nav-tabs\"><a class=\"ds-nav-tab ds-nav-tab-active\" href=\"/\">home</a><a class=\"ds-nav-tab\" href=\"/portfolio\">portfolio</a><a class=\"ds-nav-tab\" href=\"/watchlist\">watchlist</a></nav></div><div class=\"ds-nav-chrome\"><button class=\"ds-theme-toggle\" type=\"button\">EN</button><button class=\"ds-theme-toggle\" type=\"button\">dark</button></div></header>",
+      "css": ".ds-nav { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 3rem; font-family: 'IBM Plex Sans', system-ui, sans-serif; } .ds-nav-group { display: flex; align-items: baseline; gap: 2rem; } .ds-nav-masthead { font-size: 0.875rem; font-weight: 500; letter-spacing: 0.025em; color: oklch(45% 0.008 60); } .ds-nav-tabs { display: flex; align-items: baseline; gap: 1.25rem; font-size: 0.75rem; } .ds-nav-tab { padding-bottom: 0.25rem; border-bottom: 1px solid transparent; color: oklch(45% 0.008 60); text-decoration: none; transition: color 200ms; } .ds-nav-tab:hover { color: oklch(20% 0.008 60); } .ds-nav-tab-active { color: oklch(20% 0.008 60); border-bottom-color: oklch(20% 0.008 60); } .ds-nav-chrome { display: flex; align-items: baseline; gap: 1rem; } .ds-theme-toggle { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: oklch(45% 0.008 60); background: none; border: 0; cursor: pointer; transition: color 200ms; } .ds-theme-toggle:hover { color: oklch(20% 0.008 60); }"
     },
     {
       "name": "Sparkline (30-day)",
@@ -251,18 +255,66 @@
       "description": "Inline 12px outlined-stroke calendar glyph next to a ticker name when earnings is within 14 days. currentColor follows theme; title attribute carries the date.",
       "html": "<span class=\"ds-calendar-mark\" title=\"Earnings May 13 · in 8 days\" aria-label=\"Earnings May 13 (in 8 days)\"><svg width=\"12\" height=\"12\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"2.5\" y=\"3.5\" width=\"11\" height=\"10\" rx=\"1\" /><line x1=\"2.5\" y1=\"6.5\" x2=\"13.5\" y2=\"6.5\" /><line x1=\"5.5\" y1=\"2\" x2=\"5.5\" y2=\"4.5\" /><line x1=\"10.5\" y1=\"2\" x2=\"10.5\" y2=\"4.5\" /></svg></span>",
       "css": ".ds-calendar-mark { display: inline-flex; align-items: center; color: oklch(45% 0.008 60); cursor: help; }"
+    },
+    {
+      "name": "SWS card (v4)",
+      "kind": "card",
+      "refersTo": "sws-card",
+      "description": "The v4 study-mode card primitive: bg-surface-raised + 1px rule border + rounded-xl (12px), no shadow, no z-lift. Wraps the snowflake, KPI strip, statement grid, gauge cluster, dividend switcher, performance chart. Depth from the surface->surface-raised tonal step + hairline only.",
+      "html": "<div class=\"ds-sws-card\"><div class=\"ds-label-cap\">Snowflake</div><div style=\"color:oklch(45% 0.008 60);font-size:0.875rem;\">A self-contained SWS primitive lives here.</div></div>",
+      "css": ".ds-sws-card { background: oklch(98% 0.004 75); border: 1px solid oklch(86% 0.006 70); border-radius: 12px; padding: 1.25rem; } .ds-label-cap { font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 0.75rem; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: oklch(45% 0.008 60); margin-bottom: 0.75rem; }"
+    },
+    {
+      "name": "Portfolio tab strip (v4)",
+      "kind": "nav",
+      "refersTo": "portfolio-tab-active",
+      "description": "The six-tab strip on /portfolio (holdings/returns/updates/dividends/analysis/calendar), driven by the ?tab= query param (parsed server-side). Active tab inks the text and draws a GOLD underline (distinct from the top-level NavBar's INK underline). The analysis tab nests a second client-state sub-tab strip with the same gold underline.",
+      "html": "<nav class=\"ds-ptab-strip\"><a class=\"ds-ptab ds-ptab-active\" href=\"?tab=holdings\">holdings</a><a class=\"ds-ptab\" href=\"?tab=returns\">returns</a><a class=\"ds-ptab\" href=\"?tab=updates\">updates</a><a class=\"ds-ptab\" href=\"?tab=dividends\">dividends</a><a class=\"ds-ptab\" href=\"?tab=analysis\">analysis</a><a class=\"ds-ptab\" href=\"?tab=calendar\">calendar</a></nav>",
+      "css": ".ds-ptab-strip { display: flex; gap: 0.25rem; border-bottom: 1px solid oklch(86% 0.006 70); font-family: 'IBM Plex Sans', system-ui, sans-serif; } .ds-ptab { position: relative; padding: 0.5rem 0.75rem; font-size: 0.875rem; color: oklch(45% 0.008 60); text-decoration: none; transition: color 200ms; } .ds-ptab:hover { color: oklch(20% 0.008 60); } .ds-ptab-active { color: oklch(20% 0.008 60); font-weight: 500; } .ds-ptab-active::after { content: ''; position: absolute; left: 0.5rem; right: 0.5rem; bottom: -1px; height: 2px; background: #B89968; }"
+    },
+    {
+      "name": "Snowflake (5-axis SWS radar)",
+      "kind": "custom",
+      "refersTo": "snowflake-fill",
+      "description": "The SWS signature: hand-rolled SVG 5-axis radar (Value/Future/Past/Health/Dividend), 130x120 viewBox, three sizes (28 mini in the register, 96 strip, 240 card). Concentric rings + spokes in rule; data polygon stroked + dotted in gold with a color-mix(gold 28%) fill; null axes render dashed in quiet (a structural signal, not a color one). The polygon shape is the read - no delta glyph. SSR-renderable.",
+      "html": "<svg width=\"130\" height=\"120\" viewBox=\"0 0 130 120\" role=\"img\" aria-label=\"5-axis snowflake\"><polygon points=\"65,10 108,41 91,91 39,91 22,41\" fill=\"none\" stroke=\"oklch(86% 0.006 70)\" stroke-width=\"1\" /><polygon points=\"65,32.5 86.5,48 78,73 52,73 43.5,48\" fill=\"none\" stroke=\"oklch(86% 0.006 70)\" stroke-width=\"1\" /><polygon points=\"65,23.5 86.5,48 85.8,83.8 54.6,69.4 39.2,46.6\" fill=\"color-mix(in oklch, #B89968 28%, transparent)\" stroke=\"#B89968\" stroke-width=\"1.5\" /><g fill=\"#B89968\"><circle cx=\"65\" cy=\"23.5\" r=\"2\" /><circle cx=\"86.5\" cy=\"48\" r=\"2\" /><circle cx=\"85.8\" cy=\"83.8\" r=\"2\" /><circle cx=\"54.6\" cy=\"69.4\" r=\"2\" /><circle cx=\"39.2\" cy=\"46.6\" r=\"2\" /></g></svg>",
+      "css": ".ds-snowflake { display: inline-block; }"
+    },
+    {
+      "name": "Statement card (v4)",
+      "kind": "card",
+      "refersTo": "statement-card",
+      "description": "Small SWS tile: a rounded-full icon badge + headline + optional subtext, in an SWS card. The badge glyph carries the sentiment (check on a success tint / warn on a warn tint / hollow neutral on rule); color only reinforces it (no-sole-signal). The loud status palette's main home.",
+      "html": "<div class=\"ds-stmt-grid\"><div class=\"ds-stmt-card\"><span class=\"ds-stmt-badge ds-stmt-check\">✓</span><div class=\"ds-stmt-head\">Trading below estimated fair value</div></div><div class=\"ds-stmt-card\"><span class=\"ds-stmt-badge ds-stmt-warn\">!</span><div class=\"ds-stmt-head\">Dividend not well covered by earnings</div></div></div>",
+      "css": ".ds-stmt-grid { display: grid; gap: 0.75rem; font-family: 'IBM Plex Sans', system-ui, sans-serif; } .ds-stmt-card { display: flex; gap: 0.75rem; align-items: flex-start; background: oklch(98% 0.004 75); border: 1px solid oklch(86% 0.006 70); border-radius: 12px; padding: 1rem; } .ds-stmt-badge { display: inline-flex; align-items: center; justify-content: center; width: 1.75rem; height: 1.75rem; border-radius: 9999px; border: 1px solid; font-size: 0.875rem; flex-shrink: 0; } .ds-stmt-check { color: #009244; border-color: #009244; background: color-mix(in oklch, #009244 18%, transparent); } .ds-stmt-warn { color: #C25F1F; border-color: #C25F1F; background: color-mix(in oklch, #C25F1F 18%, transparent); } .ds-stmt-head { font-size: 0.875rem; color: oklch(20% 0.008 60); line-height: 1.4; }"
+    },
+    {
+      "name": "KPI tile + strip (v4)",
+      "kind": "card",
+      "refersTo": "kpi-tile",
+      "description": "Single-metric SWS card: uppercase label (tracking 0.08em) + text-2xl tabular value + a delta row pairing a glyph with a status color (up/success, down/danger, flat/quiet). kpi-strip is a responsive 4-up grid (Unrealized/Realized/Dividends/Currency).",
+      "html": "<div class=\"ds-kpi-strip\"><div class=\"ds-kpi-tile\"><div class=\"ds-kpi-label\">Unrealized</div><div class=\"ds-kpi-value\">+$12,480</div><div class=\"ds-kpi-delta ds-kpi-up\">↑ +4.2%</div></div><div class=\"ds-kpi-tile\"><div class=\"ds-kpi-label\">Dividends TTM</div><div class=\"ds-kpi-value\">$1,905</div><div class=\"ds-kpi-delta ds-kpi-flat\">· flat</div></div></div>",
+      "css": ".ds-kpi-strip { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; font-family: 'IBM Plex Sans', system-ui, sans-serif; } .ds-kpi-tile { background: oklch(98% 0.004 75); border: 1px solid oklch(86% 0.006 70); border-radius: 12px; padding: 1rem; display: flex; flex-direction: column; gap: 0.25rem; } .ds-kpi-label { font-size: 0.75rem; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: oklch(45% 0.008 60); } .ds-kpi-value { font-size: 1.5rem; font-weight: 500; color: oklch(20% 0.008 60); font-feature-settings: 'tnum' 1; font-variant-numeric: tabular-nums; } .ds-kpi-delta { font-size: 0.75rem; font-feature-settings: 'tnum' 1; } .ds-kpi-up { color: #009244; } .ds-kpi-down { color: #BC0024; } .ds-kpi-flat { color: oklch(45% 0.008 60); }"
+    },
+    {
+      "name": "Comparison gauge (v4)",
+      "kind": "custom",
+      "refersTo": "comparison-gauge-marker",
+      "description": "Horizontal valuation gauge in an SWS card. A surface-zebra track with tick labels; a gold portfolio marker (dot) and a quiet reference line; an out-of-range gold +/- overflow caret. A two-row table below gives portfolio vs reference. Position + glyph + color all carry the signal. Used for PE/PS/PEG in the analysis Valuation sub-tab.",
+      "html": "<div class=\"ds-gauge-card\"><div class=\"ds-label-cap\">P / E</div><div class=\"ds-gauge-track\"><span class=\"ds-gauge-ref\" style=\"left:40%\"></span><span class=\"ds-gauge-marker\" style=\"left:62%\"></span></div></div>",
+      "css": ".ds-gauge-card { background: oklch(98% 0.004 75); border: 1px solid oklch(86% 0.006 70); border-radius: 12px; padding: 1.25rem; font-family: 'IBM Plex Sans', system-ui, sans-serif; } .ds-gauge-track { position: relative; height: 4px; border-radius: 9999px; background: oklch(94.5% 0.006 75); margin-top: 0.75rem; } .ds-gauge-ref { position: absolute; top: 50%; transform: translate(-50%, -50%); width: 2px; height: 12px; background: oklch(45% 0.008 60); } .ds-gauge-marker { position: absolute; top: 50%; transform: translate(-50%, -50%); width: 10px; height: 10px; border-radius: 9999px; background: #B89968; border: 2px solid oklch(98% 0.004 75); } .ds-label-cap { font-size: 0.75rem; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: oklch(45% 0.008 60); }"
     }
   ],
   "narrative": {
     "northStar": "The Quiet Ledger",
-    "overview": "The dashboard is a paper-and-ink ledger for a long-horizon investor, a place for sitting with positions, not reacting to them. Warm graphite type rests on cream in light mode; in dark mode (the v4 default) paper-cream ink rests on an SWS-style cool near-black (hue ~240). One rare gold accent carries interactive emphasis. Numbers are reported with the same typographic gravity at 0.2% as at 5%; the data does the talking, not the chrome. Mercury for restraint, Linear for craft, Notion for the canvas-as-page feel.\n\nExplicitly not a Bloomberg full-clone, not Robinhood, not the generic LLM SaaS dashboard. The reading room rejects all three by construction.\n\nThree thin server-component routes (/, /portfolio, /watchlist) share a single max-w-6xl column, a NavBar tab strip in pb-1 border-b underline form, and a theme toggle that swaps dark <-> light. Tokens are CSS custom properties in web/src/app/globals.css; since v4 dark is the default (defaultTheme=\"dark\", enableSystem=false). Both modes are first-class.",
+    "overview": "The dashboard is a paper-and-ink ledger for a long-horizon investor, a place for sitting with positions, not reacting to them. Warm graphite type rests on cream in light mode; in dark mode (the v4 default) paper-cream ink rests on an SWS-style cool near-black (hue ~240). One rare gold accent carries interactive emphasis. Numbers are reported with the same typographic gravity at 0.2% as at 5%; the data does the talking, not the chrome. Mercury for restraint, Linear for craft, Notion for the canvas-as-page feel.\n\nExplicitly not a Bloomberg full-clone, not Robinhood, not the generic LLM SaaS dashboard. The reading room rejects all three by construction.\n\nThree top-level routes (/, /portfolio, /watchlist) share a single max-w-6xl column and a NavBar (lowercase masthead + 3-tab ink-underline strip + a locale toggle EN/中 and a 2-state dark<->light theme toggle). / and /watchlist stay thin; /portfolio is itself split into six query-param tabs (?tab=holdings|returns|updates|dividends|analysis|calendar, parsed server-side) - the weekend-study surface where the SWS primitives (snowflake, KPI strip, statement cards, comparison gauges, dividend ledger) live. The whole surface is fully localized en/zh. Tokens are CSS custom properties in web/src/app/globals.css; since v4 dark is the default (defaultTheme=\"dark\", enableSystem=false). Both modes are first-class.",
     "keyCharacteristics": [
       "Paper-cream (light) / cool near-black (dark) surface, inverting ink, one rare SWS gold accent.",
-      "One humanist sans family (IBM Plex Sans + Plex Mono), tabular figures opt-in on numeric cells.",
-      "Flat by default; depth from spacing, hairline borders, and tonal contrast within the warm-neutral family.",
-      "Two densities (glance, study) sharing one visual vocabulary; drill-in not switch-of-surface is how density scales.",
-      "Color never carries meaning alone; gain/loss always paired with arrow + sign.",
-      "Charts that ship in SSR HTML are hand-rolled SVG; Recharts only inside lazy-mounted drill-ins.",
+      "Plex Sans + Plex Mono for the working surface; Plex Serif (v4) reserved for display h1s + the dividend income hero. Tabular figures opt-in on numeric cells.",
+      "Flat by default; depth from spacing, hairline borders, and tonal contrast. v4 adds bordered rounded-xl SWS cards (bg-surface-raised) for the study-mode primitives - still shadowless.",
+      "Two densities (glance, study) sharing one visual vocabulary; drill-in / portfolio-tab, not switch-of-surface, is how density scales.",
+      "Color never carries meaning alone; gain/loss always paired with arrow + sign; statement sentiment always paired with a check/warn/neutral glyph.",
+      "Charts that ship in SSR HTML are hand-rolled SVG (sparkline, donut, stacks, benchmark line, snowflake radar, dividend bar); Recharts only inside the lazy-mounted drill-in price chart.",
       "Restrained motion: state changes only; prefers-reduced-motion: reduce zeroes all transitions and animations globally."
     ],
     "rules": [
@@ -297,8 +349,8 @@
         "section": "colors"
       },
       {
-        "name": "The One Family Rule",
-        "body": "Every glyph in the interface comes from IBM Plex Sans (or Plex Mono for inline code) at varying weights.",
+        "name": "The Sans-Working, Serif-Display Rule (v4)",
+        "body": "The working surface is IBM Plex Sans (Plex Mono for inline code + macro tickers). IBM Plex Serif is the only sanctioned second family, display-only: the portfolio masthead h1, the dividend income hero, and the ƒ ex-div glyph. Replaces the v3 One Family Rule. A serif heading outside those three roles, or any serif paragraph, is a regression. No third family.",
         "section": "typography"
       },
       {
@@ -322,8 +374,13 @@
         "section": "elevation"
       },
       {
+        "name": "The Shadowless-Card Rule (v4)",
+        "body": "The v4 rounded-xl SWS cards (bg-surface-raised + 1px rule border) are real containers but never float: no box-shadow, no hover-lift, no z-translate. Depth reads from the surface->surface-raised tonal step + the hairline border. Rounded corners (rounded-xl 12px, rounded-full for chips/dots/markers) are the one visual concession; the v3 rounded-sm 2px still applies to the notes textarea + drill-in inner frames.",
+        "section": "elevation"
+      },
+      {
         "name": "The No-Floating-Cards Rule",
-        "body": "Cards are not the default container. Most things are sections divided by spacing and a hairline rule. The drill-in is the closest thing to a card and is full-bleed within the row it expands from.",
+        "body": "Cards are allowed (v4 added bordered rounded-xl SWS cards for the portfolio study tabs) but they never float: no shadow, no z-lift, no blur. The glance surfaces (/, /watchlist, the holdings register) still default to sections divided by spacing and a hairline rule, not a card grid. The drill-in stays full-bleed within the row it expands from.",
         "section": "elevation"
       },
       {
@@ -333,7 +390,7 @@
       },
       {
         "name": "The Hand-Rolled-SVG Rule",
-        "body": "Charts that ship in SSR HTML are hand-rolled SVG (sparkline, donut, concentration stack, currency stack, benchmark line). Recharts is reserved for lazy-mounted drill-in surfaces.",
+        "body": "Charts that ship in SSR HTML are hand-rolled SVG (sparkline, donut, concentration/currency stacks, benchmark line, snowflake radar, dividend stacked bar). price-chart.tsx (the drill-in 90-day chart) is the only Recharts surface; the v4 performance-chart-card embeds the hand-rolled benchmark-chart, not Recharts.",
         "section": "elevation"
       },
       {
@@ -368,6 +425,7 @@
       "Don't use border-left greater than 1px as a colored accent stripe on cards or alerts.",
       "Don't apply background-clip: text with a gradient. Use a single solid color, with emphasis through weight.",
       "Don't apply backdrop-filter: blur decoratively. No glassmorphism unless purposeful and rare.",
+      "Don't give the v4 rounded-xl SWS cards a box-shadow, hover-lift, or z-translate. They earn depth from the surface-raised tonal step + rule hairline only.",
       "Don't build a hero-metric template (huge number, small label, supporting stats, gradient accent).",
       "Don't repeat identical card grids. Same-sized cards with icon + heading + text endlessly is a layout failure.",
       "Don't reach for a modal as the first thought. Exhaust inline and progressive (drill-in) alternatives first.",
@@ -375,8 +433,8 @@
       "Don't animate transform or layout. Color and opacity only, ≤200ms.",
       "Don't use bounce or elastic easing. Ease out with exponential curves.",
       "Don't use em dashes in copy. Use commas, colons, semicolons, periods, or parentheses.",
-      "Don't introduce a second sans family. One Plex Sans for everything; Plex Mono only for inline code."
+      "Don't introduce a second sans family, or use IBM Plex Serif beyond its three display roles (portfolio h1, dividend income hero, ƒ ex-div glyph). Plex Sans is the working voice, Plex Mono is for inline code + macro tickers, Plex Serif is a rare display accent. No serif paragraphs."
     ]
   },
-  "lastManualSync": "2026-05-21: v4 colorMeta + narrative hand-synced (gold accent, status palette, two-tier rule, dark default). Component CSS samples + tonal ramps are still v3 2026-05-13 captures — regenerate via /impeccable document for a full v4 sidecar."
+  "lastManualSync": "2026-06-04: full v4 SWS hand-sync. Added the display-serif typography role + Sans-working/Serif-display rule, the Shadowless-Card rule; refreshed No-Floating-Cards + Hand-Rolled-SVG; updated narrative/keyCharacteristics/dos/donts; fixed the nav (locale toggle + 2-state theme) and notes-focus (gold) specimens; added v4 component specimens (SWS card, portfolio tab strip, snowflake radar, statement card, KPI tile/strip, comparison gauge). Color tonal ramps remain the 2026-05-13 captures (neutral families unchanged). Mirrors DESIGN.md as of 2026-06-04."
 }

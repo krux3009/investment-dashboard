@@ -31,10 +31,14 @@ ships.
   `rounded` scale, and the new component tokens. CLAUDE.md refreshed
   alongside (Architecture tree, Surfaces, advisor endpoints + prompt
   versions, Verification).
-- ⬜ **DESIGN.json sidecar re-sync** (new, spun out of #2). The
-  machine-readable sidecar still carries the v3 component CSS
-  specimens + the retired "One Family Rule" typography rule. Lower
-  priority than the human doc; do when the JSON is actually consumed.
+- ✅ **DESIGN.json sidecar re-sync** (2026-06-04). Hand-synced to the
+  v4 DESIGN.md: display-serif typographyMeta role, Sans-working/
+  Serif-display + Shadowless-Card rules, refreshed No-Floating-Cards +
+  Hand-Rolled-SVG, narrative/keyCharacteristics/dos/donts, fixed nav
+  (locale toggle + 2-state theme) + notes-focus (gold) specimens, and
+  six new v4 component specimens (SWS card, portfolio tab strip,
+  snowflake radar, statement card, KPI tile/strip, comparison gauge).
+  Color tonal ramps left as the 2026-05-13 captures (neutrals unchanged).
 - ⬜ **#5 re-baseline Playwright** — still pending; no visual change
   this pass (docs only), baselines remain valid.
 
