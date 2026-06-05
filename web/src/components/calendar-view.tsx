@@ -205,6 +205,74 @@ function EventRow({ ev, selected, onSelect, label }: EventRowProps) {
   );
 }
 
+interface AgendaListProps {
+  days: { iso: string; day: number; evs: ForesightEvent[]; isToday: boolean }[];
+  computePnl: (iso: string) => { pnl: number; pct: number; isLive: boolean } | null;
+  selectedId: string | null;
+  onSelect: (eventId: string) => void;
+}
+
+// Mobile agenda: one row per signal-carrying day, in date order. Reuses the
+// same EventRow chips + PnlRow + tap-to-open selection as the desktop grid;
+// no MAX_EVENTS cap since the list has vertical room to spare.
+function AgendaList({ days, computePnl, selectedId, onSelect }: AgendaListProps) {
+  const t = useT();
+  const { locale } = useLocale();
+
+  if (days.length === 0) {
+    return (
+      <div className="md:hidden py-8 text-center text-xs text-quiet">
+        {t("calendar.agenda.empty")}
+      </div>
+    );
+  }
+
+  return (
+    <div className="md:hidden flex flex-col">
+      {days.map((row) => {
+        const pnl = computePnl(row.iso);
+        return (
+          <div
+            key={row.iso}
+            className={`py-3 border-b border-rule/60 last:border-b-0 ${
+              row.isToday ? "-mx-2 px-2 rounded-md ring-1 ring-rule ring-inset" : ""
+            }`}
+          >
+            <div className="flex items-baseline justify-between mb-1.5">
+              <span className="text-sm text-ink tabular">
+                {formatDate(row.iso, locale)}
+              </span>
+              {row.isToday && (
+                <span className="text-[10px] uppercase tracking-wider text-whisper">
+                  {t("calendar.today_cap")}
+                </span>
+              )}
+            </div>
+            {pnl && (
+              <PnlRow pnl={pnl.pnl} pct={pnl.pct} dim={false} isLive={pnl.isLive} />
+            )}
+            <div className="flex flex-col gap-0.5">
+              {row.evs.map((ev) => (
+                <EventRow
+                  key={ev.event_id}
+                  ev={ev}
+                  selected={ev.event_id === selectedId}
+                  onSelect={onSelect}
+                  label={t("calendar.select_event", {
+                    date: formatDate(ev.date, locale),
+                    kind: t(KIND_LABEL_KEY[ev.kind]),
+                    label: ev.label,
+                  })}
+                />
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function CalendarView({ initial, dailyPnl, year, month }: Props) {
   const t = useT();
   const { locale } = useLocale();
@@ -262,6 +330,49 @@ export function CalendarView({ initial, dailyPnl, year, month }: Props) {
     }
     return out;
   }, [year, month]);
+
+  // Per-day P&L resolver shared by the desktop grid + the mobile agenda:
+  // today (live, while market open) > a past day's recorded entry > none.
+  const computePnl = useCallback(
+    (iso: string): { pnl: number; pct: number; isLive: boolean } | null => {
+      if (iso === todayIso && liveTotals && market === "open") {
+        return {
+          pnl: liveTotals.total_today_change_abs_usd,
+          pct: liveTotals.total_today_change_pct,
+          isLive: true,
+        };
+      }
+      const entry = pnlByDate.get(iso);
+      if (iso < todayIso && entry) {
+        return { pnl: entry.pnl_usd, pct: entry.pnl_pct, isLive: false };
+      }
+      return null;
+    },
+    [todayIso, liveTotals, market, pnlByDate],
+  );
+
+  // Mobile agenda: a chronological list of the visible month's days that
+  // carry signal — any day with events, plus today, plus past days with a
+  // recorded P&L. A month grid is inherently 7 columns wide; below md we
+  // swap it for this list rather than crush 7 cells into 390px.
+  const agendaDays = useMemo(() => {
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const out: {
+      iso: string;
+      day: number;
+      evs: ForesightEvent[];
+      isToday: boolean;
+    }[] = [];
+    for (let d = 1; d <= daysInMonth; d++) {
+      const iso = isoDate(year, month, d);
+      const evs = eventsByDate.get(iso) ?? [];
+      const isToday = iso === todayIso;
+      const hasPnl = computePnl(iso) !== null;
+      if (evs.length === 0 && !isToday && !hasPnl) continue;
+      out.push({ iso, day: d, evs, isToday });
+    }
+    return out;
+  }, [year, month, eventsByDate, todayIso, computePnl]);
 
   const selected = useMemo(
     () => initial.events.find((e) => e.event_id === selectedId) ?? null,
@@ -372,8 +483,17 @@ export function CalendarView({ initial, dailyPnl, year, month }: Props) {
         </div>
       </div>
 
+      {/* Mobile (below md): chronological agenda list. */}
+      <AgendaList
+        days={agendaDays}
+        computePnl={computePnl}
+        selectedId={selectedId}
+        onSelect={handleSelect}
+      />
+
+      {/* Desktop (md+): the month grid. */}
       <div
-        className="grid grid-cols-7 pb-2"
+        className="hidden md:grid grid-cols-7 pb-2"
         role="presentation"
       >
         {WEEKDAY_KEYS.map((k) => (
@@ -386,27 +506,12 @@ export function CalendarView({ initial, dailyPnl, year, month }: Props) {
         ))}
       </div>
 
-      <div className="grid grid-cols-7">
+      <div className="hidden md:grid grid-cols-7">
         {cells.map((c, i) => {
           const iso = isoDate(c.y, c.m, c.d);
           const evs = eventsByDate.get(iso) ?? [];
           const cellIsToday = iso === todayIso;
-          const isPast = iso < todayIso;
-          const pnlEntry = pnlByDate.get(iso);
-          let pnlForCell: { pnl: number; pct: number; isLive: boolean } | null = null;
-          if (cellIsToday && liveTotals && market === "open") {
-            pnlForCell = {
-              pnl: liveTotals.total_today_change_abs_usd,
-              pct: liveTotals.total_today_change_pct,
-              isLive: true,
-            };
-          } else if (isPast && pnlEntry) {
-            pnlForCell = {
-              pnl: pnlEntry.pnl_usd,
-              pct: pnlEntry.pnl_pct,
-              isLive: false,
-            };
-          }
+          const pnlForCell = computePnl(iso);
           const isToday = cellIsToday;
           const visible = evs.slice(0, MAX_EVENTS_PER_CELL);
           const overflow = evs.length - visible.length;

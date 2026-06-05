@@ -135,8 +135,27 @@ Verified via Playwright at 390 (watchlist 25 cards no overflow; returns
 detail scrolls in wrapper; analysis gauges/diversification stack) and 768
 (watchlist table returns, cards hidden, no page overflow). Not yet committed.
 
-### Phase 3 — Calendar
-- Agenda/list view below `md`; grid stays at `md+`.
+### Phase 3 — Calendar — ✅ DONE 2026-06-05
+- ✅ Agenda/list view below `md`; grid stays at `md+`. New `AgendaList`
+  renders one row per signal-carrying day of the visible month (any day
+  with events + today + past days with recorded P&L), in date order:
+  `formatDate` header + `PnlRow` + the same `EventRow` chips, tap-to-open
+  the existing foresight What/Meaning/Watch panel. No `MAX_EVENTS` cap (the
+  list has vertical room). Extracted a shared `computePnl(iso)` resolver
+  (today-live > past-recorded > none) so the grid + agenda share P&L logic;
+  this also collapsed the grid's inline `pnlForCell` block. Weekday header +
+  cell grid now `hidden md:grid`. New i18n `calendar.agenda.empty` (en + zh).
+  Verified at 390 (grid hidden, 6 event chips, tap → NFP foresight panel, no
+  overflow) and 768 (grid returns, agenda hidden).
+
+---
+
+## Status: v7 complete (2026-06-05)
+
+All three phases shipped + Playwright-verified at 390 + 768. Phases 1 & 2
+committed (`c93768f`, `2976b2a`); Phase 3 + this doc pending commit. Open
+decisions resolved: card face = Value+Total+Today; sort = segmented pills;
+calendar = full agenda (not shrunk grid); bottom tab bar skipped for v1.
 
 ---
 
