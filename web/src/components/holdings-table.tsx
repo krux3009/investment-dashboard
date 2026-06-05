@@ -16,9 +16,99 @@ import { Sparkline } from "./sparkline";
 import { Snowflake, type SnowflakeScores } from "./snowflake";
 import { useT } from "@/lib/i18n/use-t";
 import { useLocale } from "@/lib/i18n/locale-provider";
+import type { StringKey } from "@/lib/i18n/strings";
 
 const EARNINGS_SOON_DAYS = 14;
 const EX_DIV_SOON_DAYS = 14;
+
+// Earnings glyph (small calendar icon) rendered when the holding reports
+// within EARNINGS_SOON_DAYS. Shared by the desktop row + the mobile card.
+function EarningsGlyph({ item }: { item: EarningsItem | undefined }) {
+  const t = useT();
+  const { locale } = useLocale();
+  if (!item || item.days_until > EARNINGS_SOON_DAYS) return null;
+  const dateLabel = new Intl.DateTimeFormat(
+    locale === "zh" ? "zh-CN" : "en-US",
+    { month: "long", day: "numeric" },
+  ).format(new Date(item.date));
+  const daysLabel =
+    item.days_until === 0
+      ? t("holdings.earnings.today")
+      : t(
+          item.days_until === 1
+            ? "holdings.earnings.in_day"
+            : "holdings.earnings.in_days",
+          { n: item.days_until },
+        );
+  return (
+    <span
+      title={t("holdings.earnings.title", { date: dateLabel, label: daysLabel })}
+      aria-label={t("holdings.earnings.aria", { date: dateLabel, label: daysLabel })}
+      className="text-quiet inline-flex items-center cursor-help"
+    >
+      <svg
+        width="12"
+        height="12"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden
+      >
+        <rect x="2.5" y="3.5" width="11" height="10" rx="1" />
+        <line x1="2.5" y1="6.5" x2="13.5" y2="6.5" />
+        <line x1="5.5" y1="2" x2="5.5" y2="4.5" />
+        <line x1="10.5" y1="2" x2="10.5" y2="4.5" />
+      </svg>
+    </span>
+  );
+}
+
+// Ex-dividend glyph (ƒ in serif italic) rendered when next_ex_date falls
+// within EX_DIV_SOON_DAYS. Shared by the desktop row + the mobile card.
+function DividendGlyph({ dividend }: { dividend: HoldingDividend | undefined }) {
+  const t = useT();
+  const { locale } = useLocale();
+  if (!dividend || !dividend.next_ex_date) return null;
+  const ex = new Date(dividend.next_ex_date);
+  const today = new Date();
+  const daysUntil = Math.ceil((ex.getTime() - today.getTime()) / 86_400_000);
+  if (daysUntil < 0 || daysUntil > EX_DIV_SOON_DAYS) return null;
+  const dateLabel = new Intl.DateTimeFormat(
+    locale === "zh" ? "zh-CN" : "en-US",
+    { month: "long", day: "numeric" },
+  ).format(ex);
+  const daysLabel =
+    daysUntil === 0
+      ? t("dividends.exdiv.today")
+      : t(
+          daysUntil === 1
+            ? "dividends.exdiv.in_day"
+            : "dividends.exdiv.in_days",
+          { n: daysUntil },
+        );
+  return (
+    <span
+      title={t("dividends.exdiv.title", { date: dateLabel, label: daysLabel })}
+      aria-label={t("dividends.exdiv.aria", { date: dateLabel, label: daysLabel })}
+      className="text-quiet inline-flex items-center cursor-help font-serif italic text-sm leading-none"
+    >
+      ƒ
+    </span>
+  );
+}
+
+// 30-day sparkline trend direction from first vs last close.
+function sparkDirectionFor(points: PricePoint[]): "gain" | "loss" | "quiet" {
+  if (points.length < 2) return "quiet";
+  const first = points[0].close;
+  const last = points[points.length - 1].close;
+  if (last > first) return "gain";
+  if (last < first) return "loss";
+  return "quiet";
+}
 
 type SortKey = "ticker" | "qty" | "current_price" | "today_change_pct" | "market_value_usd" | "total_pnl_pct";
 type SortDir = "asc" | "desc";
@@ -114,88 +204,10 @@ function HoldingRow({
   dividendSoon,
   snowflakeScores,
 }: HoldingRowProps) {
-  const t = useT();
-  const { locale } = useLocale();
   const pulseHash = `${h.current_price}|${h.today_change_pct}|${h.market_value_usd}|${h.total_pnl_pct}`;
   const pulsing = useTickPulse(pulseHash);
   const pulseCls = pulsing ? "tick-pulse-cell" : "";
   const isUsd = h.currency === "USD";
-
-  // Earnings glyph (rendered in the left margin column when reporting
-  // within EARNINGS_SOON_DAYS). Returns null if no upcoming event.
-  const earningsGlyph = (() => {
-    const e = earningsItem;
-    if (!e || e.days_until > EARNINGS_SOON_DAYS) return null;
-    const dateLabel = new Intl.DateTimeFormat(
-      locale === "zh" ? "zh-CN" : "en-US",
-      { month: "long", day: "numeric" },
-    ).format(new Date(e.date));
-    const daysLabel =
-      e.days_until === 0
-        ? t("holdings.earnings.today")
-        : t(
-            e.days_until === 1
-              ? "holdings.earnings.in_day"
-              : "holdings.earnings.in_days",
-            { n: e.days_until },
-          );
-    return (
-      <span
-        title={t("holdings.earnings.title", { date: dateLabel, label: daysLabel })}
-        aria-label={t("holdings.earnings.aria", { date: dateLabel, label: daysLabel })}
-        className="text-quiet inline-flex items-center cursor-help"
-      >
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden
-        >
-          <rect x="2.5" y="3.5" width="11" height="10" rx="1" />
-          <line x1="2.5" y1="6.5" x2="13.5" y2="6.5" />
-          <line x1="5.5" y1="2" x2="5.5" y2="4.5" />
-          <line x1="10.5" y1="2" x2="10.5" y2="4.5" />
-        </svg>
-      </span>
-    );
-  })();
-
-  // Ex-dividend glyph (ƒ in serif italic), rendered when next_ex_date is
-  // within EX_DIV_SOON_DAYS.
-  const dividendGlyph = (() => {
-    if (!dividendSoon || !dividendSoon.next_ex_date) return null;
-    const ex = new Date(dividendSoon.next_ex_date);
-    const today = new Date();
-    const daysUntil = Math.ceil((ex.getTime() - today.getTime()) / 86_400_000);
-    if (daysUntil < 0 || daysUntil > EX_DIV_SOON_DAYS) return null;
-    const dateLabel = new Intl.DateTimeFormat(
-      locale === "zh" ? "zh-CN" : "en-US",
-      { month: "long", day: "numeric" },
-    ).format(ex);
-    const daysLabel =
-      daysUntil === 0
-        ? t("dividends.exdiv.today")
-        : t(
-            daysUntil === 1
-              ? "dividends.exdiv.in_day"
-              : "dividends.exdiv.in_days",
-            { n: daysUntil },
-          );
-    return (
-      <span
-        title={t("dividends.exdiv.title", { date: dateLabel, label: daysLabel })}
-        aria-label={t("dividends.exdiv.aria", { date: dateLabel, label: daysLabel })}
-        className="text-quiet inline-flex items-center cursor-help font-serif italic text-sm leading-none"
-      >
-        ƒ
-      </span>
-    );
-  })();
 
   // Zebra tint via :nth-child(even). The register's alternating-row
   // pattern is the structural cue. Expanded + hover states win in the
@@ -224,8 +236,8 @@ function HoldingRow({
             glyph applies. Earnings glyph wins if both are present. */}
         <td className="py-3 pl-1 pr-2 align-top w-6">
           <div className="flex flex-col items-center gap-1 pt-1">
-            {earningsGlyph}
-            {dividendGlyph}
+            <EarningsGlyph item={earningsItem} />
+            <DividendGlyph dividend={dividendSoon} />
           </div>
         </td>
 
@@ -340,6 +352,163 @@ function HoldingRow({
   );
 }
 
+// Mobile (below md) stacked-card form of one holding. Same data + tap-to-
+// expand drill-in as HoldingRow, reshaped into the SWS card vocabulary
+// (bg-surface-raised border rounded-xl). The whole card is the tap target.
+// Card face: market value USD (primary) + total-return % + today % on the
+// right; ticker/name/market·ccy + sparkline + glyphs on the left.
+function HoldingCard({
+  h,
+  sparkData,
+  sparkDirection,
+  isExpanded,
+  onToggle,
+  earningsItem,
+  dividendSoon,
+  snowflakeScores,
+}: HoldingRowProps) {
+  const t = useT();
+  const pulseHash = `${h.current_price}|${h.today_change_pct}|${h.market_value_usd}|${h.total_pnl_pct}`;
+  const pulsing = useTickPulse(pulseHash);
+  const pulseCls = pulsing ? "tick-pulse-cell" : "";
+  const isUsd = h.currency === "USD";
+  const noToday =
+    (h.today_change_pct === 0 || h.today_change_pct === null) &&
+    (h.today_change_abs === 0 || h.today_change_abs === null);
+
+  return (
+    <div>
+      <div
+        className={`rounded-xl border px-4 py-3 cursor-pointer transition-colors ${
+          isExpanded
+            ? "bg-surface-expanded border-ink/30"
+            : "bg-surface-raised border-rule hover:bg-surface-hover"
+        }`}
+        onClick={() => onToggle(h.code)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onToggle(h.code);
+          }
+        }}
+        tabIndex={0}
+        role="button"
+        aria-expanded={isExpanded}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-col gap-0.5 min-w-0">
+            <span className="text-base font-medium text-ink leading-tight">
+              {h.ticker}
+            </span>
+            <span className="text-xs text-quiet truncate">{h.name}</span>
+            <span className="text-xs text-whisper">
+              {h.market} · {h.currency}
+            </span>
+          </div>
+
+          <div className={`flex flex-col items-end gap-0.5 tabular shrink-0 ${pulseCls}`}>
+            <div className="text-ink font-medium">
+              {fmtUsd(h.market_value_usd, { decimals: 2 })}
+            </div>
+            {!isUsd && (
+              <div className="text-xs text-whisper font-normal">
+                {fmtCurrency(h.market_value, h.currency, { decimals: 2 })}
+              </div>
+            )}
+            <div className={`flex items-baseline gap-1 text-sm font-medium ${directionClass(h.total_pnl_pct)}`}>
+              <span aria-hidden>{arrowFor(h.total_pnl_pct)}</span>
+              <span>{fmtPct(h.total_pnl_pct, 2)}</span>
+              <span className="text-xs text-whisper font-normal">
+                {t("holdings.card.total")}
+              </span>
+            </div>
+            {noToday ? (
+              <div className="text-xs text-whisper font-normal">
+                — {t("holdings.card.today")}
+              </div>
+            ) : (
+              <div className={`flex items-baseline gap-1 text-sm font-medium ${directionClass(h.today_change_pct)}`}>
+                <span aria-hidden>{arrowFor(h.today_change_pct)}</span>
+                <span>{fmtPct(h.today_change_pct, 2)}</span>
+                <span className="text-xs text-whisper font-normal">
+                  {t("holdings.card.today")}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-2.5 flex items-center gap-3">
+          <Sparkline points={sparkData} direction={sparkDirection} />
+          <Snowflake size={28} scores={snowflakeScores ?? {}} showLabels={false} showRings={false} />
+          <div className="flex items-center gap-2 ml-auto">
+            <EarningsGlyph item={earningsItem} />
+            <DividendGlyph dividend={dividendSoon} />
+          </div>
+        </div>
+      </div>
+
+      {isExpanded && (
+        <DrillIn
+          code={h.code}
+          direction={
+            h.total_pnl_pct > 0 ? "gain" : h.total_pnl_pct < 0 ? "loss" : "quiet"
+          }
+        />
+      )}
+    </div>
+  );
+}
+
+// Mobile sort control — replaces the column-header sorting that vanishes
+// when the table becomes cards. Horizontally scrollable pill row driving
+// the same handleSort / localStorage sort state as the desktop headers.
+const MOBILE_SORT_PILLS: { key: SortKey; labelKey: StringKey }[] = [
+  { key: "ticker", labelKey: "holdings.sort.ticker" },
+  { key: "market_value_usd", labelKey: "holdings.sort.value" },
+  { key: "today_change_pct", labelKey: "holdings.col.today" },
+  { key: "total_pnl_pct", labelKey: "holdings.sort.total" },
+];
+
+function MobileSortControl({
+  sort,
+  onSort,
+}: {
+  sort: SortState | null;
+  onSort: (key: SortKey) => void;
+}) {
+  const t = useT();
+  return (
+    <div className="md:hidden mb-3 -mx-1 overflow-x-auto">
+      <div className="flex items-center gap-1.5 px-1 min-w-max">
+        <span className="text-xs uppercase tracking-[0.04em] text-whisper pr-1 shrink-0">
+          {t("holdings.sort.label")}
+        </span>
+        {MOBILE_SORT_PILLS.map((p) => {
+          const active = sort?.key === p.key;
+          const arrow = active ? (sort?.dir === "asc" ? "↑" : "↓") : "";
+          return (
+            <button
+              key={p.key}
+              type="button"
+              onClick={() => onSort(p.key)}
+              aria-pressed={active}
+              className={`shrink-0 rounded-full border px-3 py-2 text-xs transition-colors ${
+                active
+                  ? "border-ink text-ink bg-surface-hover font-medium"
+                  : "border-rule text-quiet"
+              }`}
+            >
+              {t(p.labelKey)}
+              {arrow && <span className="ml-1 text-quiet">{arrow}</span>}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 interface Props {
   holdings: Holding[];
   // Map of code → 30-day price history, fetched server-side in page.tsx
@@ -416,6 +585,30 @@ export function HoldingsTable({
         {t("holdings.heading")}
       </div>
 
+      {/* Mobile (below md): sort pills + stacked cards. */}
+      <MobileSortControl sort={sort} onSort={handleSort} />
+      <div className="md:hidden flex flex-col gap-2">
+        {sorted.map((h) => {
+          const sparkData = sparklines[h.code]?.points ?? [];
+          return (
+            <HoldingCard
+              key={h.code}
+              h={h}
+              sparkData={sparkData}
+              sparkDirection={sparkDirectionFor(sparkData)}
+              isExpanded={expandedCode === h.code}
+              onToggle={handleRowToggle}
+              earningsItem={earningsByCode[h.code]}
+              dividendSoon={dividendsByCode[h.code]}
+              snowflakeScores={snowflakeScoresByCode[h.code]}
+            />
+          );
+        })}
+      </div>
+
+      {/* Desktop (md+): the register table. Wrapped so it scrolls inside
+          its own box at tablet widths instead of pushing the page. */}
+      <div className="hidden md:block overflow-x-auto">
       <table className="w-full border-collapse">
         <thead>
           <tr className="border-b border-rule">
@@ -451,20 +644,12 @@ export function HoldingsTable({
         <tbody>
           {sorted.map((h) => {
             const sparkData = sparklines[h.code]?.points ?? [];
-            const sparkDirection: "gain" | "loss" | "quiet" =
-              sparkData.length >= 2
-                ? sparkData[sparkData.length - 1].close > sparkData[0].close
-                  ? "gain"
-                  : sparkData[sparkData.length - 1].close < sparkData[0].close
-                  ? "loss"
-                  : "quiet"
-                : "quiet";
             return (
               <HoldingRow
                 key={h.code}
                 h={h}
                 sparkData={sparkData}
-                sparkDirection={sparkDirection}
+                sparkDirection={sparkDirectionFor(sparkData)}
                 isExpanded={expandedCode === h.code}
                 onToggle={handleRowToggle}
                 earningsItem={earningsByCode[h.code]}
@@ -475,6 +660,7 @@ export function HoldingsTable({
           })}
         </tbody>
       </table>
+      </div>
     </section>
   );
 }

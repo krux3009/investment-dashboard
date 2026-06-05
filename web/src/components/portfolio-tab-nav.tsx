@@ -29,7 +29,7 @@ export function PortfolioTabNav({ active }: Props) {
 
   return (
     <nav
-      className="flex gap-1 mb-6 border-b border-rule"
+      className="flex flex-nowrap gap-1 mb-6 border-b border-rule overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       aria-label={t("portfolio.tab.aria")}
     >
       {TABS.map((tab) => {
@@ -41,7 +41,7 @@ export function PortfolioTabNav({ active }: Props) {
             prefetch
             aria-current={on ? "page" : undefined}
             className={[
-              "relative px-3 py-2 text-sm transition-colors",
+              "relative shrink-0 whitespace-nowrap px-3 py-2 text-sm transition-colors",
               on ? "text-ink font-medium" : "text-quiet hover:text-ink",
             ].join(" ")}
           >

@@ -17,12 +17,12 @@ export function NavBar() {
   const pathname = usePathname();
   const t = useT();
   return (
-    <header className="flex items-baseline justify-between mb-12">
-      <div className="flex items-baseline gap-8">
+    <header className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2 mb-8 md:mb-12">
+      <div className="flex items-baseline gap-4 md:gap-8 min-w-0">
         <div className="text-sm font-medium tracking-wide text-quiet">
           {t("nav.brand")}
         </div>
-        <nav className="flex items-baseline gap-5 text-xs">
+        <nav className="flex items-baseline gap-4 md:gap-5 text-xs">
           {TABS.map((tab) => {
             const active = pathname === tab.href;
             return (

@@ -59,7 +59,7 @@ function EventRow({ event, days, expanded, onToggle, insight }: RowProps) {
 
   return (
     <div className="py-3 border-b border-rule/60 last:border-b-0">
-      <div className="grid grid-cols-[7rem_5rem_1fr_auto] gap-x-4 items-baseline">
+      <div className="grid grid-cols-[5rem_4rem_minmax(0,1fr)_auto] md:grid-cols-[7rem_5rem_minmax(0,1fr)_auto] gap-x-3 md:gap-x-4 items-baseline">
         <div className="tabular text-sm">
           <div className="text-ink">{formatDate(event.date, locale)}</div>
           <div className="text-xs text-whisper">{daysUntilLabel}</div>
@@ -88,7 +88,7 @@ function EventRow({ event, days, expanded, onToggle, insight }: RowProps) {
       </div>
 
       {expanded && (
-        <div className="mt-3 ml-[7rem] pl-4 border-l border-rule/60">
+        <div className="mt-3 ml-[5rem] md:ml-[7rem] pl-4 border-l border-rule/60">
           <ForesightInsightBody insight={insight} />
         </div>
       )}
