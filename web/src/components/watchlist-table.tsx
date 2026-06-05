@@ -28,6 +28,42 @@ const tickerFromCode = (code: string) =>
 const marketFromCode = (code: string) =>
   code.includes(".") ? code.split(".")[0] : "?";
 
+// Shared derivation for the desktop row + the mobile card: resolves the
+// ticker/market labels, 30-day trend, and the live-or-snapshot last/today
+// values from the same precedence (live tick > snapshot quote > sparkline).
+function deriveWatchlistRow(
+  code: string,
+  points: PricePoint[],
+  quote: Quote | undefined,
+  liveQuote: LiveWatchlistQuote | undefined,
+) {
+  const has = points.length >= 2;
+  const sparkLast = has ? points[points.length - 1].close : null;
+  const first = has ? points[0].close : null;
+  const change30 =
+    has && first && first !== 0 ? (sparkLast! - first) / first : null;
+  const direction: "gain" | "loss" | "quiet" =
+    change30 === null ? "quiet" : change30 > 0 ? "gain" : change30 < 0 ? "loss" : "quiet";
+  const last = liveQuote?.last_price ?? quote?.last_price ?? sparkLast;
+  const today = liveQuote?.today_change_pct ?? quote?.today_change_pct ?? null;
+  return {
+    ticker: tickerFromCode(code),
+    market: marketFromCode(code),
+    change30,
+    direction,
+    last,
+    today,
+  };
+}
+
+const fmtLast = (last: number | null) =>
+  last === null
+    ? "–"
+    : `$${last.toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}`;
+
 interface WatchlistRowProps {
   code: string;
   points: PricePoint[];
@@ -50,20 +86,8 @@ function WatchlistRow({
   onToggle,
   snowflakeScores,
 }: WatchlistRowProps) {
-  const ticker = tickerFromCode(code);
-  const market = marketFromCode(code);
-  const has = points.length >= 2;
-  const sparkLast = has ? points[points.length - 1].close : null;
-  const first = has ? points[0].close : null;
-  const change30 =
-    has && first && first !== 0 ? (sparkLast! - first) / first : null;
-  const direction: "gain" | "loss" | "quiet" =
-    change30 === null ? "quiet" : change30 > 0 ? "gain" : change30 < 0 ? "loss" : "quiet";
-
-  const last =
-    liveQuote?.last_price ?? quote?.last_price ?? sparkLast;
-  const today =
-    liveQuote?.today_change_pct ?? quote?.today_change_pct ?? null;
+  const { ticker, market, change30, direction, last, today } =
+    deriveWatchlistRow(code, points, quote, liveQuote);
 
   const pulseHash = `${last ?? ""}|${today ?? ""}`;
   const pulsing = useTickPulse(pulseHash);
@@ -108,14 +132,7 @@ function WatchlistRow({
         </td>
 
         <td className="py-3 px-4 text-right tabular font-medium text-ink">
-          <div className={pulseCls}>
-            {last === null
-              ? "–"
-              : `$${last.toLocaleString("en-US", {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}`}
-          </div>
+          <div className={pulseCls}>{fmtLast(last)}</div>
         </td>
 
         <td className={`py-3 px-4 text-right tabular font-medium ${directionClass(today)}`}>
@@ -165,6 +182,97 @@ function WatchlistRow({
   );
 }
 
+// Mobile (below md) stacked-card form of one watchlist symbol. Same data +
+// tap-to-expand drill-in as WatchlistRow, in the SWS card vocabulary. Card
+// face: last price (primary) + today % + 30-day % on the right; ticker +
+// market on the left; sparkline + mini snowflake along the bottom.
+function WatchlistCard({
+  code,
+  points,
+  quote,
+  liveQuote,
+  isExpanded,
+  onToggle,
+  snowflakeScores,
+}: WatchlistRowProps) {
+  const t = useT();
+  const { ticker, market, change30, direction, last, today } =
+    deriveWatchlistRow(code, points, quote, liveQuote);
+  const pulseHash = `${last ?? ""}|${today ?? ""}`;
+  const pulsing = useTickPulse(pulseHash);
+  const pulseCls = pulsing ? "tick-pulse-cell" : "";
+
+  return (
+    <div>
+      <div
+        className={`rounded-xl border px-4 py-3 cursor-pointer transition-colors ${
+          isExpanded
+            ? "bg-surface-expanded border-ink/30"
+            : "bg-surface-raised border-rule hover:bg-surface-hover"
+        }`}
+        onClick={() => onToggle(code)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onToggle(code);
+          }
+        }}
+        tabIndex={0}
+        role="button"
+        aria-expanded={isExpanded}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-col gap-0.5 min-w-0">
+            <span className="text-base font-medium text-ink leading-tight">
+              {ticker}
+            </span>
+            <span className="text-xs text-whisper uppercase tracking-wider">
+              {market}
+            </span>
+          </div>
+
+          <div className={`flex flex-col items-end gap-0.5 tabular shrink-0 ${pulseCls}`}>
+            <div className="text-ink font-medium">{fmtLast(last)}</div>
+            {today === null || today === 0 ? (
+              <div className="text-xs text-whisper font-normal">
+                — {t("holdings.card.today")}
+              </div>
+            ) : (
+              <div className={`flex items-baseline gap-1 text-sm font-medium ${directionClass(today)}`}>
+                <span aria-hidden>{arrowFor(today)}</span>
+                <span>{fmtPct(today, 2)}</span>
+                <span className="text-xs text-whisper font-normal">
+                  {t("holdings.card.today")}
+                </span>
+              </div>
+            )}
+            {change30 === null ? (
+              <div className="text-xs text-whisper font-normal">
+                — {t("watchlist.col.30d")}
+              </div>
+            ) : (
+              <div className={`flex items-baseline gap-1 text-sm font-medium ${directionClass(change30)}`}>
+                <span aria-hidden>{arrowFor(change30)}</span>
+                <span>{fmtPct(change30, 1)}</span>
+                <span className="text-xs text-whisper font-normal">
+                  {t("watchlist.col.30d")}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-2.5 flex items-center gap-3">
+          <Sparkline points={points} direction={direction} />
+          <Snowflake size={28} scores={snowflakeScores ?? {}} showLabels={false} showRings={false} />
+        </div>
+      </div>
+
+      {isExpanded && <DrillIn code={code} direction={direction} />}
+    </div>
+  );
+}
+
 export function WatchlistTable({
   codes,
   sparklines,
@@ -191,6 +299,24 @@ export function WatchlistTable({
         </div>
       </div>
 
+      {/* Mobile (below md): stacked cards. */}
+      <div className="md:hidden flex flex-col gap-2">
+        {codes.map((code) => (
+          <WatchlistCard
+            key={code}
+            code={code}
+            points={sparklines[code]?.points ?? []}
+            quote={quotes[code]}
+            liveQuote={liveMap.get(code)}
+            isExpanded={expandedCode === code}
+            onToggle={toggle}
+            snowflakeScores={snowflakeScoresByCode[code]}
+          />
+        ))}
+      </div>
+
+      {/* Desktop (md+): the table, scrollable inside its box at tablet width. */}
+      <div className="hidden md:block overflow-x-auto">
       <table className="w-full">
         <thead>
           <tr className="border-b border-rule">
@@ -244,6 +370,7 @@ export function WatchlistTable({
           ))}
         </tbody>
       </table>
+      </div>
     </section>
   );
 }

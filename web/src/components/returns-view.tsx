@@ -285,7 +285,7 @@ function DetailReport({ detail }: { detail: ReturnsDetail }) {
       </header>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[680px] text-sm">
           <thead>
             <tr className="border-b border-rule text-quiet">
               {headerKeys.map((h) => (

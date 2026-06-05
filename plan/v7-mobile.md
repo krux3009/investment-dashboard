@@ -85,19 +85,55 @@ unchanged.
 
 ## Phased order
 
-### Phase 1 — Daily-glance essentials (highest value)
+### Phase 1 — Daily-glance essentials (highest value) — ✅ DONE 2026-06-05
 The 15-second phone glance must be clean.
-- NavBar: fix the header row at 390px (gaps / wrap / shrink masthead).
-- Portfolio tab strip: horizontal scroll.
-- **Holdings register → cards** below `md` + mobile sort control.
-- Home: verify hero + 4-tile digest + foresight read well (likely fine).
+- ✅ NavBar: header row now `flex-wrap` + responsive gaps (`gap-4 md:gap-8`,
+  nav `gap-4 md:gap-5`) + `mb-8 md:mb-12`. At 390 the EN/theme toggles wrap
+  to a second line cleanly; no overflow.
+- ✅ Portfolio tab strip: `overflow-x-auto flex-nowrap` + hidden scrollbar
+  (`[scrollbar-width:none] [&::-webkit-scrollbar]:hidden`), links `shrink-0
+  whitespace-nowrap`. 4 tabs visible, Analysis/Calendar scroll in.
+- ✅ **Holdings register → cards** below `md`. New `HoldingCard` (SWS
+  `bg-surface-raised border rounded-xl`, whole card = tap target → inline
+  drill-in). Card face = market value USD (primary) + total-return % +
+  today % on the right; sparkline + mini snowflake + earnings/ƒ glyphs on
+  the bottom-left. Desktop `<table>` now `hidden md:block` inside an
+  `overflow-x-auto` wrapper (also fixes a *pre-existing* 14px page overflow
+  from the 9-col table at the 768 boundary). Extracted shared `EarningsGlyph`
+  / `DividendGlyph` / `sparkDirectionFor` so row + card share one source.
+- ✅ **Mobile sort control** (`MobileSortControl`): scrollable pill row
+  (Ticker / Value / Today / Total) driving the same `handleSort` +
+  `ql.holdings.sort` localStorage as the desktop headers. New i18n keys
+  `holdings.sort.*` + `holdings.card.{total,today}` (en + zh).
+- ✅ Home: read fine at 390 EXCEPT a foresight `[learn more]` overflowed
+  29px — the `grid-cols-[7rem_5rem_1fr_auto]` `1fr` col couldn't shrink
+  below min-content. Fixed: responsive `grid-cols-[5rem_4rem_minmax(0,1fr)_
+  auto] md:grid-cols-[7rem_5rem_minmax(0,1fr)_auto]` + matching expanded-body
+  indent `ml-[5rem] md:ml-[7rem]`. Verified no page overflow at 390 + 768.
 
-### Phase 2 — Study surfaces
-- Watchlist → cards (mirror holdings).
-- Returns detail → `overflow-x-auto` scroll wrapper.
-- Performance chart card: stack toggles/metrics, ensure chart width.
-- Analysis tab: verify sub-tab nav + gauges at 390px (cards already
-  stack; mostly a spacing pass).
+Verified via Playwright at 390 (cards, sort reorder, drill-in expand, no
+page overflow) and 768 (table returns, scrolls in wrapper, no page overflow).
+Not yet committed.
+
+### Phase 2 — Study surfaces — ✅ DONE 2026-06-05
+- ✅ Watchlist → cards (mirror holdings). New `WatchlistCard` + shared
+  `deriveWatchlistRow` / `fmtLast` helpers (row + card one source). Card
+  face = last price (primary) + today % + 30-day % on the right; ticker +
+  market left; sparkline + mini snowflake bottom. Table now `hidden
+  md:block overflow-x-auto`. No sort control (watchlist has no sort).
+  Reuses `holdings.card.today` + `watchlist.col.30d` labels — no new i18n.
+- ✅ Returns detail → wrapper already existed; added `min-w-[680px]` so the
+  9-col table scrolls sideways inside its box instead of crushing at 390.
+- ✅ Performance chart card → already `flex-wrap` header + `grid-cols-2
+  md:grid-cols-4` metrics; verified clean at 390 (range strip + KPIs stack,
+  BenchmarkChart scales). No change needed.
+- ✅ Analysis tab → verified at 390: sub-tab nav (5 axes) fits one row,
+  comparison gauges + diversification stacked bars all full-width, no
+  overflow. Cards already stacked; no change needed.
+
+Verified via Playwright at 390 (watchlist 25 cards no overflow; returns
+detail scrolls in wrapper; analysis gauges/diversification stack) and 768
+(watchlist table returns, cards hidden, no page overflow). Not yet committed.
 
 ### Phase 3 — Calendar
 - Agenda/list view below `md`; grid stays at `md+`.
