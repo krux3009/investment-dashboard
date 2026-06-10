@@ -21,9 +21,23 @@ export interface ComparisonGaugeProps {
   unit?: string;
   portfolioLabel?: ReactNode; // row label for the portfolio marker (default "portfolio")
   referenceLabel?: string;   // e.g. "US Market", "Tech sector"
+  verdict?: {                // plain-English read of portfolio vs reference
+    tone: "success" | "warn" | "neutral";
+    label: string;          // chip text, e.g. "Much pricier than the market"
+    meaning?: ReactNode;    // one-line explanation under the table
+  };
   sub?: ReactNode;           // small caption below the table
   className?: string;
 }
+
+// Verdict chip tone → status color (18% tint bg + saturated text/border),
+// matching statement-card.tsx and the insight action chip.
+const VERDICT_CLASS = {
+  success:
+    "bg-[color-mix(in_oklch,var(--accent-success)_18%,transparent)] text-[var(--accent-success)] border-[var(--accent-success)]",
+  warn: "bg-[color-mix(in_oklch,var(--accent-warn)_18%,transparent)] text-[var(--accent-warn)] border-[var(--accent-warn)]",
+  neutral: "bg-transparent text-quiet border-rule",
+} as const;
 
 function formatValue(value: number, unit?: string): string {
   const rounded = Math.abs(value) >= 100 ? value.toFixed(0) : value.toFixed(1);
@@ -39,6 +53,7 @@ export function ComparisonGauge({
   unit = "",
   portfolioLabel = "portfolio",
   referenceLabel = "Market",
+  verdict,
   sub,
   className,
 }: ComparisonGaugeProps) {
@@ -62,7 +77,19 @@ export function ComparisonGauge({
         className,
       )}
     >
-      <h4 className="text-sm font-medium text-ink">{title}</h4>
+      <div className="flex items-start justify-between gap-2">
+        <h4 className="text-sm font-medium text-ink">{title}</h4>
+        {verdict ? (
+          <span
+            className={cn(
+              "shrink-0 inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium",
+              VERDICT_CLASS[verdict.tone],
+            )}
+          >
+            {verdict.label}
+          </span>
+        ) : null}
+      </div>
 
       <div className="relative h-9">
         {/* Scale bar */}
@@ -99,13 +126,19 @@ export function ComparisonGauge({
       <table className="w-full text-xs">
         <tbody>
           <tr>
-            <td className="text-quiet py-0.5">{portfolioLabel}</td>
+            <td className="text-quiet py-0.5">
+              <span className="inline-block w-2 h-2 rounded-full bg-[var(--accent-primary)] mr-2 align-middle" />
+              {portfolioLabel}
+            </td>
             <td className="text-ink py-0.5 tabular text-right font-medium">
               {formatValue(portfolio, unit)}
             </td>
           </tr>
           <tr>
-            <td className="text-quiet py-0.5">{referenceLabel}</td>
+            <td className="text-quiet py-0.5">
+              <span className="inline-block w-0.5 h-2.5 bg-quiet mr-2 align-middle" />
+              {referenceLabel}
+            </td>
             <td className="text-quiet py-0.5 tabular text-right">
               {formatValue(reference, unit)}
             </td>
@@ -113,6 +146,9 @@ export function ComparisonGauge({
         </tbody>
       </table>
 
+      {verdict?.meaning ? (
+        <p className="text-[11px] text-whisper leading-snug">{verdict.meaning}</p>
+      ) : null}
       {sub ? <p className="text-[11px] text-quiet leading-snug">{sub}</p> : null}
     </div>
   );

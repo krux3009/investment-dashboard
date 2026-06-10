@@ -38,7 +38,11 @@ _TTL = timedelta(days=7)
 # Bumped whenever _TRANSLATOR_PROMPT is rewritten so the cache key
 # changes and old translations aren't served. The actual cached row
 # stays in DuckDB until the 7d TTL expires; we just stop reading it.
-_PROMPT_VERSION = "v3-no-em-dash"
+# v3-no-em-dash → v4-recommend (2026-06-06): dropped the observation-only
+# guardrail. The translation may now add a short plain "so what" (what
+# this could mean / what to watch). Still anti-hype in tone; no
+# has_forbidden post-check on this surface (single short sentence).
+_PROMPT_VERSION = "v4-recommend"
 
 # The translator's system prompt. Mirrors the digest prompt's banned
 # words so the LEAD / ticker rows and the drill-in speak the same voice.
@@ -53,9 +57,8 @@ Hard rules:
   not the indicator name ("RSI", "MA", "death cross", "Bollinger").
 - Keep dates ("May 1") and specific numbers from the input verbatim.
   Drop dates only if removing them does not lose the timing.
-- State observations only. No buy / sell / hold / target / forecast /
-  predict / recommend. No hype words (surge, plunge, soar, crash,
-  breakout, rally, tank).
+- You may add a short, plain "so what": what this could mean or what to
+  keep an eye on. Keep it calm and grounded: no hype, no guarantees.
 - NEVER use em dashes (—) in the output. Use colons, commas, or
   periods instead.
 

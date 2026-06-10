@@ -490,6 +490,36 @@ function CashFlowValueCard({ valuation }: { valuation: ValuationResponse }) {
   );
 }
 
+// Plain-English verdict from portfolio vs market. All three gauges are
+// "price-to-X" multiples, so the same banding applies: higher portfolio
+// ratio = pricier. PEG below the market reads as cheaper-for-its-growth.
+function gaugeVerdict(portfolio: number, market: number) {
+  const r = market > 0 ? portfolio / market : 1;
+  if (r <= 0.9)
+    return {
+      tone: "success",
+      labelKey: "analysis.gauge.verdict.cheaper",
+      meaningKey: "analysis.gauge.meaning.cheaper",
+    } as const;
+  if (r < 1.15)
+    return {
+      tone: "neutral",
+      labelKey: "analysis.gauge.verdict.inline",
+      meaningKey: "analysis.gauge.meaning.inline",
+    } as const;
+  if (r < 2)
+    return {
+      tone: "warn",
+      labelKey: "analysis.gauge.verdict.pricier",
+      meaningKey: "analysis.gauge.meaning.pricier",
+    } as const;
+  return {
+    tone: "warn",
+    labelKey: "analysis.gauge.verdict.much_pricier",
+    meaningKey: "analysis.gauge.meaning.much_pricier",
+  } as const;
+}
+
 function PriceGauge({ gauge, unit, titleKey }: { gauge: GaugeResponse; unit: string; titleKey: StringKey }) {
   const t = useT();
   const title = t(titleKey);
@@ -507,6 +537,7 @@ function PriceGauge({ gauge, unit, titleKey }: { gauge: GaugeResponse; unit: str
       </div>
     );
   }
+  const v = gaugeVerdict(gauge.portfolio, gauge.market);
   return (
     <ComparisonGauge
       title={title}
@@ -516,6 +547,7 @@ function PriceGauge({ gauge, unit, titleKey }: { gauge: GaugeResponse; unit: str
       unit={unit}
       portfolioLabel={t("analysis.gauge.portfolio")}
       referenceLabel={t("analysis.gauge.us_market")}
+      verdict={{ tone: v.tone, label: t(v.labelKey), meaning: t(v.meaningKey) }}
       sub={
         gauge.excluded_count > 0
           ? t("analysis.gauge.excluded_note", {

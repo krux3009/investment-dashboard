@@ -1,24 +1,32 @@
-"""Per-stock educational insight (Meaning + Watch).
+"""Per-stock recommendation (Action + Why + Confidence + Risk).
 
 Lives under each holding's drill-in. Short summaries stay in the daily
-digest at the top of the page; deeper teaching about ONE ticker happens
-here when the user expands a row.
+digest at the top of the page; the per-ticker recommendation happens here
+when the user expands a row.
 
-For a given code we collect the same signals the digest sees (anomalies,
-30-day delta, today's move, news headlines for that one symbol) and ask
-Claude for two short labelled lines:
+For a given code we collect the signals the dashboard already computes
+(valuation multiples, 5-axis snowflake scores, unrealized P&L, dividend
+yield, anomalies, 30-day delta, today's move, news for that one symbol)
+and ask Claude for four short labelled lines:
 
-    Meaning: <educational interpretation — why today's number matters,
-              how it compares to typical, what pattern it fits>
-    Watch:   <observation target — what to monitor over coming sessions>
+    Action:     <Consider adding / Consider trimming / Hold / ...>
+    Why:        <plain-English reasoning grounded in the signals above>
+    Confidence: <High | Medium | Low>
+    Risk:       <the key risk / what would make this call wrong>
 
-Cached in `prices.duckdb` table `insight_cache`, keyed by
-(code, prompt_version). 6h TTL — same cadence as the digest. Bump
-_PROMPT_VERSION to invalidate without dropping the table.
+This is a direct recommendation surface — the user decides whether to act.
+The grounding rule (recommend only from the signals given; thin signals →
+Hold/Watch + Low confidence) plus the mandatory Confidence + Risk lines are
+the safeguard against a confidently-wrong model. A slim anti-hype guard
+(`FORBIDDEN_HYPE`) keeps the tone calm and blocks pump language.
+
+Cached in `prices.duckdb` table `recommendation_cache`, keyed by
+(code, prompt_version_with_locale). 6h TTL — same cadence as the digest.
+Bump _PROMPT_VERSION to invalidate without dropping the table.
 
 If ANTHROPIC_API_KEY is missing the route returns 503; we never silently
-fall back to "Meaning unavailable" prose because that would be confusing
-inline with the anomaly drill-in.
+fall back to a stub because that would be confusing inline with the
+anomaly drill-in.
 """
 
 from __future__ import annotations
@@ -28,7 +36,13 @@ import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from api._advisor_guard import RETRY_SUFFIX_EN, RETRY_SUFFIX_ZH, has_forbidden
+from api import dividends, fair_value, snowflake
+from api._advisor_guard import (
+    FORBIDDEN_HYPE,
+    RETRY_SUFFIX_HYPE_EN,
+    RETRY_SUFFIX_HYPE_ZH,
+    has_forbidden,
+)
 from api.data import anomalies, prices
 from api.data.moomoo_client import get_summary
 from api.digest import _fetch_news
@@ -37,66 +51,31 @@ from api.i18n import DEFAULT_LOCALE, Locale, prompt_version_with_locale
 log = logging.getLogger(__name__)
 
 _TTL = timedelta(hours=6)
-# v3-no-em-dash → v4-no-em-dash (2026-05-10): locale-aware prompts.
-# Cache key is now `f"{_PROMPT_VERSION}-{locale}"` so en + zh prose
-# coexist without collisions.
-# v4-no-em-dash → v5-source-edit (2026-05-13): ported the digest v6
-# source-edit pairs into _INSIGHT_PROMPT (en) + _LANG_INSTRUCTION["zh"]:
-# (1) describe price movement, not the pace of a trend (accelerating /
-# decelerating / slowing / easing); (2) Meaning line is past-only, no
-# forward-look expectations — the Watch line names an observation target
-# without predicting its outcome. FORBIDDEN list unchanged; fix is at
-# the prompt level. Old v4 rows in insight_cache become orphaned and
-# rebuild on next request.
-_PROMPT_VERSION = "v5-source-edit"
+# v5-source-edit (educational Meaning/Watch) → v6-recommend (2026-06-06):
+# the dashboard dropped its educational-only guardrail. This surface now
+# emits a direct recommendation (Action / Why / Confidence / Risk) grounded
+# in the signals we pass. New table `recommendation_cache`; old
+# `insight_cache` rows are left orphaned (harmless, regenerable).
+_PROMPT_VERSION = "v6-recommend"
 
-# Post-check ban tuples for FORBIDDEN retry. Narrower than the prompt
-# prose ban list — descriptive-use tokens (buy/sell/hold/target/add in
-# EN, 买入/卖出/持有 in ZH) live in the prompt only, since the prompt's
-# concept-translation table actively uses them descriptively
-# ("big institutions have been buying / selling"). Including them here
-# would cause retry loops on legitimate observational prose. Pace +
-# magnitude + hype + outcome-prediction tokens stay because their use
-# is always characterization, never description.
-_BANS: dict[Locale, tuple[str, ...]] = {
+# The only post-check ban now: pump/hype. Action / forecast / target /
+# sizing language is allowed — that is the whole point of the rework.
+_BANS = FORBIDDEN_HYPE
+
+# Quiet fallback when both Claude attempts hit a hype word, or signals are
+# too thin to call. Recommendation-shaped so the frontend renders uniformly.
+_QUIET: dict[Locale, tuple[str, str, str, str]] = {
     "en": (
-        # Action recommendation (clear-cut):
-        "forecast", "predict", "recommend", "should", "ought", "tomorrow",
-        # Hype:
-        "surge", "plunge", "soar", "crash", "breakout", "rally", "tank",
-        "bullish", "bearish",
-        # Magnitude qualifiers:
-        "notable", "significant", "remarkable", "impressive", "robust",
-        "solid", "sharp", "stark", "dramatic", "modest", "outsized", "massive",
-        # Highlight verbs:
-        "registers", "boasts", "showcases", "demonstrates", "highlights",
-        # Indicator behavior:
-        "momentum", "decelerat", "mover",
-        # Pace + forward-look (v5 source-edit):
-        "pace", "accelerat", "slowing", "easing", "rate-of-change",
+        "Hold",
+        "Not enough fresh signal to make a confident call on this holding right now.",
+        "Low",
+        "Thin data; revisit after the next earnings update or material news.",
     ),
     "zh": (
-        "加仓", "减仓", "清仓", "目标价", "预测", "推荐", "建议",
-        "应该", "理应",
-        "看多", "看涨", "看空", "看跌",
-        "飙升", "暴涨", "暴跌", "大跌", "崩盘", "突破点", "反弹",
-        "显著", "强劲", "疲软", "稳健", "急剧",
-        "动能", "势头",
-        # Pace + forward-look:
-        "节奏", "放缓", "减速", "加速", "趋缓",
-    ),
-}
-
-# Quiet fallback when both Claude attempts produce a forbidden hit.
-# Same shape as the prompt's "genuinely nothing to teach" template.
-_QUIET: dict[Locale, tuple[str, str]] = {
-    "en": (
-        "No material new information for this holding right now.",
-        "Watch for the next earnings update or material news.",
-    ),
-    "zh": (
-        "本周该持仓暂无重要新信息。",
-        "留意下次财报或重要消息。",
+        "持有",
+        "目前该持仓的新信号不足，难以给出有把握的判断。",
+        "Low",
+        "数据有限；待下次财报或重要消息后再看。",
     ),
 }
 
@@ -104,110 +83,73 @@ _QUIET: dict[Locale, tuple[str, str]] = {
 _LANG_INSTRUCTION: dict[Locale, str] = {
     "en": "\n\nRespond in English.\n",
     "zh": (
-        "\n\n请使用简体中文回答。所有结构化标签（'Meaning:' / 'Watch:'）保持英文以便解析。"
-        "采用零售投资者的朴素中文，避免术语。禁用以下中文词汇："
-        "买入、卖出、持有、加仓、减仓、清仓、目标价、预测、预计、推荐、建议、"
-        "应该、理应、看多、看涨、看空、看跌、飙升、暴涨、暴跌、大跌、崩盘、"
-        "突破、突破点、反弹、显著、强劲、疲软、稳健、动能、势头。"
-        "\n\n不要描述任何指标的节奏——无论是趋势、资金流、买盘还是卖盘。"
-        "写发生了什么，不要说它在加速、减速、放缓或趋缓。\"节奏\" 一词本身禁用。"
-        "\n    反例：\"下跌节奏放缓\" / \"上行速度趋缓\" / \"机构卖出节奏改变\""
-        "\n    正例：\"过去 30 天下跌 3.79%，近五个交易日中有三个收低\" / "
-        "\"机构卖出：May 13 当日成交量比前三日小 65%\""
-        "\n\n\"Meaning:\" 一行只写已发生的事实，不得包含前瞻性预期。"
-        "\"Watch:\" 一行写一个观察对象，不得预测其结果。"
-        "\n    反例 (Meaning)：\"价格上行，可能面临阻力\""
-        "\n    正例 (Meaning)：\"30 天涨幅为 +100%，当前价格接近 30 天高点\""
-        "\n    反例 (Watch)：\"价格下周可能继续上涨\""
-        "\n    正例 (Watch)：\"观察下次财报现金流是否延续当前趋势\""
-        "\n\nWatch 一行的时间词优先使用 \"下次/下个/未来\"，避免 \"后续\"。"
-        "\n    反例 (Watch)：\"观察后续季度营收是否出现变化\""
-        "\n    正例 (Watch)：\"观察未来季度营收是否出现变化\""
-        "\n\n日期保留原英文（如 \"May 8\"）即可，无需翻译。\n"
+        "\n\n请使用简体中文撰写 Why 与 Risk 两行的正文。"
+        "所有结构化标签（'Action:' / 'Why:' / 'Confidence:' / 'Risk:'）保持英文以便解析。"
+        "Confidence 的取值也必须是英文 High / Medium / Low 三者之一。"
+        "Action 一行可用中文表述（如 \"考虑加仓\"、\"考虑减仓\"、\"持有\"、\"观望\"）。"
+        "采用零售投资者的朴素中文，避免术语。日期保留原英文（如 \"May 8\"）即可。\n"
     ),
 }
 
 _INSIGHT_PROMPT = """\
-You are writing two short educational lines for ONE stock holding in a
-beginner investor's dashboard. The reader is a first-year student who
-has never invested. They have already read a one-line summary at the top
-of the page; this is the deeper explanation for THIS specific stock.
+You are the analyst on a long-horizon retail investor's dashboard. For ONE
+stock the reader holds, write a short, direct recommendation. The reader is
+a first-year student who has never invested, so every word must be plain.
 
-Output format, exact and machine-parsed, two lines:
+Output format, exact and machine-parsed, FOUR lines with these literal labels:
 
-Meaning: <one educational sentence: what today's number or move means in context. Why it's notable, how it compares to typical, what pattern it fits, or what news connects to it.>
-Watch: <one sentence: what to monitor in the next few sessions. Frame as observation targets, not actions.>
+Action: <one of: Consider adding · Consider trimming · Hold · Consider starting a position · Consider exiting · Watch. Plain wording is fine; lead with the verb.>
+Why: <one or two plain sentences. Justify the action using the SIGNALS BELOW: valuation vs market, the 5-axis scores, unrealized P&L, dividend yield, anomalies, 30-day move, news. Name the numbers you lean on.>
+Confidence: <exactly one word: High, Medium, or Low.>
+Risk: <one sentence: the main thing that could make this call wrong, or what to keep an eye on.>
 
 Hard rules:
-- EXACTLY two lines, with the literal labels "Meaning:" and "Watch:".
-- Each line ONE sentence, ≤22 words. Aim for 15. Brevity is valued.
-- Do not repeat the today's-move number; the summary already has it.
-  Use it as context for the educational point.
-- Quote tickers, percentages, and currency figures verbatim if you use
-  them. Numbers stay; words around them must be plain.
-- Do not characterize the pace of any metric — trend, flows, selling,
-  buying. Describe what happened, not whether it is accelerating,
-  decelerating, slowing, or easing. The word "pace" itself is banned.
-    Bad: "pace of decline slowing" / "rate-of-change easing" /
-         "shifts the pace of institutional selling"
-    Good: "down 3.79% over 30 days, three of the last five sessions lower" /
-          "institutional selling: 65% smaller volume on May 13 than the prior three days"
-- The "Meaning" line is past-only. Stick to what has happened. Do not
-  state forward-looking expectations in Meaning. The "Watch" line names
-  an observation target without predicting its outcome.
-    Bad (Meaning): "price rising at a pace that may face friction ahead"
-    Good (Meaning): "30-day change is +100%, current price near the 30-day high"
-    Bad (Watch):   "the price will likely climb further next week"
-    Good (Watch):  "Whether the next earnings update confirms the cash-flow trend"
-- NEVER use em dashes (—) in any output line. Use colons, commas, or
-  periods instead.
+- EXACTLY four lines, labels spelled exactly "Action:", "Why:", "Confidence:", "Risk:".
+- Each line ONE or two sentences, ≤30 words. Brevity is valued.
+- GROUNDING: recommend ONLY from the signals provided below. Never invent a
+  number, target, or fact you were not given. If the signals are thin,
+  missing, or conflict, set Action to "Hold" or "Watch" and Confidence to
+  "Low". A weak, honest call beats a confident guess.
+- Confidence reflects how strong and aligned the signals are, not how much
+  you like the stock. Several signals pointing the same way → High. Mixed or
+  sparse → Low.
+- Quote tickers, percentages, multiples, and currency figures verbatim.
+- Calm, grounded tone. A recommendation is fine; hype is not. No guarantees,
+  no certainty claims, no "to the moon".
+- NEVER use em dashes (—). Use colons, commas, or periods.
 
-NEVER use these action words:
-  buy / sell / hold / trim / add / target / forecast / predict / expect /
-  recommend / "you should" / "you ought" / "consider [verb]" / "tomorrow".
-
-NEVER use these hype words:
-  surge / plunge / soar / crash / breakout / rally / tank.
-
-Translate CONCEPTS, not just words. Never use these terms; use the
-plain meaning on the right:
-
+Translate CONCEPTS into plain words. Never use the jargon on the left:
   Indicator overbought (RSI / KDJ / BIAS / MACD / CCI)
-    → "the price has climbed fast and could slow soon"
+    → "the price has climbed fast and could cool off"
   Indicator oversold
-    → "the price has fallen fast and could steady soon"
-  Moving averages / MA5 / MA10 / MA20 / Bollinger Band / trend lines
+    → "the price has fallen fast and could steady"
+  Moving averages / MA / Bollinger Band / trend lines
     → "the recent price trend"
   Death cross / golden cross
-    → "the recent trend has shifted slightly down / up"
+    → "the recent trend has tilted down / up"
   Block-trade net inflows / outflows
     → "big institutions have been buying / selling"
   Short interest / short ratio
     → "bets that the price will fall"
-  Perpetual securities / perpetual bonds
-    → "raised long-term funding"
+  P/E, P/S, PEG
+    → "how expensive the stock is versus its earnings / sales / growth"
 
-The "Meaning" line is the heart of this output. Make it teach. Prefer:
-- Comparisons to typical ("a 43% one-month gain is unusually large for
-  a public stock; most don't move that fast in a month")
-- Pattern recognition ("flat days after big runs are normal: the
-  price is digesting the move, not weakening")
-- Connecting threads between news + price + flows
+How to read the signals:
+- Valuation: a forward P/E, P/S, or PEG BELOW the US market is cheaper; ABOVE
+  is pricier. A PEG near or below 1 is reasonable for the growth.
+- Snowflake scores are 0 to 6 (higher is better) on Value, Future, Past,
+  Health, Dividend. Use them as a quick read of strengths and weaknesses.
+- A positive target-upside means analysts' average price target sits above
+  today's price; negative means below.
 
-The "Watch" line names a future observation target. Phrase as what
-would matter, not what to do.
+If there is genuinely nothing to act on (flat price, no anomalies, no news,
+neutral valuation), output:
+  Action: Hold
+  Why: Nothing in the current signals points to a change for this holding.
+  Confidence: Low
+  Risk: Watch for the next earnings update or material news.
 
-If there is genuinely nothing material to teach about this stock today
-(no anomaly, flat price, no news, no notable 30-day context), output
-exactly:
-  Meaning: Nothing notable for this holding today.
-  Watch: Watch for the next earnings update or material news.
-
-Tone: matter-of-fact, calm, considered. Like a patient teacher writing
-one note in a personal ledger.
-
-Output the two lines only. No preamble, no markdown, no bullet
-characters.
+Output the four lines only. No preamble, no markdown, no bullet characters.
 """
 
 
@@ -215,8 +157,11 @@ characters.
 class Insight:
     code: str
     ticker: str
-    meaning: str
-    watch: str
+    action: str
+    action_tone: str  # "positive" | "caution" | "neutral"
+    why: str
+    confidence: str  # "High" | "Medium" | "Low"
+    risk: str
     generated_at: datetime
     cached: bool = False
 
@@ -228,11 +173,14 @@ def _ensure_table() -> None:
     with prices._DB_LOCK:
         prices._db().execute(
             """
-            CREATE TABLE IF NOT EXISTS insight_cache (
+            CREATE TABLE IF NOT EXISTS recommendation_cache (
                 code VARCHAR NOT NULL,
                 prompt_version VARCHAR NOT NULL,
-                meaning VARCHAR,
-                watch VARCHAR,
+                action VARCHAR,
+                action_tone VARCHAR,
+                why VARCHAR,
+                confidence VARCHAR,
+                risk VARCHAR,
                 generated_at TIMESTAMP,
                 PRIMARY KEY (code, prompt_version)
             )
@@ -245,20 +193,23 @@ def _load_cached(code: str, locale: Locale = DEFAULT_LOCALE) -> Insight | None:
     pv = prompt_version_with_locale(_PROMPT_VERSION, locale)
     with prices._DB_LOCK:
         row = prices._db().execute(
-            "SELECT meaning, watch, generated_at FROM insight_cache "
-            "WHERE code = ? AND prompt_version = ?",
+            "SELECT action, action_tone, why, confidence, risk, generated_at "
+            "FROM recommendation_cache WHERE code = ? AND prompt_version = ?",
             [code, pv],
         ).fetchone()
     if not row:
         return None
-    meaning, watch, generated_at = row
+    action, action_tone, why, confidence, risk, generated_at = row
     if datetime.now() - generated_at > _TTL:
         return None
     return Insight(
         code=code,
         ticker=code.split(".", 1)[-1],
-        meaning=meaning,
-        watch=watch,
+        action=action,
+        action_tone=action_tone,
+        why=why,
+        confidence=confidence,
+        risk=risk,
         generated_at=generated_at,
         cached=True,
     )
@@ -269,18 +220,21 @@ def _save_cache(insight: Insight, locale: Locale = DEFAULT_LOCALE) -> None:
     pv = prompt_version_with_locale(_PROMPT_VERSION, locale)
     with prices._DB_LOCK:
         prices._db().execute(
-            "INSERT OR REPLACE INTO insight_cache VALUES (?, ?, ?, ?, ?)",
+            "INSERT OR REPLACE INTO recommendation_cache VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 insight.code,
                 pv,
-                insight.meaning,
-                insight.watch,
+                insight.action,
+                insight.action_tone,
+                insight.why,
+                insight.confidence,
+                insight.risk,
                 insight.generated_at,
             ],
         )
 
 
-# ── Signal collection (per-ticker, mirrors digest._collect_signals) ─────────
+# ── Signal collection (per-ticker) ──────────────────────────────────────────
 
 
 def _collect_one(code: str) -> dict | None:
@@ -311,6 +265,31 @@ def _collect_one(code: str) -> dict | None:
         f"  - \"{n['title']}\" ({n['publisher']})" for n in news
     ]
 
+    # Valuation multiples (cached 24h). Target-upside vs today's price.
+    metrics = fair_value.get_metrics(pos.code)
+    target_upside_pct = None
+    if metrics.target_mean_price and pos.current_price:
+        target_upside_pct = (metrics.target_mean_price - pos.current_price) / pos.current_price
+
+    # 5-axis snowflake scores (no Claude — scoring only; anomalies are
+    # session-cached so the health axis reuses the fetch above).
+    try:
+        scores = snowflake._compute_scores(
+            pos.code, pos.total_pnl_pct, pos.current_price, pos.currency
+        )
+    except Exception as exc:  # scoring is best-effort enrichment
+        log.warning("recommendation: snowflake scoring failed for %s: %s", pos.code, exc)
+        scores = None
+
+    # Dividend yield (cached). TTM per-share over current price.
+    dividend_yield_pct = None
+    try:
+        div = dividends.get_one(pos.code)
+        if div and pos.current_price:
+            dividend_yield_pct = (div.ttm_per_share_native / pos.current_price) * 100
+    except Exception as exc:
+        log.warning("recommendation: dividend lookup failed for %s: %s", pos.code, exc)
+
     return {
         "ticker": pos.ticker,
         "code": pos.code,
@@ -319,6 +298,13 @@ def _collect_one(code: str) -> dict | None:
         "current_price": pos.current_price,
         "today_pct": pos.today_change_pct,
         "delta_30d_pct": delta_30d_pct,
+        "total_pnl_pct": pos.total_pnl_pct,
+        "forward_pe": metrics.forward_pe,
+        "price_to_sales": metrics.price_to_sales,
+        "peg": metrics.peg,
+        "target_upside_pct": target_upside_pct,
+        "dividend_yield_pct": dividend_yield_pct,
+        "scores": scores,
         "anomaly_lines": anomaly_lines,
         "news_lines": news_lines,
     }
@@ -331,6 +317,28 @@ def _format_pct(value: float | None) -> str:
     return f"{sign}{value * 100:.2f}%"
 
 
+def _format_x(value: float | None) -> str:
+    return f"{value:.1f}x" if value is not None else "n/a"
+
+
+def _format_scores(scores) -> str:
+    if scores is None:
+        return "unavailable"
+
+    def one(label: str, v) -> str:
+        return f"{label} {v}/6" if v is not None else f"{label} n/a"
+
+    return ", ".join(
+        [
+            one("Value", scores.valuation),
+            one("Future", scores.future),
+            one("Past", scores.past),
+            one("Health", scores.health),
+            one("Dividend", scores.dividends),
+        ]
+    )
+
+
 def _build_user_message(s: dict) -> str:
     today = datetime.now().strftime("%A, %B %-d %Y")
     lines: list[str] = [
@@ -340,7 +348,20 @@ def _build_user_message(s: dict) -> str:
         (
             f"  Price: {s['currency']} {s['current_price']:.2f} · "
             f"today {_format_pct(s['today_pct'])} · "
-            f"30-day {_format_pct(s['delta_30d_pct'])}"
+            f"30-day {_format_pct(s['delta_30d_pct'])} · "
+            f"your unrealized P&L {_format_pct(s['total_pnl_pct'])}"
+        ),
+        (
+            f"  Valuation: forward P/E {_format_x(s['forward_pe'])}, "
+            f"P/S {_format_x(s['price_to_sales'])}, "
+            f"PEG {_format_x(s['peg'])}, "
+            f"analyst target upside {_format_pct(s['target_upside_pct'])}"
+        ),
+        f"  Scores (0-6): {_format_scores(s['scores'])}",
+        (
+            f"  Dividend yield: {s['dividend_yield_pct']:.2f}%"
+            if s["dividend_yield_pct"] is not None
+            else "  Dividend yield: none"
         ),
     ]
     if s["anomaly_lines"]:
@@ -356,30 +377,59 @@ def _build_user_message(s: dict) -> str:
     return "\n".join(lines)
 
 
+# ── Parsing ─────────────────────────────────────────────────────────────────
+
+_POSITIVE_KEYS = ("add", "buy", "start", "accumulat", "increas", "build", "加", "买", "增", "建仓")
+_CAUTION_KEYS = ("trim", "sell", "exit", "reduc", "lighten", "cut", "减", "卖", "清", "降")
+
+
+def classify_action_tone(action: str) -> str:
+    """Map an action phrase to a chip tone. Defaults to neutral (hold/watch)."""
+    low = action.lower()
+    if any(k in low for k in _POSITIVE_KEYS):
+        # "consider adding" → positive; but "don't add" is not produced by the prompt.
+        return "positive"
+    if any(k in low for k in _CAUTION_KEYS):
+        return "caution"
+    return "neutral"
+
+
+def normalize_confidence(text: str) -> str:
+    low = text.lower()
+    if "high" in low or "高" in text:
+        return "High"
+    if "low" in low or "低" in text:
+        return "Low"
+    return "Medium"
+
+
+def _parse_body(body: str) -> tuple[str, str, str, str]:
+    action = why = confidence = risk = ""
+    for raw in body.splitlines():
+        line = raw.strip()
+        low = line.lower()
+        if low.startswith("action:"):
+            action = line.split(":", 1)[1].strip()
+        elif low.startswith("why:"):
+            why = line.split(":", 1)[1].strip()
+        elif low.startswith("confidence:"):
+            confidence = line.split(":", 1)[1].strip()
+        elif low.startswith("risk:"):
+            risk = line.split(":", 1)[1].strip()
+    return action, why, confidence, risk
+
+
 # ── Claude call ─────────────────────────────────────────────────────────────
 
 
-def _parse_body(body: str) -> tuple[str, str]:
-    meaning = ""
-    watch = ""
-    for line in body.splitlines():
-        line = line.strip()
-        if line.lower().startswith("meaning:"):
-            meaning = line.split(":", 1)[1].strip()
-        elif line.lower().startswith("watch:"):
-            watch = line.split(":", 1)[1].strip()
-    if not meaning and not watch:
-        # Model drifted from the format — surface raw body as meaning.
-        meaning = body
-    return meaning, watch
+def _call_claude(
+    user_message: str, locale: Locale = DEFAULT_LOCALE
+) -> tuple[str, str, str, str]:
+    """Returns (action, why, confidence, risk).
 
-
-def _call_claude(user_message: str, locale: Locale = DEFAULT_LOCALE) -> tuple[str, str]:
-    """Returns (meaning, watch). Parses the two-line output.
-
-    Runs the FORBIDDEN post-check + one retry, mirroring
-    `analysts/_base.call_analyst`. If both attempts produce a banned
-    token, falls back to the locale-specific quiet template.
+    Runs the anti-hype post-check + one retry. If both attempts hit a hype
+    word, or the model never produced an Action or Risk line, falls back to
+    the locale-specific quiet recommendation.
     """
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
@@ -397,7 +447,7 @@ def _call_claude(user_message: str, locale: Locale = DEFAULT_LOCALE) -> tuple[st
     def _shot(system: str) -> str:
         response = client.messages.create(
             model=model,
-            max_tokens=400,
+            max_tokens=500,
             system=system,
             messages=[{"role": "user", "content": user_message}],
         )
@@ -406,18 +456,27 @@ def _call_claude(user_message: str, locale: Locale = DEFAULT_LOCALE) -> tuple[st
     body = _shot(system_prompt)
     bad = has_forbidden(body, bans, locale)
     if bad is not None:
-        log.info("insight: forbidden %r in first draft, retrying (locale=%s)", bad, locale)
-        retry_suffix = (RETRY_SUFFIX_ZH if locale == "zh" else RETRY_SUFFIX_EN).format(bad=bad)
+        log.info("recommendation: hype %r in first draft, retrying (locale=%s)", bad, locale)
+        retry_suffix = (
+            RETRY_SUFFIX_HYPE_ZH if locale == "zh" else RETRY_SUFFIX_HYPE_EN
+        ).format(bad=bad)
         body = _shot(system_prompt + retry_suffix)
         bad2 = has_forbidden(body, bans, locale)
         if bad2 is not None:
             log.warning(
-                "insight: forbidden %r persisted after retry, quieting (locale=%s)",
+                "recommendation: hype %r persisted after retry, quieting (locale=%s)",
                 bad2, locale,
             )
             return _QUIET[locale]
 
-    return _parse_body(body)
+    action, why, confidence, risk = _parse_body(body)
+    if not action or not risk:
+        log.warning(
+            "recommendation: missing %s line, quieting (locale=%s)",
+            "Action" if not action else "Risk", locale,
+        )
+        return _QUIET[locale]
+    return action, why, confidence, risk
 
 
 # ── Public API ──────────────────────────────────────────────────────────────
@@ -426,8 +485,8 @@ def _call_claude(user_message: str, locale: Locale = DEFAULT_LOCALE) -> tuple[st
 def get_insight(
     code: str, force_refresh: bool = False, locale: Locale = DEFAULT_LOCALE
 ) -> Insight | None:
-    """Return per-stock insight, hitting the 6h cache unless force_refresh.
-    Returns None if `code` isn't a current holding.
+    """Return the per-stock recommendation, hitting the 6h cache unless
+    force_refresh. Returns None if `code` isn't a current holding.
     """
     if not force_refresh:
         cached = _load_cached(code, locale)
@@ -439,12 +498,15 @@ def get_insight(
         return None
 
     user_message = _build_user_message(signals)
-    meaning, watch = _call_claude(user_message, locale)
+    action, why, confidence, risk = _call_claude(user_message, locale)
     insight = Insight(
         code=code,
         ticker=signals["ticker"],
-        meaning=meaning,
-        watch=watch,
+        action=action,
+        action_tone=classify_action_tone(action),
+        why=why,
+        confidence=normalize_confidence(confidence),
+        risk=risk,
         generated_at=datetime.now(),
     )
     _save_cache(insight, locale)

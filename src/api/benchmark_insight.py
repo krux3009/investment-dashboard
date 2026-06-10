@@ -15,7 +15,12 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
 from api import benchmark
-from api._advisor_guard import RETRY_SUFFIX_EN, RETRY_SUFFIX_ZH, has_forbidden
+from api._advisor_guard import (
+    FORBIDDEN_HYPE,
+    RETRY_SUFFIX_HYPE_EN,
+    RETRY_SUFFIX_HYPE_ZH,
+    has_forbidden,
+)
 from api.data import prices
 from api.i18n import DEFAULT_LOCALE, Locale, prompt_version_with_locale
 
@@ -24,46 +29,21 @@ log = logging.getLogger(__name__)
 _TTL = timedelta(hours=6)
 # v2-no-em-dash → v3-no-em-dash (2026-05-10): locale-aware prompts.
 # v3-no-em-dash → v4-source-edit (2026-05-13): ported the digest v6
-# source-edit pairs into _PROMPT (en) + _LANG_INSTRUCTION["zh"]:
-# (1) describe what happened, not the pace of any metric (return, gap,
-# recovery, rally, drawdown) — "pace" itself banned; (2) What + Meaning
-# lines are past-only, no forward-look expectations; Watch line names an
-# observation target without predicting its outcome; (3) ZH Watch wording
-# nudged toward 未来/下次/下个 over 后续. FORBIDDEN list unchanged; fix
-# at the prompt level. Old v3 rows in benchmark_insight_cache orphan and
-# rebuild on next request.
-_PROMPT_VERSION = "v4-source-edit"
+# source-edit pairs (pace / forward-look / magnitude bans).
+# v4-source-edit → v5-recommend (2026-06-06): dropped the educational-only
+# guardrail. Prose may now be directional and actionable (add / trim /
+# hold / rebalance), kept calm and grounded. Removed the action-word,
+# magnitude, pace, and forward-look bans plus the benchmark-specific
+# alpha/beta/outperform ban; the only surviving post-check is the slim
+# anti-hype list (_BANS = FORBIDDEN_HYPE). Old v4 rows in
+# benchmark_insight_cache orphan and rebuild on next request.
+_PROMPT_VERSION = "v5-recommend"
 
-# Post-check ban tuples for FORBIDDEN retry. See _advisor_guard.py
-# for matcher semantics. Benchmark-specific bans add finance-theory
-# terms (alpha / beta / outperform / underperform / 跑赢 / 跑输) on
-# top of the magnitude + hype + pace + forward-look baseline.
-_BANS: dict[Locale, tuple[str, ...]] = {
-    "en": (
-        "forecast", "predict", "recommend", "should", "ought", "tomorrow",
-        "surge", "plunge", "soar", "crash", "breakout", "rally", "tank",
-        "bullish", "bearish",
-        "notable", "significant", "remarkable", "impressive", "robust",
-        "solid", "sharp", "stark", "dramatic", "modest", "outsized", "massive",
-        "registers", "boasts", "showcases", "demonstrates", "highlights",
-        "momentum", "decelerat", "mover",
-        "pace", "accelerat", "slowing", "easing", "rate-of-change",
-        # Benchmark surface-specific:
-        "alpha", "beta", "outperform", "underperform", "benchmark-beating",
-        "track-record", "risk-adjusted",
-    ),
-    "zh": (
-        "加仓", "减仓", "清仓", "目标价", "预测", "推荐", "建议",
-        "应该", "理应",
-        "看多", "看涨", "看空", "看跌",
-        "飙升", "暴涨", "暴跌", "大跌", "崩盘", "突破点", "反弹",
-        "显著", "强劲", "疲软", "稳健", "急剧",
-        "动能", "势头",
-        "节奏", "放缓", "减速", "加速", "趋缓",
-        # Benchmark surface-specific:
-        "跑赢", "跑输",
-    ),
-}
+# Post-check ban tuples for FORBIDDEN retry. See _advisor_guard.py for
+# matcher semantics. Only the slim anti-hype list survives the move to
+# direct recommendations: the model may give a directional view but
+# never pump.
+_BANS: dict[Locale, tuple[str, ...]] = FORBIDDEN_HYPE
 
 # Quiet fallback when both Claude attempts produce a forbidden hit.
 _QUIET: dict[Locale, tuple[str, str, str]] = {
@@ -75,7 +55,7 @@ _QUIET: dict[Locale, tuple[str, str, str]] = {
     "zh": (
         "在该窗口内，组合与基准走势之间存在可量化的差距。",
         "图表与下方表格已展示这些差距的相对大小。",
-        "观察未来同等长度窗口内组合与基准之间差距的变化方向。",
+        "未来同等长度窗口内，组合与基准之间差距的变化方向。",
     ),
 }
 
@@ -84,28 +64,21 @@ _LANG_INSTRUCTION: dict[Locale, str] = {
     "en": "\n\nRespond in English.\n",
     "zh": (
         "\n\n请使用简体中文回答。所有结构化标签（'What:' / 'Meaning:' / 'Watch:'）保持英文以便解析。"
-        "采用零售投资者的朴素中文。禁用以下中文词汇："
-        "买入、卖出、持有、加仓、减仓、目标价、预测、推荐、应该、看多、看空、"
-        "飙升、暴跌、崩盘、突破、反弹、跑赢、跑输、显著、强劲、疲软、动能。"
-        "\n\n不要描述任何指标的节奏——无论是收益率、差距、回升、上行还是回撤。"
-        "写发生了什么，不要说它在加速、减速、放缓或趋缓。\"节奏\" 一词本身禁用。"
-        "\n    反例：\"组合回升的节奏较 SPY 放缓\""
-        "\n    正例：\"在相同的 30 天窗口内，组合上涨 4.3%，SPY 上涨 7.1%\""
-        "\n\n\"What:\" 与 \"Meaning:\" 两行只写已发生的事实，不得包含前瞻性预期。"
-        "\"Watch:\" 一行写一个观察对象，不得预测其结果。"
-        "\n    反例 (Meaning)：\"随着 SPY 继续上行，差距可能进一步扩大\""
-        "\n    正例 (Meaning)：\"窗口内组合与 SPY 的差距从 1.2% 扩大至 2.8%\""
-        "\n    反例 (Watch)：\"SPY 下个月或将继续领先组合\""
-        "\n    正例 (Watch)：\"观察未来一个月组合与 SPY 的差距是收窄还是扩大\""
+        "采用零售投资者的朴素中文。可以给出明确、可执行的方向性看法"
+        "（例如加仓、减仓、持有或再平衡），但须保持冷静、有据的口吻：不得夸大、保证或断言必然。"
         "\n\nWatch 一行的时间词优先使用 \"下次/下个/未来\"，避免 \"后续\"。\n"
     ),
 }
 
 _PROMPT = """\
-You are writing three short educational lines about a personal-portfolio
-performance comparison for a beginner investor's dashboard. The reader
-is a first-year student. They already see the chart and the percentage
-change for each line; this is the deeper plain-English context.
+You are writing three short lines about a personal-portfolio performance
+comparison for a long-horizon investor's dashboard. They already see the
+chart and the percentage change for each line; this is the deeper
+plain-English context.
+
+You may give a direct, actionable view (e.g. whether to add to, trim,
+hold, or rebalance the book). Keep it calm and grounded: no hype, no
+guarantees, no certainty claims. The reader makes the final decision.
 
 Output format, exact and machine-parsed, three lines:
 
@@ -114,45 +87,20 @@ What: <one sentence: describe the relationship between the portfolio
        words, no jargon.>
 Meaning: <one sentence: what the relationship means in plain terms.
           Pattern, comparison, or context. Avoid jargon.>
-Watch: <one sentence: what to monitor going forward as an observation
-        target, never an action.>
+Watch: <one sentence: what this suggests you might do or keep an eye on
+        as you decide; a concrete, actionable takeaway is welcome.>
 
 Hard rules:
 - EXACTLY three lines, with the literal labels "What:" / "Meaning:" /
   "Watch:".
 - Each line ONE sentence, ≤22 words. Aim for 15.
-- Percentages quoted verbatim if used. The educational point is
-  qualitative; the numbers stand on their own.
-- Do not characterize the pace of any metric — return, gap, recovery,
-  rally, drawdown. Describe what happened, not whether it is
-  accelerating, decelerating, slowing, or easing. The word "pace"
-  itself is banned.
-    Bad: "the portfolio's pace of recovery has slowed compared to SPY"
-    Good: "the portfolio gained 4.3% while SPY gained 7.1% over the same 30-day window"
-- The "What" and "Meaning" lines are past-only. Stick to what has
-  happened over the window. Do not state forward-looking expectations.
-  The "Watch" line names an observation target without predicting its
-  outcome.
-    Bad (Meaning): "the gap may widen further as SPY keeps climbing"
-    Good (Meaning): "the gap between the portfolio and SPY widened from 1.2% to 2.8% over the window"
-    Bad (Watch):   "SPY will likely outpace the portfolio next month"
-    Good (Watch):  "Whether the gap between the portfolio and SPY narrows or widens over the next month"
+- Percentages quoted verbatim if used.
 - NEVER use em dashes (—) in any output line. Use colons, commas, or
   periods instead.
 
-NEVER use these action words:
-  buy / sell / hold / trim / add / target / forecast / predict / expect /
-  recommend / "you should" / "you ought" / "consider [verb]" / "tomorrow".
-
-NEVER use these hype words:
-  surge / plunge / soar / crash / breakout / rally / tank.
-
-Translate concepts: never use alpha / beta / outperform / underperform /
-benchmark-beating / track-record / risk-adjusted. Plain everyday English
-only; describe shape and direction, not finance theory.
-
-Tone: matter-of-fact, calm. Like a patient teacher writing one note in
-a personal ledger.
+Tone: matter-of-fact, calm. Like a steady hand writing one note in a
+personal ledger. Plain everyday English; describe shape and direction
+clearly, then say what you'd do.
 
 Output the three lines only. No preamble, no markdown, no bullets.
 """
@@ -292,15 +240,17 @@ def _call_claude(
     bad = has_forbidden(body, bans, locale)
     if bad is not None:
         log.info(
-            "benchmark_insight: forbidden %r in first draft, retrying (locale=%s)",
+            "benchmark_insight: hype %r in first draft, retrying (locale=%s)",
             bad, locale,
         )
-        retry_suffix = (RETRY_SUFFIX_ZH if locale == "zh" else RETRY_SUFFIX_EN).format(bad=bad)
+        retry_suffix = (
+            RETRY_SUFFIX_HYPE_ZH if locale == "zh" else RETRY_SUFFIX_HYPE_EN
+        ).format(bad=bad)
         body = _shot(system_prompt + retry_suffix)
         bad2 = has_forbidden(body, bans, locale)
         if bad2 is not None:
             log.warning(
-                "benchmark_insight: forbidden %r persisted after retry, quieting (locale=%s)",
+                "benchmark_insight: hype %r persisted after retry, quieting (locale=%s)",
                 bad2, locale,
             )
             return _QUIET[locale]

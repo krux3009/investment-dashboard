@@ -27,7 +27,13 @@ export const STRINGS = {
     // ── shared / common ─────────────────────────────────────────────
     "common.what": "What",
     "common.meaning": "Meaning",
-    "common.watch": "Watch",
+    "common.watch": "Takeaway",
+    "common.why": "Why",
+    "common.confidence": "Confidence",
+    "common.risk": "Risk",
+    "confidence.high": "High",
+    "confidence.medium": "Medium",
+    "confidence.low": "Low",
     "common.hide": "[hide]",
     "common.learn_more": "[learn more]",
     "common.drafting_commentary": "Drafting commentary…",
@@ -145,8 +151,8 @@ export const STRINGS = {
     "concentration.aria.currency_exposure": "Currency exposure as USD share",
 
     // ── insight ─────────────────────────────────────────────────────
-    "insight.heading": "What this means",
-    "insight.drafting": "Drafting insight…",
+    "insight.heading": "Recommendation",
+    "insight.drafting": "Drafting recommendation…",
 
     // ── sentiment (Reddit) ──────────────────────────────────────────
     "sentiment.heading": "Reddit discussion · past 7 days",
@@ -390,6 +396,18 @@ export const STRINGS = {
       "{excluded}/{total} holdings excluded (missing or out-of-range data)",
     "analysis.gauge.portfolio": "portfolio",
     "analysis.gauge.us_market": "US Market",
+    "analysis.gauge.verdict.cheaper": "Cheaper than the market",
+    "analysis.gauge.verdict.inline": "About the market average",
+    "analysis.gauge.verdict.pricier": "Pricier than the market",
+    "analysis.gauge.verdict.much_pricier": "Much pricier than the market",
+    "analysis.gauge.meaning.cheaper":
+      "Your holdings trade below the typical US stock on this measure: a lower price for what you get.",
+    "analysis.gauge.meaning.inline":
+      "Your holdings sit near the typical US stock on this measure.",
+    "analysis.gauge.meaning.pricier":
+      "Your holdings trade above the typical US stock here. You are paying more, common for faster growers.",
+    "analysis.gauge.meaning.much_pricier":
+      "Your holdings trade well above the typical US stock: priced for strong growth, so more rides on it arriving.",
     "analysis.diversification.heading": "Diversification",
     "analysis.sectors.unavailable": "Sector breakdown unavailable.",
     "analysis.sectors.heading": "Across Industries",
@@ -486,7 +504,13 @@ export const STRINGS = {
     // ── shared / common ─────────────────────────────────────────────
     "common.what": "情况",
     "common.meaning": "意义",
-    "common.watch": "关注",
+    "common.watch": "要点",
+    "common.why": "理由",
+    "common.confidence": "信心",
+    "common.risk": "风险",
+    "confidence.high": "高",
+    "confidence.medium": "中",
+    "confidence.low": "低",
     "common.hide": "[收起]",
     "common.learn_more": "[详解]",
     "common.drafting_commentary": "正在生成解读…",
@@ -603,8 +627,8 @@ export const STRINGS = {
     "concentration.aria.currency_exposure": "以 USD 占比表示的币种敞口",
 
     // ── insight ─────────────────────────────────────────────────────
-    "insight.heading": "数字含义",
-    "insight.drafting": "正在生成解析…",
+    "insight.heading": "建议",
+    "insight.drafting": "正在生成建议…",
 
     // ── sentiment (Reddit) ──────────────────────────────────────────
     "sentiment.heading": "Reddit 讨论 · 过去 7 天",
@@ -845,6 +869,17 @@ export const STRINGS = {
       "{excluded}/{total} 只持仓已排除（数据缺失或超出范围）",
     "analysis.gauge.portfolio": "组合",
     "analysis.gauge.us_market": "美股大盘",
+    "analysis.gauge.verdict.cheaper": "比大盘便宜",
+    "analysis.gauge.verdict.inline": "与大盘相当",
+    "analysis.gauge.verdict.pricier": "比大盘贵",
+    "analysis.gauge.verdict.much_pricier": "比大盘贵得多",
+    "analysis.gauge.meaning.cheaper":
+      "在这项指标上，你的持仓低于美股平均水平：相同回报付的价格更低。",
+    "analysis.gauge.meaning.inline": "在这项指标上，你的持仓与美股平均水平接近。",
+    "analysis.gauge.meaning.pricier":
+      "在这项指标上，你的持仓高于美股平均：付出更多，常见于成长更快的公司。",
+    "analysis.gauge.meaning.much_pricier":
+      "在这项指标上，你的持仓远高于美股平均：按强劲增长定价，更依赖增长兑现。",
     "analysis.diversification.heading": "分散度",
     "analysis.sectors.unavailable": "行业分布暂不可用。",
     "analysis.sectors.heading": "跨行业",

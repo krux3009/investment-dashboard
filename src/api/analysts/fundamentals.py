@@ -16,10 +16,10 @@ from api.data import anomalies
 from api.i18n import Locale
 
 ROLE = "Fundamentals"
-ROLE_BANS: dict[Locale, tuple[str, ...]] = {
-    "en": ("cheap", "expensive", "undervalued", "overvalued", "fairly valued"),
-    "zh": ("便宜", "昂贵", "低估", "高估", "估值合理"),
-}
+# Recommendation-era (2026-06-06): valuation words (cheap / expensive /
+# undervalued / overvalued) are now allowed; the only active bans are the
+# shared anti-hype list in FORBIDDEN_BASE.
+ROLE_BANS: dict[Locale, tuple[str, ...]] = {"en": (), "zh": ()}
 
 
 def _build_context(code: str, ticker: str, currency: str) -> dict:

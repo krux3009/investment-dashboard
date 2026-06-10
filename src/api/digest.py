@@ -52,7 +52,12 @@ log = logging.getLogger(__name__)
 # the technical-tile end-runs ("pace of decline slowing", "rate-of-change
 # easing", "may face friction ahead"). Source-edit in template,
 # FORBIDDEN_BASE unchanged. Cache keys "v6-en" / "v6-zh".
-_PROMPT_VERSION = "v6"
+# v6 → v7-recommend (2026-06-06): removed the educational-only guardrail.
+# Tiles may now give a directional/actionable read. Dropped the observation-
+# only framing, magnitude/pace/forward-look prohibitions, the trading-action
+# ban tail, and all role-specific bans; the only active post-check ban is the
+# shared anti-hype list (FORBIDDEN_HYPE). Cache keys "v7-recommend-en" / "-zh".
+_PROMPT_VERSION = "v7-recommend"
 _TTL = timedelta(hours=6)
 
 # Bound across-ticker concurrency. 4 tickers × 4 tiles = 16 inflight calls

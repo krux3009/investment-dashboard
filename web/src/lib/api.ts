@@ -178,8 +178,11 @@ export async function fetchDigest(
 export interface InsightResponse {
   code: string;
   ticker: string;
-  meaning: string;
-  watch: string;
+  action: string;
+  action_tone: "positive" | "caution" | "neutral";
+  why: string;
+  confidence: string; // "High" | "Medium" | "Low"
+  risk: string;
   generated_at: string;
   cached: boolean;
   available?: boolean;

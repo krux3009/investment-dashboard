@@ -30,6 +30,23 @@ function Header({ label }: { label: string }) {
   );
 }
 
+// Action chip tone → status color. Mirrors statement-card.tsx ICON_CLASS:
+// 18% tinted background, full-saturation text + border.
+const TONE_CLASS: Record<InsightResponse["action_tone"], string> = {
+  positive:
+    "bg-[color-mix(in_oklch,var(--accent-success)_18%,transparent)] text-[var(--accent-success)] border-[var(--accent-success)]",
+  caution:
+    "bg-[color-mix(in_oklch,var(--accent-warn)_18%,transparent)] text-[var(--accent-warn)] border-[var(--accent-warn)]",
+  neutral: "bg-transparent text-ink border-rule",
+};
+
+// Confidence chip: High = success, Medium = gold, Low = quiet.
+const CONFIDENCE_CLASS: Record<string, string> = {
+  High: "text-[var(--accent-success)] border-[var(--accent-success)]",
+  Medium: "text-[var(--accent-primary)] border-[var(--accent-primary)]",
+  Low: "text-quiet border-rule",
+};
+
 export function InsightBlock({ code }: Props) {
   const t = useT();
   const { locale } = useLocale();
@@ -103,26 +120,52 @@ export function InsightBlock({ code }: Props) {
     );
   }
 
-  const { meaning, watch } = state.data;
-  if (!meaning && !watch) return null;
+  const { action, action_tone, why, confidence, risk } = state.data;
+  if (!action && !why) return null;
+  const confidenceLabel =
+    confidence === "High"
+      ? t("confidence.high")
+      : confidence === "Low"
+        ? t("confidence.low")
+        : t("confidence.medium");
   return (
     <div>
       <Header label={headerLabel} />
+      {/* Action + Confidence chips */}
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        {action && (
+          <span
+            className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-sm font-medium ${TONE_CLASS[action_tone] ?? TONE_CLASS.neutral}`}
+          >
+            {action}
+          </span>
+        )}
+        {confidence && (
+          <span
+            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${CONFIDENCE_CLASS[confidence] ?? CONFIDENCE_CLASS.Low}`}
+          >
+            <span className="uppercase tracking-wide text-quiet">
+              {t("common.confidence")}
+            </span>
+            {confidenceLabel}
+          </span>
+        )}
+      </div>
       <dl className="flex flex-col gap-3 text-sm leading-[1.65]">
-        {meaning && (
+        {why && (
           <div className="grid grid-cols-[5rem_1fr] gap-x-3 items-baseline">
             <dt className="text-xs uppercase tracking-wide text-quiet">
-              {t("common.meaning")}
+              {t("common.why")}
             </dt>
-            <dd className="text-ink">{meaning}</dd>
+            <dd className="text-ink">{why}</dd>
           </div>
         )}
-        {watch && (
+        {risk && (
           <div className="grid grid-cols-[5rem_1fr] gap-x-3 items-baseline">
             <dt className="text-xs uppercase tracking-wide text-quiet">
-              {t("common.watch")}
+              {t("common.risk")}
             </dt>
-            <dd className="text-ink">{watch}</dd>
+            <dd className="text-quiet">{risk}</dd>
           </div>
         )}
       </dl>

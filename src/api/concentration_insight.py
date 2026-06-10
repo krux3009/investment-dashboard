@@ -14,7 +14,12 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from api import concentration
-from api._advisor_guard import RETRY_SUFFIX_EN, RETRY_SUFFIX_ZH, has_forbidden
+from api._advisor_guard import (
+    FORBIDDEN_HYPE,
+    RETRY_SUFFIX_HYPE_EN,
+    RETRY_SUFFIX_HYPE_ZH,
+    has_forbidden,
+)
 from api.data import prices
 from api.i18n import DEFAULT_LOCALE, Locale, prompt_version_with_locale
 
@@ -23,49 +28,23 @@ log = logging.getLogger(__name__)
 _TTL = timedelta(hours=6)
 # v2-no-em-dash → v3-no-em-dash (2026-05-10): locale-aware prompts.
 # v3-no-em-dash → v4-source-edit (2026-05-13): ported the digest v6
-# source-edit pairs into _PROMPT (en) + _LANG_INSTRUCTION["zh"], adapted
-# to the snapshot surface: (1) no pace characterization on top-N share
-# or exposure — "pace" itself banned; (2) What + Meaning lines are
-# snapshot-only, no forward-look on how the shape will evolve; Watch
-# line names an observation target without predicting its outcome;
-# (3) ZH Watch wording nudged toward 未来/下次/下个 over 后续.
-# FORBIDDEN list unchanged. Cache keys "v4-source-edit-en" /
-# "v4-source-edit-zh"; old v3 rows orphan and rebuild on next request.
-_PROMPT_VERSION = "v4-source-edit"
+# source-edit pairs (pace / forward-look / magnitude bans), snapshot
+# surface.
+# v4-source-edit → v5-recommend (2026-06-06): dropped the educational-only
+# guardrail. Prose may now be directional and actionable (add / trim /
+# hold / rebalance / diversify), kept calm and grounded. Removed the
+# action-word, magnitude, pace, and forward-look bans plus the
+# concentration-specific rebalance/diversify/over-weight ban; the only
+# surviving post-check is the slim anti-hype list (_BANS = FORBIDDEN_HYPE).
+# Old v4 rows in concentration_insight_cache orphan and rebuild on next
+# request.
+_PROMPT_VERSION = "v5-recommend"
 
-# Post-check ban tuples for FORBIDDEN retry. See _advisor_guard.py
-# for matcher semantics. Concentration-specific bans add portfolio-action
-# framings (rebalance / diversify / over-weight / 再平衡 / 超配) on top
-# of the magnitude + hype + pace + forward-look baseline.
-_BANS: dict[Locale, tuple[str, ...]] = {
-    "en": (
-        "forecast", "predict", "recommend", "should", "ought", "tomorrow",
-        "surge", "plunge", "soar", "crash", "breakout", "rally", "tank",
-        "bullish", "bearish",
-        "notable", "significant", "remarkable", "impressive", "robust",
-        "solid", "sharp", "stark", "dramatic", "modest", "outsized", "massive",
-        "registers", "boasts", "showcases", "demonstrates", "highlights",
-        "momentum", "decelerat", "mover",
-        "pace", "accelerat", "slowing", "easing", "rate-of-change",
-        # Concentration surface-specific:
-        "rebalance", "diversify", "over-weight", "under-weight",
-        "over-allocated", "under-allocated", "spread out",
-        "reduce exposure", "increase exposure",
-    ),
-    "zh": (
-        "加仓", "减仓", "清仓", "目标价", "预测", "推荐", "建议",
-        "应该", "理应",
-        "看多", "看涨", "看空", "看跌",
-        "飙升", "暴涨", "暴跌", "大跌", "崩盘", "突破点", "反弹",
-        "显著", "强劲", "疲软", "稳健", "急剧",
-        "动能", "势头",
-        "节奏", "放缓", "减速", "加速", "趋缓",
-        # Concentration surface-specific:
-        "再平衡", "分散投资", "过度集中", "分散开来",
-        "降低敞口", "增加敞口",
-        "超配", "低配", "过配", "欠配",
-    ),
-}
+# Post-check ban tuples for FORBIDDEN retry. See _advisor_guard.py for
+# matcher semantics. Only the slim anti-hype list survives the move to
+# direct recommendations: the model may suggest rebalancing or trimming
+# a concentrated book but never pump.
+_BANS: dict[Locale, tuple[str, ...]] = FORBIDDEN_HYPE
 
 # Quiet fallback when both Claude attempts produce a forbidden hit.
 _QUIET: dict[Locale, tuple[str, str, str]] = {
@@ -77,7 +56,7 @@ _QUIET: dict[Locale, tuple[str, str, str]] = {
     "zh": (
         "账本持有若干仓位，其中一只为最大单一持仓。",
         "上方比率已展示当前形态。",
-        "观察未来数月头号持仓占比与货币敞口的变化方向。",
+        "未来数月头号持仓占比与货币敞口的变化方向。",
     ),
 }
 
@@ -86,31 +65,22 @@ _LANG_INSTRUCTION: dict[Locale, str] = {
     "en": "\n\nRespond in English.\n",
     "zh": (
         "\n\n请使用简体中文回答。所有结构化标签（'What:' / 'Meaning:' / 'Watch:'）保持英文以便解析。"
-        "采用零售投资者的朴素中文。禁用以下中文词汇："
-        "买入、卖出、持有、加仓、减仓、目标价、推荐、应该、看多、看空、"
-        "飙升、暴跌、突破、反弹、显著、强劲、疲软、动能、"
-        "再平衡、分散投资、过度集中、分散开来、降低敞口、增加敞口、"
-        "超配、低配、过配、欠配。"
-        "\n\n不要描述账本形态变化的节奏。仅写当前快照。\"节奏\" 一词本身禁用，"
-        "加速、减速、放缓、趋缓亦不得用于头号持仓占比、敞口或仓位权重。"
-        "\n    反例：\"头号持仓占比正在加速上升\""
-        "\n    正例：\"头号持仓占账本价值 47.3%，其后四只持仓与之差距明显\""
-        "\n\n\"What:\" 与 \"Meaning:\" 两行只写当前快照，不得包含对形态演变的前瞻性预期。"
-        "\"Watch:\" 一行写一个观察对象，不得预测其结果。"
-        "\n    反例 (Meaning)：\"账本越来越集中，这一趋势可能持续\""
-        "\n    正例 (Meaning)：\"账本依赖单只持仓 K71U，其占比达 47.3%\""
-        "\n    反例 (Watch)：\"头号持仓占比或将继续上升\""
-        "\n    正例 (Watch)：\"观察未来数月头号持仓占比相对当前 47.3% 的变化方向\""
+        "采用零售投资者的朴素中文。可以给出明确、可执行的方向性看法"
+        "（例如加仓、减仓、持有、再平衡或分散持仓），但须保持冷静、有据的口吻：不得夸大、保证或断言必然。"
         "\n\nWatch 一行的时间词优先使用 \"下次/下个/未来\"，避免 \"后续\"。\n"
     ),
 }
 
 _PROMPT = """\
-You are writing three short educational lines about the SHAPE of a
-personal investment portfolio for a beginner investor's dashboard. The
-reader is a first-year student. They already see the numeric ratios
-(top-1, top-3, top-5 share, currency exposure, largest position);
-this is the deeper plain-English context.
+You are writing three short lines about the SHAPE of a personal
+investment portfolio for a long-horizon investor's dashboard. They
+already see the numeric ratios (top-1, top-3, top-5 share, currency
+exposure, largest position); this is the deeper plain-English context.
+
+You may give a direct, actionable view (e.g. whether to add to, trim,
+hold, rebalance, or diversify the book). Keep it calm and grounded: no
+hype, no guarantees, no certainty claims. The reader makes the final
+decision.
 
 Output format, exact and machine-parsed, three lines:
 
@@ -119,49 +89,22 @@ What: <one sentence: describe the shape of the book in plain words.
        if relevant.>
 Meaning: <one sentence: what the shape means in plain terms. Pattern
           or context. Avoid jargon.>
-Watch: <one sentence: what to monitor as the shape changes over time
-        (observation target, never an action).>
+Watch: <one sentence: what this suggests you might do or keep an eye on
+        as you decide; a concrete, actionable takeaway is welcome.>
 
 Hard rules:
 - EXACTLY three lines, with the literal labels "What:" / "Meaning:" /
   "Watch:".
 - Each line ONE sentence, ≤22 words. Aim for 15.
 - Percentages quoted verbatim if used.
-- Do not characterize the pace at which the shape is changing. Stick
-  to the current snapshot. The word "pace" itself is banned, as are
-  accelerating / decelerating / slowing / easing applied to top-N
-  share, exposure, or position weight.
-    Bad: "top-1 share has been growing at an accelerating clip"
-    Good: "top-1 is 47.3% of book value, with the next four positions trailing well behind"
-- The "What" and "Meaning" lines describe the current snapshot only.
-  Do not state forward-looking expectations about how the shape will
-  evolve. The "Watch" line names an observation target without
-  predicting its outcome.
-    Bad (Meaning): "the book is becoming more concentrated, and this trend may continue"
-    Good (Meaning): "the book leans on one position, K71U, which makes up 47.3% of value"
-    Bad (Watch):   "top-1 share will likely keep rising as K71U gains momentum"
-    Good (Watch):  "Whether top-1 share moves above or below its current 47.3% over the coming months"
 - NEVER use em dashes (—) in any output line. Use colons, commas, or
   periods instead.
 
-NEVER use these action words:
-  buy / sell / hold / trim / add / target / forecast / predict / expect /
-  recommend / "you should" / "you ought" / "consider [verb]" / "tomorrow".
+Use plain everyday words like "the book leans heavily on …", "USD
+makes up …", "most of the value sits in …", then say what you'd do.
 
-NEVER use these hype words:
-  surge / plunge / soar / crash / breakout / rally / tank.
-
-NEVER use these portfolio-action words or framings:
-  rebalance / diversify / "concentrated risk" / "too concentrated" /
-  "spread out" / "reduce exposure" / "increase exposure" / over-weight /
-  under-weight / over-allocated / under-allocated.
-
-Describe shape and direction, not finance theory. Use plain everyday
-words like "the book leans heavily on …", "USD makes up …",
-"most of the value sits in …".
-
-Tone: matter-of-fact, calm, considered. Like a patient teacher writing
-one note in a personal ledger.
+Tone: matter-of-fact, calm, considered. Like a steady hand writing one
+note in a personal ledger.
 
 Output the three lines only. No preamble, no markdown, no bullets.
 """
@@ -304,15 +247,17 @@ def _call_claude(
     bad = has_forbidden(body, bans, locale)
     if bad is not None:
         log.info(
-            "concentration_insight: forbidden %r in first draft, retrying (locale=%s)",
+            "concentration_insight: hype %r in first draft, retrying (locale=%s)",
             bad, locale,
         )
-        retry_suffix = (RETRY_SUFFIX_ZH if locale == "zh" else RETRY_SUFFIX_EN).format(bad=bad)
+        retry_suffix = (
+            RETRY_SUFFIX_HYPE_ZH if locale == "zh" else RETRY_SUFFIX_HYPE_EN
+        ).format(bad=bad)
         body = _shot(system_prompt + retry_suffix)
         bad2 = has_forbidden(body, bans, locale)
         if bad2 is not None:
             log.warning(
-                "concentration_insight: forbidden %r persisted after retry, quieting (locale=%s)",
+                "concentration_insight: hype %r persisted after retry, quieting (locale=%s)",
                 bad2, locale,
             )
             return _QUIET[locale]

@@ -21,10 +21,10 @@ from api.i18n import Locale
 log = logging.getLogger(__name__)
 
 ROLE = "Sentiment"
-ROLE_BANS: dict[Locale, tuple[str, ...]] = {
-    "en": ("FOMO", "panic", "capitulation", "euphoric", "meme"),
-    "zh": ("恐慌", "投降", "狂热", "迷因", "踏空"),
-}
+# Recommendation-era (2026-06-06): sentiment-as-signal words (FOMO / panic /
+# capitulation / euphoric / meme) are now allowed; the only active bans are
+# the shared anti-hype list in FORBIDDEN_BASE.
+ROLE_BANS: dict[Locale, tuple[str, ...]] = {"en": (), "zh": ()}
 
 
 def _build_context(code: str, ticker: str) -> dict | None:

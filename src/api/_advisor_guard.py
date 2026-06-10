@@ -67,3 +67,42 @@ RETRY_SUFFIX_ZH = (
     '"{bad}"，请重写整个输出并完全避免它。仅使用观察口吻，'
     "不得出现行动建议、幅度修饰、节奏或前瞻性表达。保持相同的标签格式。"
 )
+
+
+# ── Recommendation-era guard (2026-06-06) ────────────────────────────────────
+#
+# The dashboard moved from "educational-only" to direct recommendations
+# (Action / Why / Confidence / Risk). Action / forecast / target / sizing
+# language is now ALLOWED. The only post-check ban that survives is a slim
+# anti-hype list: the model may recommend, but never pump. This keeps the
+# Quiet-Ledger tone (calm, grounded) and protects against a confidently-wrong
+# model overselling a call. Pair with the mandatory Confidence + Risk fields.
+#
+# Modules migrate from their old observational `_BANS` to FORBIDDEN_HYPE +
+# RETRY_SUFFIX_HYPE_* as they are reworked (insight first, then the rest).
+FORBIDDEN_HYPE: dict[Locale, tuple[str, ...]] = {
+    "en": (
+        "guaranteed", "guarantee", "can't lose", "cant lose", "cannot lose",
+        "risk-free", "riskless", "to the moon", "lambo", "get rich",
+        "sure thing", "no-brainer", "no brainer", "must buy", "must-buy",
+        "can't miss", "cant miss", "easy money", "free money", "yolo",
+        "slam dunk", "100% certain", "printing money",
+    ),
+    "zh": (
+        "稳赚", "包赚", "稳赚不赔", "必涨", "一定涨", "稳涨", "躺赚",
+        "无风险", "零风险", "财富自由", "暴富", "一夜暴富", "稳赢",
+    ),
+}
+
+RETRY_SUFFIX_HYPE_EN = (
+    "\n\nIMPORTANT: your previous draft used the forbidden hype word "
+    '"{bad}". Rewrite the whole output without it. A recommendation is fine, '
+    "but keep a calm, grounded tone: no guarantees, no hype, no certainty "
+    "claims. Keep the same labelled-line format."
+)
+
+RETRY_SUFFIX_HYPE_ZH = (
+    "\n\n重要：先前的草稿包含禁用的夸大词 "
+    '"{bad}"，请重写整个输出并完全避免它。可以给出建议，'
+    "但须保持冷静、有据的口吻：不得做出保证、夸大或必然性表述。保持相同的标签格式。"
+)

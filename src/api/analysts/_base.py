@@ -22,14 +22,16 @@ import os
 import re
 from dataclasses import dataclass
 
+from api._advisor_guard import FORBIDDEN_HYPE
 from api.i18n import Locale
 
 log = logging.getLogger(__name__)
 
 
-# v5 split: trading-action subset (used by SWS-style aggregators that
-# allow judgement words like "strong"/"moderate") vs. the full base
-# (existing analyst tiles, which keep the magnitude + hype tail).
+# v5 split: trading-action subset. Retained for reference / legacy callers,
+# but as of the recommendation-era rework (2026-06-06) it is NO LONGER folded
+# into the active post-check ban list — directional/actionable reads are now
+# allowed in the tiles. The only active bans are the anti-hype list.
 FORBIDDEN_TRADING_ACTIONS: tuple[str, ...] = (
     "buy", "sell", "hold", "trim", "add", "target", "forecast",
     "predict", "expect", "recommend", "surge", "plunge", "soar",
@@ -48,33 +50,15 @@ FORBIDDEN_TRADING_ACTIONS_ZH: tuple[str, ...] = (
 )
 
 
-# Mirrors digest.py / insight.py. Trading-action subset + magnitude /
-# hype tail forbidden across every analyst tile.
-FORBIDDEN_BASE: tuple[str, ...] = FORBIDDEN_TRADING_ACTIONS + (
-    # Magnitude qualifiers (v3): describe ≠ characterize.
-    "notable", "notably", "significant", "significantly",
-    "remarkable", "remarkably", "impressive", "impressively",
-    "strong", "weak", "robust", "solid", "sharp", "stark",
-    "dramatic", "dramatically", "modest", "outsized", "massive",
-    # Highlight verbs (v3).
-    "registers", "boasts", "showcases", "demonstrates", "highlights",
-    # Indicator-behavior + activity stems (v4): describe the data, don't
-    # narrate the indicator. Substring match catches inflections — e.g.
-    # "decelerat" covers deceleration / decelerate / decelerating /
-    # decelerated; "mover" covers movers / mover.
-    "momentum", "decelerat", "mover",
-)
+# Recommendation-era (2026-06-06): the only active post-check ban is the slim
+# anti-hype list. The model may give a directional / actionable read; it just
+# can't pump (no guarantees, no "to the moon", etc.). Shared with the prose
+# advisors via `api._advisor_guard.FORBIDDEN_HYPE`.
+FORBIDDEN_BASE: tuple[str, ...] = FORBIDDEN_HYPE["en"]
 
 
-# Chinese mirror. Same observation-only register; substring match still
-# applies (CJK substrings are stable). v1 — review pass intended.
-FORBIDDEN_BASE_ZH: tuple[str, ...] = FORBIDDEN_TRADING_ACTIONS_ZH + (
-    # Magnitude qualifiers
-    "显著", "重大", "出色", "强劲", "疲软", "稳健", "急剧",
-    "戏剧性",
-    # Indicator-behavior (v4 mirror)
-    "动能", "势头",
-)
+# Chinese mirror — same anti-hype-only list.
+FORBIDDEN_BASE_ZH: tuple[str, ...] = FORBIDDEN_HYPE["zh"]
 
 
 _ROLE_ZH: dict[str, str] = {
@@ -129,22 +113,12 @@ def _has_forbidden(text: str, bans: tuple[str, ...]) -> str | None:
 _PROMPT_TEMPLATE_EN = """\
 You are the {role} analyst on a long-horizon investor's reading desk for
 {ticker} ({name}). Write ONE sentence about today's {role_lower} signals
-for this stock. Plain English, ≤22 words. Frame as observation only.
+for this stock. Plain English, ≤22 words.
+
+You may give a short directional or actionable read. Keep it calm and
+grounded: no hype, no guarantees.
 
 Forbidden words (anywhere in your output): {forbidden_csv}.
-
-Report numbers as numbers. Do not characterize their magnitude.
-Bad: "registers a notable 45% gain"
-Good: "30-day change is +45%"
-
-Do not characterize the pace of a trend. Describe what the price did,
-not whether the move is accelerating, decelerating, slowing, or easing.
-Bad: "pace of decline slowing" / "rate-of-change easing"
-Good: "30-day change is -3.79%, three of the last five sessions lower"
-
-Do not state forward-looking expectations. Stick to what has happened.
-Bad: "price rising at a pace that may face friction ahead"
-Good: "30-day change is +100%, current price near 30-day high"
 
 NEVER use em dashes (—). Use colons, commas, or periods.
 
@@ -163,21 +137,10 @@ Context:
 _PROMPT_TEMPLATE_ZH = """\
 你是一位长线投资者阅读台上的{role_zh}分析师，标的为 {ticker}（{name}）。
 请用一句简体中文记录今日该股票的{role_zh}方面信号。≤55 个汉字。
-观察口吻，不带行动建议。
+
+可以给出有方向性或可操作的简短判断。保持冷静、有据，不夸大、不做保证。
 
 禁用词（输出中任意位置都不得出现）：{forbidden_csv}。
-
-数字按原数字写出，不要修饰其幅度。
-反例："登记了显著的 45% 涨幅"
-正例："30 天涨幅为 +45%"
-
-不要描述趋势的节奏。写价格做了什么，不要说走势在加速、减速、放缓或趋缓。
-反例："下跌节奏放缓" / "上行速度趋缓"
-正例："30 天变化为 -3.79%，近五个交易日中有三个收低"
-
-不要表述前瞻性预期。仅写已发生的事实。
-反例："价格上行，可能面临阻力"
-正例："30 天涨幅为 +100%，当前价格接近 30 天高点"
 
 切勿使用破折号（—）。可使用冒号、逗号、句号或顿号。
 

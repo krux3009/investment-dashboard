@@ -10,10 +10,10 @@ Two halves:
     Future stay `None` until peer-PE / analyst-forecast layers ship.
   • Claude JSON pass: 3-5 bullets per axis as
     `{icon: "check"|"warn"|"neutral", headline, sub}`. Statement cards
-    are allowed to use judgement language ("trading 30% below fair
-    value", "moderate debt") — only the trading-action subset is
-    banned. That subset is `FORBIDDEN_TRADING_ACTIONS` in
-    `analysts/_base`, distinct from the prose advisors' full ban.
+    use judgement language ("trading 30% below fair value", "moderate
+    debt") and may carry a short directional / actionable lean. The
+    educational-only ban is gone; only the shared anti-hype floor
+    (`FORBIDDEN_HYPE` in `_advisor_guard`) is enforced post-check.
 
 Cache: `snowflake_cache (code, prompt_version, scores_json,
 statements_json, generated_at)`, locale-keyed prompt_version so EN +
@@ -33,7 +33,12 @@ import os
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 
-from api._advisor_guard import RETRY_SUFFIX_EN, RETRY_SUFFIX_ZH, has_forbidden
+from api._advisor_guard import (
+    FORBIDDEN_HYPE,
+    RETRY_SUFFIX_HYPE_EN,
+    RETRY_SUFFIX_HYPE_ZH,
+    has_forbidden,
+)
 from api.data import anomalies, prices
 from api.data.moomoo_client import get_summary
 from api.dividends import get_one as get_dividend_for
@@ -43,30 +48,20 @@ from api.i18n import DEFAULT_LOCALE, Locale, prompt_version_with_locale
 log = logging.getLogger(__name__)
 
 _TTL = timedelta(hours=6)
-_PROMPT_VERSION = "v3-snowflake-valuation"
+_PROMPT_VERSION = "v4-recommend"
 
 # Per-axis cap so the UI's vertical real estate stays bounded.
 _MAX_BULLETS = 5
 
 
-# Post-check bans for statement bullets. Narrower than
-# FORBIDDEN_TRADING_ACTIONS — ambiguous tokens with legitimate
-# descriptive uses (buy/sell/hold/add/trim/target) live in the prompt
-# prose only, since context lines feed Claude moomoo anomaly text like
-# "big institutions have been buying / selling". The post-check focuses
-# on unambiguous characterisation: recommendation verbs, hype words,
-# and forward-looking modals. Same convention insight.py / digest.py
-# use against their full prompt ban lists.
-_STATEMENT_BANS_EN: tuple[str, ...] = (
-    "forecast", "predict", "recommend", "should", "ought",
-    "bullish", "bearish", "surge", "plunge", "soar", "crash",
-    "breakout", "rally", "tank",
-)
-_STATEMENT_BANS_ZH: tuple[str, ...] = (
-    "目标价", "预测", "推荐", "建议", "应该", "理应",
-    "看多", "看涨", "看空", "看跌",
-    "飙升", "暴涨", "暴跌", "大跌", "崩盘", "突破点", "反弹",
-)
+# Post-check bans for statement bullets. The educational-only guardrail
+# is gone — directional / actionable language (buy / sell / trim / target
+# / bullish / bearish, etc.) is now allowed. Only the anti-hype floor
+# remains: the statements must stay calm and grounded, never pump. So the
+# post-check reuses the shared FORBIDDEN_HYPE list (guarantees, certainty
+# claims, "to the moon", etc.), same convention insight.py uses.
+_STATEMENT_BANS_EN: tuple[str, ...] = FORBIDDEN_HYPE["en"]
+_STATEMENT_BANS_ZH: tuple[str, ...] = FORBIDDEN_HYPE["zh"]
 
 
 # ── Score buckets ────────────────────────────────────────────────────────────
@@ -357,27 +352,26 @@ Hard limits:
   - Empty array is acceptable when no data supports that axis.
   - The "dividend" axis key (not "dividends") is intentional — match it.
 
-Framing rules (relaxed vs. prose advisors — judgement words allowed):
+Framing rules (judgement words allowed):
   - Allowed: "good value", "moderate debt", "strong cash position",
     "earnings grew 153.7% over past year", "trading 30% below fair
     value", "consistent dividend history".
-  - NEVER use trading-action language: buy / sell / hold / trim / add /
-    target / forecast / predict / expect / recommend / "should" /
-    "ought" / bullish / bearish / surge / plunge / soar / crash /
-    breakout / rally / tank.
+  - A bullet may carry a short directional or actionable lean (e.g. good
+    entry value, stretched, worth trimming). Keep it calm and grounded:
+    no hype, no guarantees, no certainty claims.
   - Past tense for "past" + "health" axes. Dividend bullets may use
     present-tense statements about current yield ("pays a 3.4% yield").
 
-Stay observational. The icon classifies the observation, not a verdict.
+The icon classifies the observation; a brief directional or actionable
+lean is fine on top of it.
 """
 
 _STATEMENTS_PROMPT_ZH_SUFFIX = (
     "\n\n请使用简体中文撰写所有 headline 与 sub 文案。JSON 的字段名"
     "(\"past\"/\"health\"/\"dividend\"/\"icon\"/\"headline\"/\"sub\") 保持英文。"
-    "禁用以下中文行动词汇：买入、卖出、持有、加仓、减仓、清仓、目标价、"
-    "预测、推荐、建议、应该、理应、看多、看涨、看空、看跌、"
-    "飙升、暴涨、暴跌、大跌、崩盘、突破点、反弹。允许使用判断性语言"
-    "（如 \"良好\"、\"稳健\"、\"债务温和\"），但必须基于已发生的事实。"
+    "允许使用判断性语言（如 \"良好\"、\"稳健\"、\"债务温和\"），"
+    "也允许带有简短的方向性或可执行倾向（如估值偏低适合介入、估值偏高、值得减持），"
+    "但须保持冷静、有据的口吻：不得夸大、不作保证、不作必然性表述。"
 )
 
 
@@ -493,8 +487,8 @@ def _call_claude_statements(
 
     bad = has_forbidden(body, bans, locale)
     if bad is not None:
-        log.info("snowflake: forbidden %r in first draft, retrying (locale=%s)", bad, locale)
-        retry_suffix = (RETRY_SUFFIX_ZH if locale == "zh" else RETRY_SUFFIX_EN).format(bad=bad)
+        log.info("snowflake: hype %r in first draft, retrying (locale=%s)", bad, locale)
+        retry_suffix = (RETRY_SUFFIX_HYPE_ZH if locale == "zh" else RETRY_SUFFIX_HYPE_EN).format(bad=bad)
         try:
             body = _shot(system_prompt + retry_suffix)
         except Exception as exc:
@@ -502,7 +496,7 @@ def _call_claude_statements(
             return dict(_EMPTY_STATEMENTS)
         bad2 = has_forbidden(body, bans, locale)
         if bad2 is not None:
-            log.warning("snowflake: forbidden %r persisted, dropping statements", bad2)
+            log.warning("snowflake: hype %r persisted, dropping statements", bad2)
             return dict(_EMPTY_STATEMENTS)
 
     return _parse_statements(body)

@@ -5,7 +5,7 @@ description: Bump _PROMPT_VERSION in a Claude advisor module and invalidate stal
 
 # prompt-bump
 
-Six advisor modules carry `_PROMPT_VERSION` constants. Cached prose lives in DuckDB keyed on `(dimension, _PROMPT_VERSION)` (often suffixed by locale via `prompt_version_with_locale`). Editing the prompt without bumping the version → stale cached prose served forever.
+Several advisor modules carry `_PROMPT_VERSION` constants. Cached prose lives in DuckDB keyed on `(dimension, _PROMPT_VERSION)` (often suffixed by locale via `prompt_version_with_locale`). Editing the prompt without bumping the version → stale cached prose served forever. (All versions were bumped to `*-recommend` on 2026-06-06 for the recommendation rework — see `project_recommendation_framing` memory.)
 
 ## Modules under management
 
@@ -20,10 +20,11 @@ Known surfaces (snapshot — re-grep before acting):
 | Module | Cache table (DuckDB) | Locale-aware |
 |---|---|---|
 | `src/api/digest.py` | `digest_cache` | yes |
-| `src/api/insight.py` | `insight_cache` | yes |
+| `src/api/insight.py` | `recommendation_cache` (was `insight_cache` pre-v6) | yes |
 | `src/api/benchmark_insight.py` | `benchmark_insight_cache` | yes |
 | `src/api/concentration_insight.py` | `concentration_insight_cache` | yes |
 | `src/api/foresight_insight.py` | `foresight_insight_cache` | yes |
+| `src/api/snowflake.py` | `snowflake_cache` | yes |
 | `src/api/company_events.py` | `company_events_cache` | check `prompt_version_with_locale` usage |
 | `src/api/sentiment_insight.py` | `sentiment_insight_cache` | yes |
 | `src/api/anomaly_translator.py` | inline cache | yes |

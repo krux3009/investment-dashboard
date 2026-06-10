@@ -1,9 +1,10 @@
-"""GET /api/insight/{code}: per-stock Meaning + Watch lines.
+"""GET /api/insight/{code}: per-stock recommendation (Action / Why /
+Confidence / Risk).
 
 Wraps api.insight.get_insight. Returns 503 if ANTHROPIC_API_KEY is
 missing so the drill-in can render a quiet "configure API key" hint
-instead of erroring out. Returns 200 with empty `meaning` / `watch`
-when the code isn't a current holding so the watchlist drill-in
+instead of erroring out. Returns 200 with `available: false` and empty
+fields when the code isn't a current holding so the watchlist drill-in
 doesn't log a console error for every non-held name.
 """
 
@@ -40,8 +41,11 @@ def get_insight(
         return {
             "code": code,
             "ticker": code.split(".", 1)[-1],
-            "meaning": "",
-            "watch": "",
+            "action": "",
+            "action_tone": "neutral",
+            "why": "",
+            "confidence": "",
+            "risk": "",
             "generated_at": "",
             "cached": False,
             "available": False,
@@ -50,8 +54,11 @@ def get_insight(
     return {
         "code": ins.code,
         "ticker": ins.ticker,
-        "meaning": ins.meaning,
-        "watch": ins.watch,
+        "action": ins.action,
+        "action_tone": ins.action_tone,
+        "why": ins.why,
+        "confidence": ins.confidence,
+        "risk": ins.risk,
         "generated_at": ins.generated_at.isoformat(),
         "cached": ins.cached,
         "available": True,

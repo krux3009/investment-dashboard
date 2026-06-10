@@ -1,11 +1,13 @@
-"""Per-event educational block for the foresight surface.
+"""Per-event block for the foresight surface.
 
 Three lines — What / Meaning / Watch — describing the event, how it
-connects to the held book, and what an attentive investor would
-observe as the date approaches. Cached on event_id, 6h TTL.
+connects to the held book, and a concrete, actionable takeaway for the
+holder as the date approaches. Cached on event_id, 6h TTL.
 
-Forbidden-words guard mirrors digest.py: no buy/sell/hold/forecast/
-predict/recommend/target/should/rally/surge/etc.
+The educational-only guardrail was dropped (2026-06-06): the prose may
+now give a direct, actionable view on what the event could mean. The
+only surviving post-check ban is a slim anti-hype list (FORBIDDEN_HYPE)
+so the model can recommend but never pump.
 """
 
 from __future__ import annotations
@@ -16,7 +18,12 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from api import foresight
-from api._advisor_guard import RETRY_SUFFIX_EN, RETRY_SUFFIX_ZH, has_forbidden
+from api._advisor_guard import (
+    FORBIDDEN_HYPE,
+    RETRY_SUFFIX_HYPE_EN,
+    RETRY_SUFFIX_HYPE_ZH,
+    has_forbidden,
+)
 from api.data import prices
 from api.data.moomoo_client import get_summary
 from api.i18n import DEFAULT_LOCALE, Locale, prompt_version_with_locale
@@ -26,64 +33,30 @@ log = logging.getLogger(__name__)
 _TTL = timedelta(hours=6)
 # v2-no-em-dash → v3-no-em-dash (2026-05-10): locale-aware prompts.
 # v3-no-em-dash → v4-source-edit (2026-05-13): ported the digest v6
-# source-edit pairs into _PROMPT (en) + _LANG_INSTRUCTION["zh"], adapted
-# to the forward-event surface: (1) no pace characterization on macro
-# background indicators (inflation cooling, growth slowing) — "pace"
-# itself banned; (2) the event being in the future is fine, but no
-# prediction of the event outcome, print number, or market reaction;
-# Watch line names an observation target without predicting its outcome;
-# (3) ZH Watch wording nudged toward 未来/下次/下个 over 后续.
-# FORBIDDEN list unchanged. Cache keys "v4-source-edit-en" /
-# "v4-source-edit-zh"; old v3 rows orphan and rebuild on next request.
-_PROMPT_VERSION = "v4-source-edit"
+# source-edit pairs into _PROMPT (en) + _LANG_INSTRUCTION["zh"].
+# v4-source-edit → v5-recommend (2026-06-06): dropped the educational-only
+# guardrail. The prompt no longer forbids prediction, action words, or
+# finance-theory terms; "Watch" now invites a concrete, actionable
+# takeaway. The only surviving post-check ban is FORBIDDEN_HYPE. Cache
+# keys "v5-recommend-en" / "v5-recommend-zh"; old v4 rows orphan and
+# rebuild on next request.
+_PROMPT_VERSION = "v5-recommend"
 
-# Post-check ban tuples for FORBIDDEN retry. See _advisor_guard.py
-# for matcher semantics. Foresight-specific bans add finance-theory
-# terms + reaction-prediction phrasings (catalyst / could move /
-# 催化剂 / 可能上涨) on top of the magnitude + hype + pace baseline.
-_BANS: dict[Locale, tuple[str, ...]] = {
-    "en": (
-        "forecast", "predict", "recommend", "should", "ought", "tomorrow",
-        "surge", "plunge", "soar", "crash", "breakout", "rally", "tank",
-        "bullish", "bearish",
-        "notable", "significant", "remarkable", "impressive", "robust",
-        "solid", "sharp", "stark", "dramatic", "modest", "outsized", "massive",
-        "registers", "boasts", "showcases", "demonstrates", "highlights",
-        "momentum", "decelerat", "mover",
-        "pace", "accelerat", "slowing", "easing", "rate-of-change",
-        # Foresight surface-specific:
-        "alpha", "beta", "outperform", "underperform", "benchmark-beating",
-        "catalyst", "could move", "expected to",
-    ),
-    "zh": (
-        "加仓", "减仓", "清仓", "目标价", "推荐", "建议",
-        "应该", "理应",
-        "看多", "看涨", "看空", "看跌",
-        "飙升", "暴涨", "暴跌", "大跌", "崩盘", "突破点", "反弹",
-        "显著", "强劲", "疲软", "稳健", "急剧",
-        "动能", "势头",
-        "节奏", "放缓", "减速", "加速", "趋缓",
-        # Foresight surface-specific:
-        "跑赢", "跑输", "催化剂",
-        "可能上涨", "可能下跌", "预期上涨", "预期下跌",
-        # Note: 预测 deliberately excluded from post-check — the standard
-        # Chinese rendering of "Summary of Economic Projections" is
-        # 经济预测摘要, which is a proper noun. Prompt prose still
-        # discourages 预测 as a verb; retain that as the soft guard.
-    ),
-}
+# The only post-check ban now: pump/hype. Prediction, action, and
+# positioning language are all allowed — that is the point of the rework.
+_BANS = FORBIDDEN_HYPE
 
-# Quiet fallback when both Claude attempts produce a forbidden hit.
+# Quiet fallback when both Claude attempts hit a hype word.
 _QUIET: dict[Locale, tuple[str, str, str]] = {
     "en": (
         "An upcoming dated event tied to one or more of the listed holdings or the broader macro calendar.",
         "Its details connect to the listed book through the named ticker or rate channel.",
-        "Whether reported figures match prior printed values on the day of release.",
+        "Keep an eye on the reported figures versus prior prints on the day of release.",
     ),
     "zh": (
         "持仓列表或宏观日历上的一个即将到来的事件。",
         "其细节通过具名持仓或利率渠道与账本相连。",
-        "观察发布当日公布数据与此前读数的对比。",
+        "发布当日留意公布数据与此前读数的对比。",
     ),
 }
 
@@ -92,76 +65,45 @@ _LANG_INSTRUCTION: dict[Locale, str] = {
     "en": "\n\nRespond in English.\n",
     "zh": (
         "\n\n请使用简体中文回答。所有结构化标签（'What:' / 'Meaning:' / 'Watch:'）保持英文以便解析。"
-        "采用零售投资者的朴素中文。禁用以下中文词汇："
-        "买入、卖出、持有、加仓、减仓、目标价、预测、推荐、应该、看多、看空、"
-        "飙升、暴跌、突破、反弹、跑赢、跑输、催化剂、"
-        "可能上涨、可能下跌、预期上涨、预期下跌。"
-        "\n\n不要描述任何宏观背景指标的节奏（通胀降温、增长放缓、需求加速、动能积累）。"
-        "写出前值或事实，不要叙述其轨迹。\"节奏\" 一词本身禁用。"
-        "\n    反例：\"通胀降温节奏正在加速\""
-        "\n    正例：\"前值 4 月 CPI 为 2.4%，较 3 月 2.7% 回落\""
-        "\n\n不得预测事件结果、数据读数或市场反应。事件本身在未来无妨，"
-        "但不可预判其结局。\"Watch:\" 一行写一个观察对象，不得预测其结果。"
-        "\n    反例 (Meaning)：\"此次数据可能推动联储进一步降息\""
-        "\n    正例 (Meaning)：\"该数据是联储利率决策的输入，与 MU 和 ANET 的融资成本相关\""
-        "\n    反例 (Watch)：\"发布后股价可能出现大幅波动\""
-        "\n    正例 (Watch)：\"观察标题数据是否符合 2.3% 的一致预期，以及与近期读数的对比\""
+        "采用零售投资者的朴素中文。"
+        "可以直接说明该事件对持仓可能意味着什么，以及临近时持有者可考虑做什么或留意什么。"
+        "保持冷静、有据的口吻：不要夸大，不做保证，不下必然性结论。最终决定由读者做出。"
         "\n\nWatch 一行的时间词优先使用 \"下次/下个/未来\"，避免 \"后续\"。\n"
     ),
 }
 
 _PROMPT = """\
-You are writing three short educational lines about an UPCOMING event
-for a beginner investor's dashboard. The reader holds the listed
-stocks; the event is on their forward calendar. They already see the
-event date and short description; this is the deeper plain-English
-context.
+You are writing three short lines about an UPCOMING event for a retail
+investor's dashboard. The reader holds the listed stocks; the event is
+on their forward calendar. They already see the event date and short
+description; this is the deeper plain-English context.
+
+You may give a direct, actionable view on what the event could mean for
+the listed holdings. Keep it calm and grounded: no hype, no guarantees,
+no certainty claims. The reader makes the final decision.
 
 Output format, exact and machine-parsed, three lines:
 
 What: <one sentence: describe the event itself in plain words.>
-Meaning: <one sentence: how it connects to the listed holdings,
-          observationally.>
-Watch: <one sentence: what an attentive investor would observe as
-        the date approaches. Observation target, never an action.>
+Meaning: <one sentence: what the event could mean for the listed
+          holdings.>
+Watch: <one sentence: what an attentive holder might do or keep an eye
+        on as the date approaches; a concrete, actionable takeaway is
+        welcome.>
 
 Hard rules:
 - EXACTLY three lines, with the literal labels "What:" / "Meaning:" /
   "Watch:".
 - Each line ONE sentence, ≤22 words. Aim for 15.
-- Do not characterize the pace of any background metric (inflation
-  cooling, growth slowing, demand accelerating, momentum building).
-  Report the prior print or fact; do not narrate its trajectory. The
-  word "pace" itself is banned.
-    Bad: "inflation has been cooling at an accelerating pace"
-    Good: "the prior April CPI print was 2.4%, down from March's 2.7%"
-- Do not predict the outcome of the event, the print number, or the
-  market reaction. The event being in the future is fine; predicting
-  its result is not. The "Watch" line names an observation target
-  without predicting its outcome.
-    Bad (Meaning): "the print may push the Fed toward another cut"
-    Good (Meaning): "the print feeds into the Fed's rate-setting decisions, which connect to funding costs for MU and ANET"
-    Bad (Watch):   "the stock will likely move sharply after the release"
-    Good (Watch):  "Whether the headline number matches the consensus 2.3% and how the cadence compares to recent prints"
+- Use plain everyday words a beginner could follow. Where a concept has
+  a jargon name, prefer the plain phrasing ("the print could shift the
+  rate path", "the talk will share product details", "the meeting will
+  set the rate decision").
 - NEVER use em dashes (—) in any output line. Use colons, commas, or
   periods instead.
 
-NEVER use these action words:
-  buy / sell / hold / trim / add / target / forecast / predict / expect /
-  recommend / "you should" / "you ought" / "consider [verb]" / "tomorrow".
-
-NEVER use these hype words:
-  surge / plunge / soar / crash / breakout / rally / tank.
-
-Translate concepts: never use alpha / beta / outperform / underperform /
-benchmark-beating / catalyst / "could move" / "expected to". Use plain
-everyday words like "the print could shift the rate path", "the talk
-will share product details", "the meeting will set the rate decision".
-
-Do NOT predict the outcome of the event. Do not give advice.
-
-Tone: matter-of-fact, calm, considered. Like a patient teacher writing
-one note in a personal ledger.
+Tone: matter-of-fact, calm, considered. Like a sharp analyst writing one
+note in a personal ledger. Confident is fine; loud is not.
 
 Output the three lines only. No preamble, no markdown, no bullets.
 """
@@ -292,15 +234,17 @@ def _call_claude(
     bad = has_forbidden(body, bans, locale)
     if bad is not None:
         log.info(
-            "foresight_insight: forbidden %r in first draft, retrying (locale=%s)",
+            "foresight_insight: hype %r in first draft, retrying (locale=%s)",
             bad, locale,
         )
-        retry_suffix = (RETRY_SUFFIX_ZH if locale == "zh" else RETRY_SUFFIX_EN).format(bad=bad)
+        retry_suffix = (
+            RETRY_SUFFIX_HYPE_ZH if locale == "zh" else RETRY_SUFFIX_HYPE_EN
+        ).format(bad=bad)
         body = _shot(system_prompt + retry_suffix)
         bad2 = has_forbidden(body, bans, locale)
         if bad2 is not None:
             log.warning(
-                "foresight_insight: forbidden %r persisted after retry, quieting (locale=%s)",
+                "foresight_insight: hype %r persisted after retry, quieting (locale=%s)",
                 bad2, locale,
             )
             return _QUIET[locale]

@@ -12,7 +12,7 @@ This project uses [Impeccable](https://impeccable.style) for design fluency. Str
 - **Type:** IBM Plex Sans (working) + Plex Mono (code/tickers) + Plex Serif (display only: portfolio h1, dividend hero, `ƒ` glyph). Tabular figures.
 - **Motion:** Restrained — state changes only. Flat by default (v4 SWS cards are bordered + `rounded-xl` but shadowless).
 - **Anti-references:** Bloomberg full-clone, crypto-neon, Robinhood gamification, generic LLM SaaS gray-blue.
-- **5 principles:** information-first · calm-under-volatility · two-modes-one-vocabulary · long-horizon-not-trading · signals-not-commands.
+- **5 principles:** information-first · calm-under-volatility · two-modes-one-vocabulary · long-horizon-not-trading · reasoned-recommendations-you-decide. *(The 5th principle was "signals-not-commands" until 2026-06-06; the owner reversed it — the dashboard now gives direct, grounded recommendations and the user makes the final call. See the `project_recommendation_framing` memory.)*
 
 ## Project Overview
 
@@ -161,28 +161,37 @@ company-events fetcher that feeds foresight.
   without an Anthropic key. Tables, charts, ratios, and event
   timelines render with handwritten labels and plain phrasing.
 - **Optional Claude depth** — [learn more] / drill-in toggles fetch
-  a `What / Meaning / Watch` block lazily. Endpoints are paired
+  the commentary lazily. The per-stock drill-in (`/api/insight/{code}`)
+  now returns a structured **recommendation** (`Action / Why /
+  Confidence / Risk`, cached in `recommendation_cache`); the other
+  surfaces keep their `What / Meaning / Watch` shape but the prose is
+  now directional. Endpoints are paired
   (`/api/digest`, `/api/insight/{code}`, `/api/benchmark-insight`,
   `/api/concentration-insight`, `/api/dividends-insight`,
   `/api/sentiment-insight/{code}`, `/api/foresight-insight/{event_id}`,
   `/api/snowflake`) and each caches in DuckDB keyed on
   `(dimension, prompt_version_with_locale(_PROMPT_VERSION, locale))`
   so a prompt edit **or** a locale switch invalidates cleanly. Current
-  prompt versions: digest `v6`, insight `v5-source-edit`, benchmark /
-  concentration / foresight `v4-source-edit`, sentiment `v2`,
-  dividends `v1-no-em-dash`, snowflake `v1-snowflake`, company-events
-  `v1`, anomaly-translator `v3-no-em-dash`. Locale resolved via
+  prompt versions (all bumped 2026-06-06 for the recommendation rework):
+  digest `v7-recommend`, insight `v6-recommend`, benchmark /
+  concentration / foresight `v5-recommend`, sentiment `v3-recommend`,
+  dividends `v2-recommend`, snowflake `v4-recommend`, anomaly-translator
+  `v4-recommend`, company-events `v1` (unchanged). Locale resolved via
   `api.i18n.parse_locale`; advisor prose accepts `?locale=en|zh`.
-  When editing any prompt copy / FORBIDDEN list / schema, bump its
-  `_PROMPT_VERSION` (use `/prompt-bump`) and run `/forbidden-framing-check`.
-- **Educational framing only** — every prompt forbids buy / sell /
-  hold / trim / add / target / forecast / predict / expect /
-  recommend / "you should" / rally / surge / soar / crash / etc.
-  Surface-specific bans extend the list (concentration forbids
-  rebalance/diversify/over-weight/under-weight; benchmark forbids
-  alpha/beta/outperform; foresight forbids predicting outcomes).
-  Every "Watch" line names an observation target, never an action.
-  See `~/.claude/projects/-Users-tanlixuan-Me-Vault/memory/feedback_financial_framing.md`.
+  When editing any prompt copy / ban list / schema, bump its
+  `_PROMPT_VERSION` (use `/prompt-bump`).
+- **Recommendation framing (since 2026-06-06)** — the educational-only
+  guardrail was removed. Prompts may now use action language (buy /
+  sell / hold / trim / add / target / rebalance / diversify /
+  outperform / cheap / expensive, etc.) and give a direct, actionable
+  view. The reader makes the final decision. The **only** surviving
+  post-check is a slim anti-hype list (`_advisor_guard.FORBIDDEN_HYPE`:
+  guaranteed / to the moon / can't lose / 稳赚 / 必涨, etc.) so prose
+  stays calm and grounded — no pump, no guarantees, no certainty
+  claims. The per-stock recommendation must stay grounded in the
+  signals passed and always carry Confidence + Risk (that pair is the
+  safety net; there is no disclaimer). See the
+  `project_recommendation_framing` memory.
 
 ## Architecture
 

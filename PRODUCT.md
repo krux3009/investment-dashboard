@@ -59,7 +59,7 @@ Explicitly not these:
 
 4. **Long-horizon tracker, not a trading floor.** Built for months-to-quarters holdings. No order-execution drama, no minute-by-minute P&L oscillation, no countdown timers. Trade execution lives in the moomoo native app on purpose.
 
-5. **Signals, not commands.** Anomaly skills surface what's unusual; the UI never tells the user what to do about it. Notation over recommendation.
+5. **Reasoned recommendations, you decide.** *(Reversed 2026-06-06 from the original "Signals, not commands."* The owner found pure notation unhelpful as a beginner.) Advisor surfaces now give a direct, actionable view — the per-stock drill-in returns Action / Why / Confidence / Risk; other surfaces carry directional prose. Every call stays grounded in the signals shown and names its Confidence + Risk, so the reasoning is legible. The dashboard advises; it does not execute — order placement still lives in the moomoo native app (principle 4), and the user makes the final call.
 
 ## Accessibility & Inclusion
 

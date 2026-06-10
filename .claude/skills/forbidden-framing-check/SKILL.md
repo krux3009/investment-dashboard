@@ -1,64 +1,46 @@
 ---
 name: forbidden-framing-check
-description: Audit a Claude advisor module (or new prose surface) for FORBIDDEN_BASE compliance, surface-specific ban extensions, and Watch-line wording rules. Use after creating or editing src/api/*_insight.py, src/api/digest.py, src/api/anomaly_translator.py, src/api/foresight_insight.py, or src/api/analysts/*.py. Also use when the user asks to "check the financial framing" of any Claude prose surface.
+description: Audit a Claude advisor module for the recommendation-era framing — anti-hype (FORBIDDEN_HYPE) compliance, grounding, and that the per-stock surface carries Action/Why/Confidence/Risk. Use after creating or editing src/api/*_insight.py, src/api/insight.py, src/api/digest.py, src/api/anomaly_translator.py, src/api/snowflake.py, or src/api/analysts/*.py. Also use when the user asks to "check the financial framing" of a Claude prose surface.
 ---
 
-# forbidden-framing-check
+# forbidden-framing-check (recommendation era)
 
-The dashboard's hard rule: every Claude-generated surface must be educational, observational, never directive. The full ruleset lives at `~/.claude/projects/-Users-tanlixuan-Me-Vault/memory/feedback_financial_framing.md` (referenced from `CLAUDE.md`).
+**Reversed 2026-06-06.** The dashboard dropped its educational-only guardrail. Advisor surfaces now give a direct, actionable view (buy/sell/trim/add/target/rebalance/cheap/expensive are ALLOWED). This skill no longer flags action language — it audits that prose stays calm, grounded, and free of hype. Full context: `project_recommendation_framing` memory + `~/.claude/projects/-Users-tanlixuan-Me-Vault/memory/feedback_financial_framing.md`.
 
 ## Source of truth
 
-`src/api/analysts/_base.py::FORBIDDEN_BASE` defines the universal ban list. `src/api/digest.py` carries the canonical version with magnitude qualifiers and indicator-behavior tokens added across v2→v5.
+`src/api/_advisor_guard.py::FORBIDDEN_HYPE` is the universal (and only) post-check ban list — pump/hype words in en + zh. Each advisor should set its `_BANS = FORBIDDEN_HYPE` (or, for `analysts/_base.py`, `FORBIDDEN_BASE = FORBIDDEN_HYPE["en"]`).
 
 ```bash
-# Always re-read these before auditing — they evolve.
-grep -A 200 '^FORBIDDEN_BASE' src/api/analysts/_base.py
-grep -A 200 '^FORBIDDEN' src/api/digest.py
+# Re-read before auditing — it evolves.
+grep -A 30 '^FORBIDDEN_HYPE' src/api/_advisor_guard.py
 ```
-
-## Surface-specific extensions (snapshot)
-
-| Surface | Must additionally ban |
-|---|---|
-| `concentration_insight.py` | rebalance, diversify, over-weight, under-weight |
-| `benchmark_insight.py` | alpha, beta, outperform, underperform |
-| `foresight_insight.py` | predict, expect, forecast, will, anticipate |
-| `analysts/fundamentals.py` | cheap, expensive, undervalued, overvalued |
-| `analysts/technical.py` | support, resistance (when used predictively) |
-
-Re-confirm the list by reading each module's local `_FORBIDDEN_EXTRA` (or equivalent) constant before flagging.
 
 ## Audit checklist
 
 For the target module:
 
-1. **Imports `FORBIDDEN_BASE`?** If not, the module is bypassing the universal ban list — flag.
-2. **Extends `FORBIDDEN_BASE` with the surface-specific bans listed above?** Diff the union against the table.
-3. **Locale coverage.** Does the module register CN forbidden tokens too? (zh prompts are gated separately — see `digest.py` v4→v5 transition.)
-4. **Output schema.** Every surface emits `What / Meaning / Watch`. Confirm:
-   - **What** is descriptive, present-tense, no action verbs.
-   - **Meaning** explains mechanism, no future-tense claims.
-   - **Watch** names an *observation target* (e.g. "next earnings call commentary on margins"), never an *action* ("consider trimming").
-5. **System prompt forbids buy/sell/hold/trim/add/target/recommend** + hype words (rally, surge, soar, crash, plunge, rocket).
-6. **Run a sample prompt and grep the output.** If `ANTHROPIC_API_KEY` is set, hit the corresponding endpoint (`/api/insight/<code>`, `/api/concentration-insight`, etc.) with a fresh cache key, then run:
+1. **Post-check uses `FORBIDDEN_HYPE`?** The module's `_BANS` (or `_STATEMENT_BANS_*`, or `_base.FORBIDDEN_BASE`) should equal the hype list, NOT the old action/magnitude/pace bans. If it still bans buy/sell/trim/add/target/forecast/recommend/alpha/beta/rebalance/cheap/expensive → flag (stale guardrail).
+2. **Retry suffix.** If it post-checks, it should use `RETRY_SUFFIX_HYPE_EN/ZH`, not the old `RETRY_SUFFIX_EN/ZH`.
+3. **No stale guardrail prose.** Grep the system prompt for leftover "observation only", "never recommend", "Watch names an observation target never an action", "do not give advice", "do not predict", magnitude/pace/forward-look bans → flag for removal.
+4. **Grounding (per-stock recommendation only).** `insight.py` must instruct: recommend only from the signals passed; thin/conflicting signals → Hold/Watch + Low confidence. Confirm the output carries **Action / Why / Confidence / Risk** and the route serializes all four.
+5. **Calm tone preserved.** Em-dash ban kept; plain-English/beginner guidance kept; `_PROMPT_VERSION` ends in `-recommend` (or was bumped after the edit).
+6. **Live hype grep.** If `ANTHROPIC_API_KEY` is set, hit the endpoint with a fresh cache key and confirm NO hype tokens:
    ```bash
-   curl -s 'http://127.0.0.1:8000/api/insight/US.NVDA' | jq -r '.what,.meaning,.watch' | \
-     grep -iE 'buy|sell|hold|trim|add|target|recommend|expect|forecast|predict|rally|surge|soar|crash|alpha|beta|cheap|expensive|undervalued|overvalued|rebalance|diversify' \
-     && echo 'FAIL: forbidden tokens present' || echo 'PASS'
+   curl -s 'http://127.0.0.1:8000/api/insight/US.NVDA' | jq -r '.action,.why,.confidence,.risk' | \
+     grep -iE 'guaranteed|to the moon|can.?t lose|risk-free|no-brainer|yolo|稳赚|必涨|财富自由' \
+     && echo 'FAIL: hype tokens present' || echo 'PASS'
    ```
-7. **Cache key includes `_PROMPT_VERSION`.** If you tightened the ban list, the version must bump (see `prompt-bump` skill).
+7. **Cache key includes `_PROMPT_VERSION`.** If you changed prompt copy or the ban list, the version must bump (see `prompt-bump`).
 
 ## Output format
-
-Report findings as a table:
 
 ```
 | Surface | Check | Status | Note |
 |---|---|---|---|
-| insight.py | imports FORBIDDEN_BASE | PASS | |
-| insight.py | extends with surface bans | FAIL | missing 'rally','surge' |
-| insight.py | Watch line names target | PASS | |
+| insight.py | _BANS = FORBIDDEN_HYPE | PASS | |
+| insight.py | Action/Why/Confidence/Risk present | PASS | |
+| benchmark_insight.py | no stale guardrail prose | FAIL | still says "observation only" |
 ```
 
 Stop after listing findings. Do not auto-fix without confirmation — wording changes are sensitive and the user maintains the canonical voice.

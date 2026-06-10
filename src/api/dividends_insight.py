@@ -5,11 +5,11 @@ stacked-bar SVG; this lazy block adds one What / Meaning / Watch trio
 when the user expands. Cache key is the rounded income shape so
 identical books hit cache.
 
-Educational framing only. The prompt forbids yield-chasing,
-DRIP / reinvest, payout-ratio, sustainable / unsustainable, dividend
-trap, and any growing- / cut-dividend characterizations on top of the
-shared FORBIDDEN_BASE in `api.analysts._base`. "Watch" line names an
-observation target, never an action.
+Direct, actionable framing (2026-06-06): the dashboard dropped its
+educational-only guardrail. The "Watch" line may now carry a concrete,
+actionable takeaway. The only surviving post-check ban is a slim
+anti-hype guard (`FORBIDDEN_HYPE`) that keeps the Quiet-Ledger tone
+calm and grounded — the reader makes the final decision.
 """
 
 from __future__ import annotations
@@ -21,32 +21,61 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from api import dividends
+from api._advisor_guard import (
+    FORBIDDEN_HYPE,
+    RETRY_SUFFIX_HYPE_EN,
+    RETRY_SUFFIX_HYPE_ZH,
+    has_forbidden,
+)
 from api.data import prices
 from api.i18n import DEFAULT_LOCALE, Locale, prompt_version_with_locale
 
 log = logging.getLogger(__name__)
 
 _TTL = timedelta(hours=6)
-_PROMPT_VERSION = "v1-no-em-dash"
+# v1-no-em-dash (educational-only) → v2-recommend (2026-06-06): the
+# dashboard dropped its educational-only guardrail. The Watch line may
+# now carry a direct, actionable takeaway; only an anti-hype post-check
+# survives. Bumping the version invalidates stale cache rows.
+_PROMPT_VERSION = "v2-recommend"
+
+# The only post-check ban now: pump/hype. Directional / actionable
+# language is allowed — that is the whole point of the rework.
+_BANS = FORBIDDEN_HYPE
+
+# Quiet fallback when both Claude attempts hit a hype word. Trio-shaped
+# so the frontend renders uniformly.
+_QUIET: dict[Locale, tuple[str, str, str]] = {
+    "en": (
+        "The income ledger looks steady; nothing stands out in the trailing distributions right now.",
+        "The book is collecting its usual income with no unusual shift in the mix.",
+        "Keep an eye on the next scheduled ex-dates and whether any single name's share of income grows.",
+    ),
+    "zh": (
+        "收入账面平稳，过去十二个月的派息没有特别突出之处。",
+        "组合照常收取分红，收入构成没有异常变化。",
+        "留意下一批除息日，以及单一持仓的收入占比是否上升。",
+    ),
+}
 
 _LANG_INSTRUCTION: dict[Locale, str] = {
     "en": "\n\nRespond in English.\n",
     "zh": (
         "\n\n请使用简体中文回答。所有结构化标签（'What:' / 'Meaning:' / 'Watch:'）保持英文以便解析。"
-        "采用零售投资者的朴素中文。禁用以下中文词汇："
-        "买入、卖出、持有、加仓、减仓、目标价、推荐、应该、看多、看空、"
-        "飙升、暴跌、突破、反弹、显著、强劲、疲软、动能、"
-        "追息、稳健、不稳健、安全、风险、分红可持续、派息率、削减分红、分红增长、"
-        "分红陷阱、复投、再平衡、超配、低配。\n"
+        "采用零售投资者的朴素中文，避免术语。\n"
     ),
 }
 
 _PROMPT = """\
-You are writing three short educational lines about the INCOME LEDGER of a
-personal investment portfolio for a beginner investor's dashboard. The
-reader is a first-year student. They already see the per-holding TTM
-distributions, next ex-dates, and the stacked-bar showing each name's
-share of trailing income; this is the deeper plain-English context.
+You are writing three short lines about the INCOME LEDGER of a personal
+investment portfolio for a beginner investor's dashboard. The reader is a
+first-year student. They already see the per-holding TTM distributions,
+next ex-dates, and the stacked-bar showing each name's share of trailing
+income; this is the deeper plain-English context.
+
+You may give a direct, actionable view. Keep it calm and grounded: no
+hype, no guarantees, no certainty claims. The reader makes the final
+decision.
 
 Output format, exact and machine-parsed, three lines:
 
@@ -55,8 +84,8 @@ What: <one sentence: describe what the income ledger looks like right now.
        mention if it is a REIT.>
 Meaning: <one sentence: what the income shape means in plain terms.
           Pattern or context. Avoid jargon.>
-Watch: <one sentence: what to monitor as the income shape changes over
-        time (observation target, never an action).>
+Watch: <one sentence: what this suggests you might do or keep an eye on as
+        you decide; a concrete, actionable takeaway is welcome.>
 
 Hard rules:
 - EXACTLY three lines, with the literal labels "What:" / "Meaning:" /
@@ -66,26 +95,9 @@ Hard rules:
 - NEVER use em dashes (—) in any output line. Use colons, commas, or
   periods instead.
 
-NEVER use these action words:
-  buy / sell / hold / trim / add / target / forecast / predict / expect /
-  recommend / "you should" / "you ought" / "consider [verb]" / "tomorrow".
-
-NEVER use these hype words:
-  surge / plunge / soar / crash / breakout / rally / tank.
-
-NEVER use these income-strategy or judgement words:
-  yield-chasing / chase yield / income strategy / dividend trap /
-  reinvest / DRIP / payout ratio / sustainable / unsustainable /
-  safe / risky / growing dividend / dividend cut / generous / stingy /
-  juicy / lucrative / passive income.
-
-NEVER use these portfolio-action framings:
-  rebalance / diversify / "concentrated income" / "income risk" /
-  "reduce exposure" / "increase exposure" / over-weight / under-weight.
-
-Describe the ledger and its shape, not finance theory. Use plain
-everyday words like "the book received …", "most trailing income came
-from …", "the next scheduled distribution is …".
+Describe the ledger and its shape in plain everyday words like "the book
+received …", "most trailing income came from …", "the next scheduled
+distribution is …".
 
 Tone: matter-of-fact, calm, considered. Like a patient teacher writing
 one note in a personal ledger.
@@ -203,30 +215,7 @@ def _build_user_message(r: dividends.DividendsResponse) -> str:
     return "\n".join(parts)
 
 
-def _call_claude(
-    user_message: str, locale: Locale = DEFAULT_LOCALE
-) -> tuple[str, str, str]:
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise RuntimeError(
-            "ANTHROPIC_API_KEY not set — add it to .env to enable /api/dividends-insight."
-        )
-
-    from anthropic import Anthropic
-
-    client = Anthropic(api_key=api_key)
-    model = os.environ.get("ANTHROPIC_DIGEST_MODEL", "claude-sonnet-4-6")
-
-    system_prompt = _PROMPT + _LANG_INSTRUCTION[locale]
-
-    response = client.messages.create(
-        model=model,
-        max_tokens=400,
-        system=system_prompt,
-        messages=[{"role": "user", "content": user_message}],
-    )
-    body = "\n".join(b.text for b in response.content if b.type == "text").strip()
-
+def _parse_body(body: str) -> tuple[str, str, str]:
     what = meaning = watch = ""
     for line in body.splitlines():
         line = line.strip()
@@ -237,6 +226,56 @@ def _call_claude(
             meaning = line.split(":", 1)[1].strip()
         elif lower.startswith("watch:"):
             watch = line.split(":", 1)[1].strip()
+    return what, meaning, watch
+
+
+def _call_claude(
+    user_message: str, locale: Locale = DEFAULT_LOCALE
+) -> tuple[str, str, str]:
+    """Returns (what, meaning, watch).
+
+    Runs the anti-hype post-check + one retry. If both attempts hit a hype
+    word, falls back to the locale-specific quiet trio.
+    """
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise RuntimeError(
+            "ANTHROPIC_API_KEY not set — add it to .env to enable /api/dividends-insight."
+        )
+
+    from anthropic import Anthropic
+
+    client = Anthropic(api_key=api_key)
+    model = os.environ.get("ANTHROPIC_DIGEST_MODEL", "claude-sonnet-4-6")
+    bans = _BANS[locale]
+    system_prompt = _PROMPT + _LANG_INSTRUCTION[locale]
+
+    def _shot(system: str) -> str:
+        response = client.messages.create(
+            model=model,
+            max_tokens=400,
+            system=system,
+            messages=[{"role": "user", "content": user_message}],
+        )
+        return "\n".join(b.text for b in response.content if b.type == "text").strip()
+
+    body = _shot(system_prompt)
+    bad = has_forbidden(body, bans, locale)
+    if bad is not None:
+        log.info("dividends-insight: hype %r in first draft, retrying (locale=%s)", bad, locale)
+        retry_suffix = (
+            RETRY_SUFFIX_HYPE_ZH if locale == "zh" else RETRY_SUFFIX_HYPE_EN
+        ).format(bad=bad)
+        body = _shot(system_prompt + retry_suffix)
+        bad2 = has_forbidden(body, bans, locale)
+        if bad2 is not None:
+            log.warning(
+                "dividends-insight: hype %r persisted after retry, quieting (locale=%s)",
+                bad2, locale,
+            )
+            return _QUIET[locale]
+
+    what, meaning, watch = _parse_body(body)
     if not (what or meaning or watch):
         what = body
     return what, meaning, watch

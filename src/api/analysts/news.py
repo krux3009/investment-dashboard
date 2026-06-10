@@ -12,10 +12,10 @@ from api import macro_events
 from api.i18n import Locale
 
 ROLE = "News"
-ROLE_BANS: dict[Locale, tuple[str, ...]] = {
-    "en": ("breaking", "shocking", "surprising", "unexpected", "bombshell"),
-    "zh": ("突发", "震惊", "意外", "黑天鹅", "爆炸性"),
-}
+# Recommendation-era (2026-06-06): hype-adjacent news words (breaking /
+# shocking / surprising / unexpected) are now allowed; the only active bans
+# are the shared anti-hype list in FORBIDDEN_BASE.
+ROLE_BANS: dict[Locale, tuple[str, ...]] = {"en": (), "zh": ()}
 
 
 def _fetch_news_lazy(code: str) -> list[dict]:

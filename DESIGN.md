@@ -254,7 +254,7 @@ The chart layer keeps these muted tints rather than the loud status green/red, s
 
 **The One Voice Rule.** The gold accent is used on ≤10% of any screen. Its rarity is the message. Two accents on one view is one accent too many.
 
-**The No-Sole-Signal Rule.** Up/down is never communicated by color alone — in either tier. Every up/down value carries an arrow (↑/↓), explicit sign (+/−), or positional cue; every statement-card sentiment carries a check/warn/neutral glyph. Color is reinforcement, never the signal. See `~/.claude/projects/-Users-tanlixuan-Me-Vault/memory/feedback_financial_framing.md` for the matching copy posture (no buy/sell/hold/target/recommend language anywhere in advisor surfaces).
+**The No-Sole-Signal Rule.** Up/down is never communicated by color alone — in either tier. Every up/down value carries an arrow (↑/↓), explicit sign (+/−), or positional cue; every statement-card sentiment carries a check/warn/neutral glyph. Color is reinforcement, never the signal. (Copy posture, reversed 2026-06-06: advisor surfaces now DO use buy/sell/hold/trim/add/recommend language and give a direct view — see the `project_recommendation_framing` memory. The No-Sole-Signal *visual* rule still holds: status color reinforces an arrow/sign/glyph, never carries meaning alone.)
 
 **The Tinted-Neutral Rule.** Pure black and pure white are forbidden. Light neutrals tint warm (hue ~60-75); dark neutrals tint cool (hue ~240). Never `#000`, never `#fff`.
 
@@ -455,7 +455,7 @@ The `calendar` tab: a `grid-cols-7` 42-cell month grid (`?month=YYYY-MM` query p
 - **Do** reach for full borders or background tint when separation is needed.
 - **Do** ship hand-rolled SVG for any chart that lives in SSR HTML; reserve Recharts for lazy-mounted drill-ins.
 - **Do** open every block with the `text-xs uppercase tracking-[0.06em] text-quiet` caption. The recurrence is the affordance.
-- **Do** keep advisor copy plain-English: never buy, sell, hold, trim, add, target, forecast, predict, recommend, "you should", rally, surge, soar, crash. See `feedback_financial_framing.md`.
+- **Do** keep advisor copy plain-English and calm. Action language (buy, sell, hold, trim, add, target, rebalance, recommend) is allowed since 2026-06-06; only hype/pump is banned (`_advisor_guard.FORBIDDEN_HYPE`: guaranteed, to the moon, can't lose). See the `project_recommendation_framing` memory.
 
 ### Don't:
 

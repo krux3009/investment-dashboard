@@ -14,6 +14,8 @@ from api.data import anomalies, prices
 from api.i18n import Locale
 
 ROLE = "Technical"
+# Recommendation-era (2026-06-06): no role-specific bans; the only active
+# bans are the shared anti-hype list in FORBIDDEN_BASE.
 ROLE_BANS: dict[Locale, tuple[str, ...]] = {"en": (), "zh": ()}
 
 
