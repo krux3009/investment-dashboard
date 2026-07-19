@@ -49,8 +49,8 @@ Three routes, layered for the two reading modes from PRODUCT.md.
 ### `/` home (15-second daily glance)
 
 1. **Hero.** USD-aggregated total + signed P&L + per-currency
-   breakdown caption + FX rates used. Allocation donut on the right
-   with labels-on-slices.
+   breakdown caption + FX rates used. 96px portfolio snowflake on
+   the right (the v4 rewrite retired the allocation donut).
 2. **Daily digest.** Always-on (no toggle) — auto-fetches on mount.
    A per-ticker **four-tile analyst grid** (Fundamentals · News ·
    Sentiment · Technical), one Claude call per tile, server-cached

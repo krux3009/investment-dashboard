@@ -55,19 +55,24 @@ function gainClass(value: number): string {
 }
 
 interface SegmentBarProps {
-  segments: Array<{ label: string; value: number; tone: "primary" | "muted" | "warn" }>;
+  segments: Array<{ label: string; value: number; tone: "primary" | "secondary" | "muted" }>;
 }
 
+// Adjacent segments must be distinguishable: gold for unrealized, graphite for
+// dividends (both were gold and read as one segment), rule-gray for the
+// zero/pending components. Status colors stay reserved for status.
 const TONE_FILL: Record<SegmentBarProps["segments"][number]["tone"], string> = {
   primary: "var(--accent-primary)",
-  muted: "var(--rule)",
-  warn: "var(--accent-warn)",
+  secondary: "var(--quiet)",
+  // Lightest ramp step that still clears 2:1 vs the surface (rule doesn't).
+  muted: "var(--slice-7)",
 };
 
 function StackedBar({ segments }: SegmentBarProps) {
   const total = segments.reduce((s, x) => s + Math.abs(x.value), 0) || 1;
   return (
-    <div className="flex h-2 w-full rounded-full overflow-hidden bg-surface">
+    // gap-0.5 = the 2px surface gap doing the separating between segments.
+    <div className="flex gap-0.5 h-2 w-full rounded-full overflow-hidden bg-surface">
       {segments.map((s) => {
         const pct = (Math.abs(s.value) / total) * 100;
         if (pct < 0.5) return null;
@@ -103,7 +108,7 @@ export function ReturnsView({ summary, detail, contributors }: Props) {
 
   const breakdownSegments: SegmentBarProps["segments"] = [
     { label: t("returns.seg.unrealized"), value: summary.unrealized_usd, tone: "primary" },
-    { label: t("returns.seg.dividends"), value: summary.dividends_usd, tone: "primary" },
+    { label: t("returns.seg.dividends"), value: summary.dividends_usd, tone: "secondary" },
     { label: t("returns.seg.realized"), value: 0, tone: "muted" },
     { label: t("returns.seg.currency"), value: 0, tone: "muted" },
   ];
@@ -165,6 +170,20 @@ function BreakdownCard({
 
       <div className="flex flex-col gap-2">
         <StackedBar segments={segments} />
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-quiet">
+          {segments
+            .filter((s) => Math.abs(s.value) > 0)
+            .map((s) => (
+              <span key={s.label} className="inline-flex items-center gap-1.5">
+                <span
+                  aria-hidden
+                  className="inline-block w-2 h-2 rounded-full"
+                  style={{ background: TONE_FILL[s.tone] }}
+                />
+                {s.label}
+              </span>
+            ))}
+        </div>
         <p className="text-[11px] text-whisper italic">{t("returns.breakdown.caveat")}</p>
       </div>
     </section>

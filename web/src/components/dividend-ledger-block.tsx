@@ -29,24 +29,17 @@ type HistoryState =
   | { kind: "ready"; data: HoldingDividend }
   | { kind: "error"; detail: string };
 
-const SLICE_VARS = [
-  "var(--slice-1)",
-  "var(--slice-2)",
-  "var(--slice-3)",
-  "var(--slice-4)",
-  "var(--slice-5)",
-  "var(--slice-6)",
-];
-
-const BAR_W = 600;
-const BAR_H = 16;
-
 interface Segment {
   label: string;
   pct: number;
   usd: number;
 }
 
+// One graphite tone per segment, separated by 2px surface gaps — the same
+// stacked-bar grammar as concentration-block.tsx. The old rank-ordered
+// slice ramp colored segments by size (which width already shows) and
+// repainted a payer whenever its rank changed. Identity rides the ordered
+// label row underneath.
 function StackedBar({
   segments,
   ariaLabel,
@@ -54,36 +47,24 @@ function StackedBar({
   segments: Segment[];
   ariaLabel: string;
 }) {
-  let cursor = 0;
   return (
-    <svg
-      viewBox={`0 0 ${BAR_W} ${BAR_H}`}
-      width="100%"
-      height={BAR_H}
+    <div
       role="img"
       aria-label={ariaLabel}
-      className="block"
+      className="flex gap-0.5 h-4 w-full rounded-sm overflow-hidden"
     >
-      {segments.map((seg, i) => {
-        const w = seg.pct * BAR_W;
-        const x = cursor;
-        cursor += w;
-        return (
-          <rect
-            key={`${seg.label}-${i}`}
-            x={x}
-            y={0}
-            width={Math.max(w, 0.5)}
-            height={BAR_H}
-            fill={SLICE_VARS[i % SLICE_VARS.length]}
-            stroke="var(--surface)"
-            strokeWidth={0.75}
-          >
-            <title>{`${seg.label} · ${fmtUsd(seg.usd, { decimals: 2 })}`}</title>
-          </rect>
-        );
-      })}
-    </svg>
+      {segments.map((seg, i) => (
+        <div
+          key={`${seg.label}-${i}`}
+          className="h-full"
+          style={{
+            width: `${Math.max(seg.pct * 100, 0.25)}%`,
+            background: "var(--quiet)",
+          }}
+          title={`${seg.label} · ${fmtUsd(seg.usd, { decimals: 2 })}`}
+        />
+      ))}
+    </div>
   );
 }
 
