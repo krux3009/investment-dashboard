@@ -32,11 +32,14 @@
   /* Lines */
   --rule: oklch(86% 0.006 70);             /* hairlines */
 
-  /* SWS-faithful status palette — light variant (deeper for readability). */
-  --accent-primary: #B89968;               /* SWS gold, slightly toned for light bg */
-  --accent-success: #009244;               /* positive ↑ */
-  --accent-warn:    #C25F1F;               /* warn ⚠ */
-  --accent-danger:  #BC0024;               /* negative ↓ */
+  /* SWS-faithful status palette — light variant (deeper for readability).
+   * Values are contrast-computed against the cream surface: gold ≥4.5:1 so it
+   * holds as line/mark AND small text; success/warn ≥4.5:1 (they color text-xs
+   * KPI deltas); danger already cleared. Don't lighten without re-checking. */
+  --accent-primary: #8a682a;               /* SWS gold, deepened for light bg (4.6:1) */
+  --accent-success: #05773b;               /* positive ↑ (5.0:1) */
+  --accent-warn:    #994a00;               /* warn ⚠ (5.6:1) */
+  --accent-danger:  #BC0024;               /* negative ↓ (5.9:1) */
 
   /* Backwards-compatible aliases. v3 components reading --accent now read gold. */
   --accent: var(--accent-primary);
@@ -49,14 +52,16 @@
   /* Tick-pulse highlight — desaturated gold (no green/red). 600ms fade. */
   --accent-tint: color-mix(in oklch, var(--accent-primary) 25%, var(--surface));
 
-  /* Sequential graphite for charts (largest = darkest) */
+  /* Sequential graphite for charts (largest = darkest). Re-stepped so every
+   * step keeps ≥2:1 against the surface and adjacent steps stay ΔL ≥ 0.06
+   * apart (ordinal-ramp validation) — the palest step used to vanish. */
   --slice-1: oklch(28% 0.008 60);
-  --slice-2: oklch(38% 0.008 60);
-  --slice-3: oklch(48% 0.008 60);
-  --slice-4: oklch(58% 0.008 60);
-  --slice-5: oklch(68% 0.008 60);
-  --slice-6: oklch(76% 0.007 65);
-  --slice-7: oklch(82% 0.007 70);
+  --slice-2: oklch(36% 0.008 62);
+  --slice-3: oklch(43.5% 0.008 64);
+  --slice-4: oklch(51% 0.008 66);
+  --slice-5: oklch(58.5% 0.008 68);
+  --slice-6: oklch(66% 0.008 70);
+  --slice-7: oklch(73.5% 0.008 72);
 }
 
 .dark {
@@ -73,11 +78,12 @@
 
   --rule: oklch(28% 0.005 240);            /* hairline */
 
-  /* SWS gold + brighter status tones for dark surface. */
+  /* SWS gold + brighter status tones for dark surface. Danger lifted from
+   * #D6002A (3.7:1, failed 4.5:1 as small delta text) to 5.0:1. */
   --accent-primary: #D9B97A;
   --accent-success: #00DA5A;
   --accent-warn:    #EB7930;
-  --accent-danger:  #D6002A;
+  --accent-danger:  #E6424C;
 
   --accent: var(--accent-primary);
   --accent-strong: oklch(78% 0.12 80);
@@ -87,13 +93,14 @@
 
   --accent-tint: color-mix(in oklch, var(--accent-primary) 22%, var(--surface));
 
+  /* Re-stepped like the light ramp: darkest step keeps ≥2:1 vs near-black. */
   --slice-1: oklch(85% 0.008 70);
-  --slice-2: oklch(75% 0.008 65);
-  --slice-3: oklch(65% 0.008 60);
-  --slice-4: oklch(55% 0.008 60);
-  --slice-5: oklch(45% 0.008 60);
-  --slice-6: oklch(36% 0.008 60);
-  --slice-7: oklch(28% 0.008 60);
+  --slice-2: oklch(77.5% 0.008 68);
+  --slice-3: oklch(70% 0.008 66);
+  --slice-4: oklch(62.5% 0.008 64);
+  --slice-5: oklch(55% 0.008 62);
+  --slice-6: oklch(47.5% 0.008 60);
+  --slice-7: oklch(40% 0.008 58);
 }
 
 @theme inline {

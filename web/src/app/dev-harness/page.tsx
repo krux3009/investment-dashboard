@@ -12,6 +12,39 @@ import { Snowflake } from "@/components/snowflake";
 import { KpiTile } from "@/components/kpi-tile";
 import { StatementCard } from "@/components/statement-card";
 import { ComparisonGauge } from "@/components/comparison-gauge";
+import { BenchmarkChart } from "@/components/benchmark-chart";
+import type { BenchmarkResponse } from "@/lib/api";
+
+// 60 mock trading days: portfolio drifts to +12%, SPY to +6%, with a dip.
+const MOCK_BENCHMARK: BenchmarkResponse = (() => {
+  const days = 60;
+  const dates = Array.from({ length: days }, (_, i) => {
+    const d = new Date(2026, 3, 1);
+    d.setDate(d.getDate() + i);
+    return d.toISOString().slice(0, 10);
+  });
+  const wave = (i: number, end: number, dip: number) =>
+    (i / (days - 1)) * end + dip * Math.sin((i / (days - 1)) * Math.PI * 2);
+  return {
+    days,
+    symbols: ["SPY"],
+    as_of: dates[days - 1],
+    portfolio: dates.map((trade_date, i) => ({
+      trade_date,
+      pct: wave(i, 0.12, -0.02),
+    })),
+    benchmarks: [
+      {
+        symbol: "SPY",
+        points: dates.map((trade_date, i) => ({
+          trade_date,
+          pct: wave(i, 0.06, -0.01),
+        })),
+      },
+    ],
+    weighting_caveat: "mock",
+  };
+})();
 
 export default function ComponentDemoPage() {
   if (process.env.NODE_ENV === "production") {
@@ -147,6 +180,16 @@ export default function ComponentDemoPage() {
             referenceLabel="US Market"
             sub="1 holding excluded due to missing forward-earnings data."
           />
+        </div>
+      </section>
+
+      {/* BenchmarkChart — crosshair/tooltip hover layer + solid zero line */}
+      <section className="flex flex-col gap-4">
+        <h2 className="text-xs font-medium uppercase tracking-[0.1em] text-quiet">
+          BenchmarkChart (hover for crosshair · arrow keys when focused)
+        </h2>
+        <div className="rounded-xl border border-rule bg-surface-raised p-6 max-w-2xl">
+          <BenchmarkChart data={MOCK_BENCHMARK} />
         </div>
       </section>
     </div>
