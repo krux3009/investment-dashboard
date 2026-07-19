@@ -51,7 +51,9 @@ function StackedBar({
           className="h-full"
           style={{
             width: `${Math.max(seg.pct * 100, 0.25)}%`,
-            background: seg.muted ? "var(--rule)" : "var(--quiet)",
+            // slice-7 is the lightest ramp step that still clears 2:1 vs the
+            // surface — rule sat at ~1.4:1 and the segment could vanish.
+            background: seg.muted ? "var(--slice-7)" : "var(--quiet)",
           }}
           title={`${seg.label} · ${(seg.pct * 100).toFixed(1)}%`}
         />

@@ -64,7 +64,8 @@ interface SegmentBarProps {
 const TONE_FILL: Record<SegmentBarProps["segments"][number]["tone"], string> = {
   primary: "var(--accent-primary)",
   secondary: "var(--quiet)",
-  muted: "var(--rule)",
+  // Lightest ramp step that still clears 2:1 vs the surface (rule doesn't).
+  muted: "var(--slice-7)",
 };
 
 function StackedBar({ segments }: SegmentBarProps) {

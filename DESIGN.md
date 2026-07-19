@@ -11,21 +11,21 @@ colors:
   quiet: "oklch(45% 0.008 60)"
   whisper: "oklch(58% 0.007 65)"
   rule: "oklch(86% 0.006 70)"
-  accent: "#B89968"
-  accent-primary: "#B89968"
+  accent: "#8a682a"
+  accent-primary: "#8a682a"
   accent-strong: "oklch(58% 0.10 80)"
-  accent-success: "#009244"
-  accent-warn: "#C25F1F"
+  accent-success: "#05773b"
+  accent-warn: "#994a00"
   accent-danger: "#BC0024"
   gain: "oklch(48% 0.10 145)"
   loss: "oklch(48% 0.13 25)"
   slice-1: "oklch(28% 0.008 60)"
-  slice-2: "oklch(38% 0.008 60)"
-  slice-3: "oklch(48% 0.008 60)"
-  slice-4: "oklch(58% 0.008 60)"
-  slice-5: "oklch(68% 0.008 60)"
-  slice-6: "oklch(76% 0.007 65)"
-  slice-7: "oklch(82% 0.007 70)"
+  slice-2: "oklch(36% 0.008 62)"
+  slice-3: "oklch(43.5% 0.008 64)"
+  slice-4: "oklch(51% 0.008 66)"
+  slice-5: "oklch(58.5% 0.008 68)"
+  slice-6: "oklch(66% 0.008 70)"
+  slice-7: "oklch(73.5% 0.008 72)"
   surface-dark: "oklch(14% 0.01 240)"
   surface-raised-dark: "oklch(18% 0.008 240)"
   surface-zebra-dark: "oklch(19% 0.008 240)"
@@ -40,16 +40,16 @@ colors:
   accent-strong-dark: "oklch(78% 0.12 80)"
   accent-success-dark: "#00DA5A"
   accent-warn-dark: "#EB7930"
-  accent-danger-dark: "#D6002A"
+  accent-danger-dark: "#E6424C"
   gain-dark: "oklch(62% 0.11 145)"
   loss-dark: "oklch(62% 0.13 25)"
   slice-1-dark: "oklch(85% 0.008 70)"
-  slice-2-dark: "oklch(75% 0.008 65)"
-  slice-3-dark: "oklch(65% 0.008 60)"
-  slice-4-dark: "oklch(55% 0.008 60)"
-  slice-5-dark: "oklch(45% 0.008 60)"
-  slice-6-dark: "oklch(36% 0.008 60)"
-  slice-7-dark: "oklch(28% 0.008 60)"
+  slice-2-dark: "oklch(77.5% 0.008 68)"
+  slice-3-dark: "oklch(70% 0.008 66)"
+  slice-4-dark: "oklch(62.5% 0.008 64)"
+  slice-5-dark: "oklch(55% 0.008 62)"
+  slice-6-dark: "oklch(47.5% 0.008 60)"
+  slice-7-dark: "oklch(40% 0.008 58)"
 typography:
   display:
     fontFamily: "var(--font-plex-sans), 'IBM Plex Sans', system-ui, sans-serif"
@@ -201,7 +201,7 @@ The product surface is laid out as three top-level routes (`/`, `/portfolio`, `/
 - Flat by default; depth from spacing, hairline borders, and tonal contrast within the warm-neutral family. v4 adds bordered `rounded-xl` SWS cards (`bg-surface-raised`) for the study-mode primitives — still shadowless.
 - Two densities (glance, study) sharing one visual vocabulary; drill-in / portfolio-tab, not switch-of-surface, is how density scales.
 - Color never carries meaning alone; gain/loss always paired with arrow + sign; statement sentiment always paired with a check/warn/neutral glyph.
-- Charts that ship in SSR HTML are hand-rolled SVG (sparklines, donut, concentration stack, benchmark line, snowflake radar, dividend stacked bar); Recharts only inside lazy-mounted drill-ins + the performance-chart card.
+- Charts that ship in SSR HTML are hand-rolled SVG (sparklines, benchmark line, snowflake radar) or plain flex divs (concentration + dividend stacked bars); Recharts only inside lazy-mounted drill-ins + the performance-chart card. (The v3 allocation donut was retired with the v4 hero snowflake.)
 - Restrained motion: state changes only; `prefers-reduced-motion: reduce` zeroes all transitions and animations globally.
 
 ## Colors: The Restrained Palette
@@ -212,16 +212,16 @@ Tinted neutrals carry the surface; one rare gold accent appears forcefully when 
 
 ### Primary
 
-- **SWS Gold Accent** (`#B89968` light · `#D9B97A` dark, exposed as `--accent-primary`; `--accent` is an alias): the single shared accent. Used on the active nav-tab underline, focus rings, the tick-pulse halo, the snowflake pentagon fill/stroke, and the gold portfolio line in the benchmark chart. ≤10% of any screen. Replaces the v3 rust accent everywhere.
+- **SWS Gold Accent** (`#8a682a` light · `#D9B97A` dark, exposed as `--accent-primary`; `--accent` is an alias): the single shared accent. Used on the active nav-tab underline, focus rings, the tick-pulse halo, the snowflake pentagon fill/stroke, and the gold portfolio line in the benchmark chart. ≤10% of any screen. Replaces the v3 rust accent everywhere. *(Light gold deepened from `#B89968` on 2026-07-19: 2.4:1 against the cream surface failed as a chart stroke and as text; `#8a682a` holds 4.6:1 so it works in both roles. Dark gold unchanged.)*
 - **Accent Strong** (`oklch(58% 0.10 80)` light · `oklch(78% 0.12 80)` dark): focus-visible ring escalation only.
 
 ### Status palette (chips + deltas only — never chart strokes)
 
-- **Success** (`#009244` light · `#00DA5A` dark, `--accent-success`): positive `↑` KPI deltas, `check` statement-card icons, the "undervalued" framing in valuation cards.
-- **Warn** (`#C25F1F` light · `#EB7930` dark, `--accent-warn`): `warn` statement-card icons, "overvalued" framing.
-- **Danger** (`#BC0024` light · `#D6002A` dark, `--accent-danger`): negative `↓` KPI deltas, low-score dividend chips.
+- **Success** (`#05773b` light · `#00DA5A` dark, `--accent-success`): positive `↑` KPI deltas, `check` statement-card icons, the "undervalued" framing in valuation cards.
+- **Warn** (`#994a00` light · `#EB7930` dark, `--accent-warn`): `warn` statement-card icons, "overvalued" framing.
+- **Danger** (`#BC0024` light · `#E6424C` dark, `--accent-danger`): negative `↓` KPI deltas, low-score dividend chips.
 
-These are intentionally brighter than the chart `gain`/`loss` tints. They live in small, bounded UI (a chip, a single delta number, a 7px icon), never in a chart stroke or a fill that occupies real estate. Each still pairs with a glyph or sign, so color is never the sole signal.
+These are intentionally brighter than the chart `gain`/`loss` tints. They live in small, bounded UI (a chip, a single delta number, a 7px icon), never in a chart stroke or a fill that occupies real estate. Each still pairs with a glyph or sign, so color is never the sole signal. *(2026-07-19: light success/warn and dark danger were re-stepped to clear WCAG 4.5:1 as `text-xs` delta text — the tones they replaced sat at 3.6–3.8:1.)*
 
 ### Neutral
 
@@ -244,11 +244,11 @@ The chart layer keeps these muted tints rather than the loud status green/red, s
 
 ### Sequential graphite (charts)
 
-`slice-1` through `slice-7` form a graphite ramp used by the donut, the concentration stacked bar, and the currency exposure stacked bar. Largest position renders darkest in light mode; the ramp **inverts in dark** (largest = lightest) so the largest position still reads heaviest against the near-black surface.
+`slice-1` through `slice-7` form a graphite ramp for **ordered magnitude scales**. The ramp **inverts in dark** (heaviest = lightest) so weight still reads against the near-black surface. Re-stepped 2026-07-19 so every step keeps ≥2:1 contrast against its surface and adjacent steps stay ≥0.06 L apart (ordinal-ramp validation — the old palest steps sat at 1.4–1.6:1 and vanished). The stacked bars no longer consume the ramp per-segment (see *Stacked bars* below): coloring segments by rank repainted a holding whenever it was overtaken, and re-encoded a size the segment width already shows. `slice-7` doubles as the "everything else" fill in stacked bars — the lightest step that still registers as a mark.
 
 ### Named Rules
 
-**The Two-Tier Color Rule.** Color works in two registers. The **quiet tier** — muted forest `gain` / sienna `loss` and the graphite slice ramp — owns everything that occupies chart real estate (sparklines, price chart, donut, stacked bars). The **loud tier** — SWS green `success` / red `danger` / orange `warn` — is confined to small bounded UI: chips, single KPI deltas, statement-card icons. **Gold** is the single shared interactive accent across both. A chart never uses the loud tier; a chip never uses gold for up/down. This is what lets the surface read calm while still flagging a 0/6 dividend score in red.
+**The Two-Tier Color Rule.** Color works in two registers. The **quiet tier** — muted forest `gain` / sienna `loss` and the graphite slice ramp — owns everything that occupies chart real estate (sparklines, price chart, stacked bars). The **loud tier** — SWS green `success` / red `danger` / orange `warn` — is confined to small bounded UI: chips, single KPI deltas, statement-card icons. **Gold** is the single shared interactive accent across both. A chart never uses the loud tier; a chip never uses gold for up/down. This is what lets the surface read calm while still flagging a 0/6 dividend score in red.
 
 **The OKLCH Doctrine (with v4 exception).** Surfaces, ink, rule, gain/loss, and slices are OKLCH in a narrow chroma band so neutrals belong to one family. The v4 accent + status tokens (`accent-primary`, `success`, `warn`, `danger`) ship as **hex**, matched from the SWS palette; this is the one sanctioned departure from the all-OKLCH doctrine.
 
@@ -319,11 +319,11 @@ Every block opens with the same caption: `text-xs uppercase tracking-[0.06em] te
 
 ### Hero (`hero.tsx`)
 
-The home route leads with this hero section: `border-b border-rule pb-10 mb-10`, `flex flex-col md:flex-row` so the donut wraps under the totals on narrow viewports. Display number left, allocation donut right. No card. No shadow. The only "huge number" in the system is the USD total, in `text-5xl font-light`. The portfolio route opens differently since v4 — see *Portfolio hero (holdings tab)* below — but reuses the same `text-5xl` display total inside its performance card.
+The home route leads with this hero section: `border-b border-rule pb-10 mb-10`, `flex flex-col md:flex-row` so the snowflake wraps under the totals on narrow viewports. Display number left, 96px portfolio snowflake right (the v3 allocation donut was retired in v4). No card. No shadow. The only "huge number" in the system is the USD total, in `text-5xl font-light`. The portfolio route opens differently since v4 — see *Portfolio hero (holdings tab)* below — but reuses the same `text-5xl` display total inside its performance card.
 
 ### Portfolio hero (holdings tab — `performance-chart-card.tsx` + `portfolio-snowflake-card.tsx`)
 
-The portfolio `holdings` tab leads with a two-column grid (`lg:grid-cols-[2fr_1fr]`): a **performance card** (2/3) beside a **snowflake card** (1/3), with the masthead `portfolio-heading` h1 (serif) above and the `holdings-kpi-strip` + register below. This replaces the v3 "donut hero on every route" — the donut now lives only on the home hero; the portfolio's at-a-glance signal is the SWS snowflake instead.
+The portfolio `holdings` tab leads with a two-column grid (`lg:grid-cols-[2fr_1fr]`): a **performance card** (2/3) beside a **snowflake card** (1/3), with the masthead `portfolio-heading` h1 (serif) above and the `holdings-kpi-strip` + register below. This replaces the v3 "donut hero on every route" — the donut is fully retired (component deleted 2026-07-19); the at-a-glance signal on both heroes is the SWS snowflake.
 
 ### Tables (`holdings-table.tsx`, `watchlist-table.tsx`)
 
@@ -357,17 +357,17 @@ A text button, no icon. Since v4 it is a 2-state swap: `dark` ↔ `light` (the v
 
 Hand-rolled SVG path, 96×28 viewBox, `strokeWidth=1.25`, `strokeLinecap="round"`. Stroke color is `var(--gain)`, `var(--loss)`, or `var(--quiet)` depending on direction over the 30-day window. SSR-renderable so the table paints in one pass without Recharts' SSR measurement issues.
 
-### Donut (`donut.tsx`)
+### Donut — retired
 
-Hand-rolled SVG paths in the hero, 210px default size. Slices use the `slice-1` to `slice-7` graphite ramp; labels render on the slice rather than in a hover-only tooltip (a v2 papercut, fixed in v3).
+The v3 allocation donut (`donut.tsx`) was superseded by the hero snowflake in v4 and the component was deleted 2026-07-19. Allocation reads live in the concentration stacked bar + the holdings register.
 
-### Stacked bars (`concentration-block.tsx`)
+### Stacked bars (`concentration-block.tsx`, `dividend-ledger-block.tsx`, `returns-view.tsx`)
 
-Hand-rolled SVG horizontal stacked bars for top-N share and currency exposure. Same graphite ramp as the donut. No traffic-light coloring; concentration "shape" is observational only.
+Flex-div horizontal stacked bars (`h-2`/`h-4`, `rounded-sm`/`-full`), one shared grammar since 2026-07-19: segments fill a **single entity-stable tone** (`var(--quiet)` graphite; the returns bar adds gold for its lead segment), separated by **2px surface gaps** (`gap-0.5`) — the gap does the separating, no strokes. An "everything else" / pending segment fills `var(--slice-7)` (fainter but still ≥2:1). The old per-segment rank-ordered slice ramp was retired: it repainted a holding whenever its rank changed and re-encoded the size the width already shows. Identity rides the ordered label row / legend beneath each bar. No traffic-light coloring; concentration "shape" is observational only.
 
 ### Line chart (`benchmark-chart.tsx`)
 
-Hand-rolled SVG line chart for portfolio vs benchmark, with a tabular-figure legend below. 30D / 90D / 1Y window toggle in `text-xs uppercase` text buttons. Since v4 the portfolio line is drawn in **gold** (`var(--accent-primary)`, `strokeWidth` 1.75) over gray benchmark strokes (`var(--quiet)`), matching the SWS portfolio chart; direction tints are not used here because relative path is the message.
+Hand-rolled SVG line chart for portfolio vs benchmark, with a tabular-figure legend below. 30D / 90D / 1Y window toggle in `text-xs uppercase` text buttons. Since v4 the portfolio line is drawn in **gold** (`var(--accent-primary)`, `strokeWidth` 2) over gray benchmark strokes (`var(--quiet)`, 1.25), matching the SWS portfolio chart; direction tints are not used here because relative path is the message. Since 2026-07-19: the zero baseline is a **solid** hairline (dashing read as projection); the portfolio line ends in a gold dot with a 2px surface ring and a stacked two-line end label in **ink** (text wears text tokens — the dot carries identity); and a client-side hover layer adds a crosshair + `bg-surface-raised` tooltip (locale-aware date, per-series values) with keyboard support (arrows / Home / End / Escape on the focused svg). No animation — calm-under-volatility holds.
 
 ### Price chart (`price-chart.tsx`)
 
@@ -415,7 +415,7 @@ A horizontal valuation gauge in an SWS card (`rounded-xl border-rule bg-surface-
 
 ### Dividend ledger block (`dividend-ledger-block.tsx`)
 
-Multi-section block (`my-12`): heading + summary (TTM total + next ex-date) + a hand-rolled SVG horizontal stacked bar (`600×16` viewBox, segments fill `var(--slice-1…6)` with `stroke=var(--surface)` separators) + a per-ticker legend + an expandable holdings table + a lazy [learn more] insight panel (`bg-surface-raised border-rule rounded-sm p-4`). Same graphite slice ramp as the donut — chart layer stays quiet-tier.
+Multi-section block (`my-12`): heading + summary (TTM total + next ex-date) + a flex-div horizontal stacked bar (single `var(--quiet)` tone, 2px surface gaps — see *Stacked bars*) + a per-ticker legend + an expandable holdings table + a lazy [learn more] insight panel (`bg-surface-raised border-rule rounded-sm p-4`). Chart layer stays quiet-tier.
 
 ### Dividends forecast switcher (`dividends-forecast-switcher.tsx`)
 
@@ -435,7 +435,7 @@ The `calendar` tab: a `grid-cols-7` 42-cell month grid (`?month=YYYY-MM` query p
 
 ### Named Rules
 
-**The Hand-Rolled-SVG Rule.** Charts that ship in SSR HTML are hand-rolled SVG (sparkline, donut, concentration stack, currency stack, benchmark line, **snowflake radar**, **dividend stacked bar**, comparison-gauge track). `price-chart.tsx` (the 90-day drill-in price chart) remains the **only** Recharts surface in the system, lazy-mounted where SSR measurement is not a concern. The v4 `performance-chart-card` embeds the hand-rolled `benchmark-chart`, not Recharts, so it stays SSR-safe. This is captured in `CLAUDE.md §Conventions`; preserve it.
+**The Hand-Rolled-SVG Rule.** Charts that ship in SSR HTML are hand-rolled — SVG paths (sparkline, benchmark line, **snowflake radar**, comparison-gauge track) or plain flex divs (concentration stack, currency stack, **dividend stacked bar**, returns breakdown bar). `price-chart.tsx` (the 90-day drill-in price chart) remains the **only** Recharts surface in the system, lazy-mounted where SSR measurement is not a concern. The v4 `performance-chart-card` embeds the hand-rolled `benchmark-chart`, not Recharts, so it stays SSR-safe. (`benchmark-chart` is `"use client"` since 2026-07-19 for its hover layer, but still SSRs its SVG.) This is captured in `CLAUDE.md §Conventions`; preserve it.
 
 **The Same-Caption Rule.** Every block opens with the `text-xs uppercase tracking-[0.06em] text-quiet` caption. Recurrence is the affordance.
 

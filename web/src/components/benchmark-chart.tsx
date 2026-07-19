@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { BenchmarkResponse, SeriesPoint } from "@/lib/api";
+import { useLocale } from "@/lib/i18n/locale-provider";
 
 interface Props {
   data: BenchmarkResponse;
@@ -51,12 +52,16 @@ function lastPoint(points: SeriesPoint[], minPct: number, range: number) {
 const fmtPct = (pct: number) =>
   `${pct >= 0 ? "+" : "−"}${Math.abs(pct * 100).toFixed(1)}%`;
 
-const fmtDate = (iso: string) => {
+const fmtDate = (iso: string, locale: "en" | "zh") => {
   const d = new Date(iso);
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return d.toLocaleDateString(locale === "zh" ? "zh-CN" : "en-US", {
+    month: "short",
+    day: "numeric",
+  });
 };
 
 export function BenchmarkChart({ data, portfolioLabel = "Portfolio" }: Props) {
+  const { locale } = useLocale();
   const wrapperRef = useRef<HTMLDivElement>(null);
   // Hovered/focused index into the portfolio series; null = no crosshair.
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
@@ -278,7 +283,7 @@ export function BenchmarkChart({ data, portfolioLabel = "Portfolio" }: Props) {
               : { left: `${(hover.x / W) * 100}%`, marginLeft: 8 }
           }
         >
-          <div className="text-whisper mb-1">{fmtDate(hover.date)}</div>
+          <div className="text-whisper mb-1">{fmtDate(hover.date, locale)}</div>
           <div className="flex items-center gap-1.5 tabular text-ink">
             <span
               aria-hidden
