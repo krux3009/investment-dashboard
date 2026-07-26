@@ -4,7 +4,6 @@ import { fetchAnomalies, fetchPrices } from "@/lib/api";
 import type { AnomalyItem, PricePoint } from "@/lib/api";
 import { useEffect, useState } from "react";
 import { AnomalyBlock } from "./anomaly-block";
-import { InsightBlock } from "./insight-block";
 import { NotesBlock } from "./notes-block";
 import { PriceChart } from "./price-chart";
 import { SentimentBlock } from "./sentiment-block";
@@ -84,7 +83,6 @@ export function DrillIn({ code, direction }: Props) {
         </div>
 
         <div className="flex flex-col gap-7">
-          <InsightBlock code={code} />
           <NotesBlock code={code} />
           <SentimentBlock code={code} />
           <div>

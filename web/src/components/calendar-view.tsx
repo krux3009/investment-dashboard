@@ -9,7 +9,6 @@ import {
   useState,
 } from "react";
 import {
-  fetchForesightInsight,
   type DailyPnlEntry,
   type DailyPnlResponse,
   type ForesightEvent,
@@ -18,10 +17,6 @@ import {
 import { useT } from "@/lib/i18n/use-t";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { useLiveMarket, useLiveTotals } from "@/lib/live-store";
-import {
-  ForesightInsightBody,
-  type InsightState,
-} from "@/components/foresight-insight-body";
 import type { StringKey } from "@/lib/i18n/strings";
 
 interface Props {
@@ -283,9 +278,6 @@ export function CalendarView({ initial, dailyPnl, year, month }: Props) {
   const { market } = useLiveMarket();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [insightById, setInsightById] = useState<
-    Record<string, InsightState>
-  >({});
   const panelRef = useRef<HTMLDivElement | null>(null);
 
   const monthLabel = useMemo(() => {
@@ -379,34 +371,9 @@ export function CalendarView({ initial, dailyPnl, year, month }: Props) {
     [initial.events, selectedId],
   );
 
-  const load = useCallback(
-    async (eventId: string) => {
-      setInsightById((s) => ({ ...s, [eventId]: { kind: "loading" } }));
-      const result = await fetchForesightInsight(
-        eventId,
-        initial.days,
-        false,
-        locale,
-      );
-      setInsightById((s) => ({
-        ...s,
-        [eventId]: result.ok
-          ? { kind: "ready", data: result.data }
-          : result.status === 503
-            ? { kind: "unavailable", detail: result.detail }
-            : { kind: "error", detail: result.detail },
-      }));
-    },
-    [initial.days, locale],
-  );
-
-  const handleSelect = useCallback(
-    (eventId: string) => {
-      setSelectedId((cur) => (cur === eventId ? null : eventId));
-      if (!insightById[eventId]) void load(eventId);
-    },
-    [insightById, load],
-  );
+  const handleSelect = useCallback((eventId: string) => {
+    setSelectedId((cur) => (cur === eventId ? null : eventId));
+  }, []);
 
   // ESC clears selection.
   useEffect(() => {
@@ -426,11 +393,6 @@ export function CalendarView({ initial, dailyPnl, year, month }: Props) {
       });
     }
   }, [selectedId]);
-
-  // Locale flip wipes cached prose so next select fetches fresh language.
-  useEffect(() => {
-    setInsightById({});
-  }, [locale]);
 
   // Month change clears selection (event ids belong to current fetch).
   useEffect(() => {
@@ -614,7 +576,6 @@ export function CalendarView({ initial, dailyPnl, year, month }: Props) {
               {t("common.hide")}
             </button>
           </div>
-          <ForesightInsightBody insight={insightById[selected.event_id]} />
         </div>
       )}
 

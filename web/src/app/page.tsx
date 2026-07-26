@@ -11,7 +11,6 @@ import type {
   ReturnsSummary,
 } from "@/lib/api";
 import { Hero } from "@/components/hero";
-import { DailyDigest } from "@/components/daily-digest";
 import { ForesightBlock } from "@/components/foresight-block";
 import { BlockSkeleton } from "@/components/block-skeleton";
 import { KpiStrip } from "@/components/kpi-strip";
@@ -128,7 +127,6 @@ export default async function Home() {
         />
       </div>
 
-      <DailyDigest />
       <Suspense fallback={<BlockSkeleton lines={5} />}>
         <ForesightSection />
       </Suspense>

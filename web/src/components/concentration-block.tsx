@@ -1,24 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import {
-  fetchConcentrationInsight,
-  type ConcentrationInsightResponse,
-  type ConcentrationResponse,
-} from "@/lib/api";
+import { type ConcentrationResponse } from "@/lib/api";
 import { useT } from "@/lib/i18n/use-t";
-import { useLocale } from "@/lib/i18n/locale-provider";
 
 interface Props {
   initial: ConcentrationResponse;
 }
-
-type InsightState =
-  | { kind: "idle" }
-  | { kind: "loading" }
-  | { kind: "ready"; data: ConcentrationInsightResponse }
-  | { kind: "unavailable"; detail: string }
-  | { kind: "error"; detail: string };
 
 const SLICE_VARS = [
   "var(--slice-1)",
@@ -79,29 +66,6 @@ function StackedBar({
 
 export function ConcentrationBlock({ initial }: Props) {
   const t = useT();
-  const { locale } = useLocale();
-  const [expanded, setExpanded] = useState(false);
-  const [insight, setInsight] = useState<InsightState>({ kind: "idle" });
-
-  useEffect(() => {
-    if (!expanded) return;
-    let cancelled = false;
-    setInsight({ kind: "loading" });
-    (async () => {
-      const result = await fetchConcentrationInsight(false, locale);
-      if (cancelled) return;
-      if (result.ok) {
-        setInsight({ kind: "ready", data: result.data });
-      } else if (result.status === 503) {
-        setInsight({ kind: "unavailable", detail: result.detail });
-      } else {
-        setInsight({ kind: "error", detail: result.detail });
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [expanded, locale]);
 
   if (initial.count === 0) return null;
 
@@ -125,13 +89,6 @@ export function ConcentrationBlock({ initial }: Props) {
         <h2 className="text-xs uppercase tracking-[0.06em] text-quiet">
           {t("concentration.heading")}
         </h2>
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="text-xs text-quiet hover:text-ink"
-        >
-          {expanded ? t("common.hide") : t("common.learn_more")}
-        </button>
       </div>
 
       <div className="flex gap-6 text-xs tabular text-quiet mb-4">
@@ -193,50 +150,6 @@ export function ConcentrationBlock({ initial }: Props) {
         </div>
       )}
 
-      {expanded && (
-        <div className="mt-4 bg-surface-raised border border-rule rounded-sm px-4 py-3">
-          {insight.kind === "loading" && (
-            <div role="status" aria-label={t("common.drafting_commentary")} className="flex flex-col gap-3">
-              {[0, 1, 2].map((i) => (
-                <div key={i} className="grid grid-cols-[5rem_1fr] gap-x-3 items-center">
-                  <div className="h-3 w-16 rounded bg-rule/40 animate-pulse" />
-                  <div className="h-4 w-full rounded bg-rule/40 animate-pulse" />
-                </div>
-              ))}
-            </div>
-          )}
-          {insight.kind === "unavailable" && (
-            <div className="text-sm text-whisper italic">{insight.detail}</div>
-          )}
-          {insight.kind === "error" && (
-            <div className="text-sm text-loss">
-              {t("common.commentary_unavailable", { detail: insight.detail })}
-            </div>
-          )}
-          {insight.kind === "ready" && (
-            <dl className="flex flex-col gap-3 text-sm leading-[1.65]">
-              {insight.data.what && (
-                <div className="grid grid-cols-[5rem_1fr] gap-x-3 items-baseline">
-                  <dt className="text-xs uppercase tracking-wide text-quiet">{t("common.what")}</dt>
-                  <dd className="text-ink">{insight.data.what}</dd>
-                </div>
-              )}
-              {insight.data.meaning && (
-                <div className="grid grid-cols-[5rem_1fr] gap-x-3 items-baseline">
-                  <dt className="text-xs uppercase tracking-wide text-quiet">{t("common.meaning")}</dt>
-                  <dd className="text-ink">{insight.data.meaning}</dd>
-                </div>
-              )}
-              {insight.data.watch && (
-                <div className="grid grid-cols-[5rem_1fr] gap-x-3 items-baseline">
-                  <dt className="text-xs uppercase tracking-wide text-quiet">{t("common.watch")}</dt>
-                  <dd className="text-ink">{insight.data.watch}</dd>
-                </div>
-              )}
-            </dl>
-          )}
-        </div>
-      )}
     </section>
   );
 }

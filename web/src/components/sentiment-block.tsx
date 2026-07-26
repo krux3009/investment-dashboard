@@ -2,24 +2,20 @@
 
 // Reddit-discussion drill-in panel. Lives between NotesBlock and
 // AnomalyBlock inside the holdings + watchlist drill-in. Renders post
-// counts, a single-ink-family stacked bar, three representative posts,
-// and a lazy [learn more] What/Meaning/Watch trio.
+// counts, a single-ink-family stacked bar, and three representative
+// posts.
 //
-// Educational framing only — observation, not a buy/sell signal. No
-// green / red, single ink family for the bar; principle-#2 calm-under-
-// volatility holds.
+// No green / red, single ink family for the bar; principle-#2
+// calm-under-volatility holds.
 
 import { useEffect, useState } from "react";
 import {
   fetchReddit,
-  fetchSentimentInsight,
   type RedditMention,
   type RedditResponse,
   type SentimentBucket,
-  type SentimentInsightResponse,
 } from "@/lib/api";
 import { useT } from "@/lib/i18n/use-t";
-import { useLocale } from "@/lib/i18n/locale-provider";
 import type { StringKey } from "@/lib/i18n/strings";
 
 interface Props {
@@ -29,14 +25,6 @@ interface Props {
 type FetchState =
   | { kind: "loading" }
   | { kind: "ready"; data: RedditResponse }
-  | { kind: "error"; detail: string };
-
-type InsightState =
-  | { kind: "idle" }
-  | { kind: "loading" }
-  | { kind: "ready"; data: SentimentInsightResponse }
-  | { kind: "absent" }
-  | { kind: "unavailable"; detail: string }
   | { kind: "error"; detail: string };
 
 const BUCKET_LABEL_KEY: Record<SentimentBucket, StringKey> = {
@@ -123,98 +111,6 @@ function MentionRow({ m }: { m: RedditMention }) {
   );
 }
 
-function LearnMore({ code }: { code: string }) {
-  const t = useT();
-  const { locale } = useLocale();
-  const [expanded, setExpanded] = useState(false);
-  const [state, setState] = useState<InsightState>({ kind: "idle" });
-
-  // Reset insight state on locale switch so the next expand re-fetches.
-  useEffect(() => {
-    setState({ kind: "idle" });
-  }, [locale]);
-
-  useEffect(() => {
-    if (!expanded) return;
-    if (state.kind !== "idle" && state.kind !== "error") return;
-    let cancelled = false;
-    setState({ kind: "loading" });
-    (async () => {
-      const result = await fetchSentimentInsight(code, false, locale);
-      if (cancelled) return;
-      if (result.ok) {
-        if (result.data === null) setState({ kind: "absent" });
-        else setState({ kind: "ready", data: result.data });
-      } else if (result.status === 503) {
-        setState({ kind: "unavailable", detail: result.detail });
-      } else {
-        setState({ kind: "error", detail: result.detail });
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // Effect deps deliberately exclude state — re-running on every
-    // setState would loop. See feedback_lazy_fetch_deps.md.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expanded, code, locale]);
-
-  return (
-    <div className="mt-4">
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        className="text-xs uppercase tracking-[0.04em] text-quiet hover:text-accent transition-colors"
-        aria-expanded={expanded}
-      >
-        {expanded ? t("common.hide") : t("common.learn_more")}
-      </button>
-      {expanded && (
-        <div className="mt-3">
-          {state.kind === "loading" && (
-            <div className="text-sm text-quiet italic">{t("sentiment.drafting")}</div>
-          )}
-          {state.kind === "absent" && (
-            <div className="text-sm text-whisper italic">
-              {t("sentiment.not_enough")}
-            </div>
-          )}
-          {state.kind === "unavailable" && (
-            <div className="text-sm text-whisper italic">{state.detail}</div>
-          )}
-          {state.kind === "error" && (
-            <div className="text-sm text-loss">
-              {t("common.insight_unavailable", { detail: state.detail })}
-            </div>
-          )}
-          {state.kind === "ready" && (
-            <dl className="flex flex-col gap-3 text-sm leading-[1.65]">
-              {state.data.what && (
-                <div className="grid grid-cols-[5rem_1fr] gap-x-3 items-baseline">
-                  <dt className="text-xs uppercase tracking-wide text-quiet">{t("common.what")}</dt>
-                  <dd className="text-ink">{state.data.what}</dd>
-                </div>
-              )}
-              {state.data.meaning && (
-                <div className="grid grid-cols-[5rem_1fr] gap-x-3 items-baseline">
-                  <dt className="text-xs uppercase tracking-wide text-quiet">{t("common.meaning")}</dt>
-                  <dd className="text-ink">{state.data.meaning}</dd>
-                </div>
-              )}
-              {state.data.watch && (
-                <div className="grid grid-cols-[5rem_1fr] gap-x-3 items-baseline">
-                  <dt className="text-xs uppercase tracking-wide text-quiet">{t("common.watch")}</dt>
-                  <dd className="text-ink">{state.data.watch}</dd>
-                </div>
-              )}
-            </dl>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export function SentimentBlock({ code }: Props) {
   const t = useT();
   const [state, setState] = useState<FetchState>({ kind: "loading" });
@@ -288,7 +184,6 @@ export function SentimentBlock({ code }: Props) {
           ))}
         </ul>
       )}
-      <LearnMore code={code} />
     </div>
   );
 }

@@ -29,7 +29,6 @@ import { Suspense } from "react";
 import { HoldingsTable } from "@/components/holdings-table";
 import { BlockSkeleton } from "@/components/block-skeleton";
 import { ConcentrationBlock } from "@/components/concentration-block";
-import { DividendLedgerBlock } from "@/components/dividend-ledger-block";
 import { PortfolioTabNav, type PortfolioTab } from "@/components/portfolio-tab-nav";
 import { PortfolioHeading } from "@/components/portfolio-heading";
 import { CalendarView } from "@/components/calendar-view";

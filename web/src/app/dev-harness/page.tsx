@@ -2,15 +2,14 @@
  * Dev-only visual harness for v4 SWS-faithful primitives. Open at
  * /__components in dev — production renders 404.
  *
- * Mounts every new primitive (Snowflake / KpiTile / StatementCard /
- * ComparisonGauge) with mock data so we can eyeball each in isolation
- * before wiring them into real surfaces.
+ * Mounts every new primitive (Snowflake / KpiTile / ComparisonGauge)
+ * with mock data so we can eyeball each in isolation before wiring
+ * them into real surfaces.
  */
 
 import { notFound } from "next/navigation";
 import { Snowflake } from "@/components/snowflake";
 import { KpiTile } from "@/components/kpi-tile";
-import { StatementCard } from "@/components/statement-card";
 import { ComparisonGauge } from "@/components/comparison-gauge";
 
 export default function ComponentDemoPage() {
@@ -27,7 +26,6 @@ export default function ComponentDemoPage() {
           Visual sanity check for{" "}
           <code className="text-ink">Snowflake</code>,{" "}
           <code className="text-ink">KpiTile</code>,{" "}
-          <code className="text-ink">StatementCard</code>,{" "}
           <code className="text-ink">ComparisonGauge</code>. Toggle theme via header.
         </p>
       </header>
@@ -87,31 +85,6 @@ export default function ComponentDemoPage() {
             label="Currency Impact"
             value="−US$662"
             delta={{ signed: "−US$662", pct: "0.4%", sign: "neg" }}
-          />
-        </div>
-      </section>
-
-      {/* StatementCard cluster */}
-      <section className="flex flex-col gap-4">
-        <h2 className="text-xs font-medium uppercase tracking-[0.1em] text-quiet">StatementCard</h2>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-          <StatementCard
-            icon="check"
-            category="past"
-            headline="Earnings grew 153.7% over the past year"
-            sub="Above the Tech industry median of 11.1%."
-          />
-          <StatementCard
-            icon="warn"
-            category="health"
-            headline="Dividend of 5.04% is not well covered by free cash flows"
-            sub="Payout ratio sits above 100% — coverage worth tracking next quarter."
-          />
-          <StatementCard
-            icon="neutral"
-            category="valuation"
-            headline="Trading 31.5% below estimated fair value"
-            sub="Based on a discounted-cash-flow model; estimate confidence: medium."
           />
         </div>
       </section>

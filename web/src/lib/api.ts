@@ -44,6 +44,22 @@ export interface HoldingsResponse {
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE ?? "http://127.0.0.1:8000";
 
+// Network-level failure (backend down, CORS) → error result instead of an
+// unhandled rejection inside the component effect that fired the fetch.
+const NETWORK_ERR = {
+  ok: false as const,
+  status: 0,
+  detail: "backend unreachable",
+};
+
+async function fetchOrNull(url: string): Promise<Response | null> {
+  try {
+    return await fetch(url, { cache: "no-store" });
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchHoldings(): Promise<HoldingsResponse> {
   const res = await fetch(`${API_BASE}/api/holdings`, { cache: "no-store" });
   if (!res.ok) {
@@ -130,92 +146,6 @@ export async function fetchQuotes(codes: string[]): Promise<QuotesResponse> {
   return (await res.json()) as QuotesResponse;
 }
 
-export interface TickerTiles {
-  code: string;
-  ticker: string;
-  name: string;
-  fundamentals: string;
-  news: string;
-  sentiment: string;
-  technical: string;
-  fundamentals_quiet: boolean;
-  news_quiet: boolean;
-  sentiment_quiet: boolean;
-  technical_quiet: boolean;
-}
-
-export interface DigestResponse {
-  generated_at: string;
-  cached: boolean;
-  holdings: TickerTiles[];
-}
-
-export type DigestResult =
-  | { ok: true; data: DigestResponse }
-  | { ok: false; status: number; detail: string };
-
-export async function fetchDigest(
-  refresh = false,
-  locale: Locale = "en",
-): Promise<DigestResult> {
-  const qs = new URLSearchParams({ locale });
-  if (refresh) qs.set("refresh", "true");
-  const url = `${API_BASE}/api/digest?${qs}`;
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) {
-    let detail = `${res.status}`;
-    try {
-      const body = await res.json();
-      detail = body.detail ?? detail;
-    } catch {
-      detail = await res.text();
-    }
-    return { ok: false, status: res.status, detail };
-  }
-  return { ok: true, data: (await res.json()) as DigestResponse };
-}
-
-export interface InsightResponse {
-  code: string;
-  ticker: string;
-  action: string;
-  action_tone: "positive" | "caution" | "neutral";
-  why: string;
-  confidence: string; // "High" | "Medium" | "Low"
-  risk: string;
-  generated_at: string;
-  cached: boolean;
-  available?: boolean;
-}
-
-export type InsightResult =
-  | { ok: true; data: InsightResponse | null }
-  | { ok: false; status: number; detail: string };
-
-export async function fetchInsight(
-  code: string,
-  refresh = false,
-  locale: Locale = "en",
-): Promise<InsightResult> {
-  const qs = new URLSearchParams({ locale });
-  if (refresh) qs.set("refresh", "true");
-  const url = `${API_BASE}/api/insight/${encodeURIComponent(code)}?${qs}`;
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) {
-    let detail = `${res.status}`;
-    try {
-      const body = await res.json();
-      detail = body.detail ?? detail;
-    } catch {
-      detail = await res.text();
-    }
-    return { ok: false, status: res.status, detail };
-  }
-  const data = (await res.json()) as InsightResponse;
-  if (data.available === false) return { ok: true, data: null };
-  return { ok: true, data };
-}
-
 export interface EarningsItem {
   code: string;
   ticker: string;
@@ -255,7 +185,8 @@ export type NoteResult =
 
 export async function fetchNote(code: string): Promise<NoteResult> {
   const url = `${API_BASE}/api/notes/${encodeURIComponent(code)}`;
-  const res = await fetch(url, { cache: "no-store" });
+  const res = await fetchOrNull(url);
+  if (!res) return NETWORK_ERR;
   if (!res.ok) {
     let detail = `${res.status}`;
     try {
@@ -338,44 +269,6 @@ export async function fetchBenchmark(
   return (await res.json()) as BenchmarkResponse;
 }
 
-export interface BenchmarkInsightResponse {
-  days: number;
-  symbols: string[];
-  what: string;
-  meaning: string;
-  watch: string;
-  generated_at: string;
-  cached: boolean;
-}
-
-export type BenchmarkInsightResult =
-  | { ok: true; data: BenchmarkInsightResponse }
-  | { ok: false; status: number; detail: string };
-
-export async function fetchBenchmarkInsight(
-  days = 90,
-  symbols?: string,
-  refresh = false,
-  locale: Locale = "en",
-): Promise<BenchmarkInsightResult> {
-  const qs = new URLSearchParams({ days: String(days), locale });
-  if (symbols) qs.set("symbols", symbols);
-  if (refresh) qs.set("refresh", "true");
-  const url = `${API_BASE}/api/benchmark-insight?${qs}`;
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) {
-    let detail = `${res.status}`;
-    try {
-      const body = await res.json();
-      detail = body.detail ?? detail;
-    } catch {
-      detail = await res.text();
-    }
-    return { ok: false, status: res.status, detail };
-  }
-  return { ok: true, data: (await res.json()) as BenchmarkInsightResponse };
-}
-
 export interface TopName {
   code: string;
   ticker: string;
@@ -399,39 +292,6 @@ export async function fetchConcentration(): Promise<ConcentrationResponse> {
     throw new Error(`/api/concentration ${res.status}: ${await res.text()}`);
   }
   return (await res.json()) as ConcentrationResponse;
-}
-
-export interface ConcentrationInsightResponse {
-  what: string;
-  meaning: string;
-  watch: string;
-  generated_at: string;
-  cached: boolean;
-}
-
-export type ConcentrationInsightResult =
-  | { ok: true; data: ConcentrationInsightResponse }
-  | { ok: false; status: number; detail: string };
-
-export async function fetchConcentrationInsight(
-  refresh = false,
-  locale: Locale = "en",
-): Promise<ConcentrationInsightResult> {
-  const qs = new URLSearchParams({ locale });
-  if (refresh) qs.set("refresh", "true");
-  const url = `${API_BASE}/api/concentration-insight?${qs}`;
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) {
-    let detail = `${res.status}`;
-    try {
-      const body = await res.json();
-      detail = body.detail ?? detail;
-    } catch {
-      detail = await res.text();
-    }
-    return { ok: false, status: res.status, detail };
-  }
-  return { ok: true, data: (await res.json()) as ConcentrationInsightResponse };
 }
 
 export type ForesightKind = "earnings" | "macro" | "company_event" | "exdiv";
@@ -502,42 +362,6 @@ export async function fetchForesight(
   return (await res.json()) as ForesightResponse;
 }
 
-export interface ForesightInsightResponse {
-  event_id: string;
-  what: string;
-  meaning: string;
-  watch: string;
-  generated_at: string;
-  cached: boolean;
-}
-
-export type ForesightInsightResult =
-  | { ok: true; data: ForesightInsightResponse }
-  | { ok: false; status: number; detail: string };
-
-export async function fetchForesightInsight(
-  eventId: string,
-  days = 30,
-  refresh = false,
-  locale: Locale = "en",
-): Promise<ForesightInsightResult> {
-  const qs = new URLSearchParams({ days: String(days), locale });
-  if (refresh) qs.set("refresh", "true");
-  const url = `${API_BASE}/api/foresight-insight/${encodeURIComponent(eventId)}?${qs}`;
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) {
-    let detail = `${res.status}`;
-    try {
-      const body = await res.json();
-      detail = body.detail ?? detail;
-    } catch {
-      detail = await res.text();
-    }
-    return { ok: false, status: res.status, detail };
-  }
-  return { ok: true, data: (await res.json()) as ForesightInsightResponse };
-}
-
 export type SentimentBucket = "positive" | "neutral" | "negative";
 
 export interface RedditMention {
@@ -566,7 +390,8 @@ export type RedditResult =
 
 export async function fetchReddit(code: string, days = 7): Promise<RedditResult> {
   const url = `${API_BASE}/api/reddit/${encodeURIComponent(code)}?days=${days}`;
-  const res = await fetch(url, { cache: "no-store" });
+  const res = await fetchOrNull(url);
+  if (!res) return NETWORK_ERR;
   if (!res.ok) {
     let detail = `${res.status}`;
     try {
@@ -579,46 +404,6 @@ export async function fetchReddit(code: string, days = 7): Promise<RedditResult>
   }
   return { ok: true, data: (await res.json()) as RedditResponse };
 }
-
-export interface SentimentInsightResponse {
-  code: string;
-  what: string;
-  meaning: string;
-  watch: string;
-  generated_at: string;
-  cached: boolean;
-  available?: boolean;
-}
-
-export type SentimentInsightResult =
-  | { ok: true; data: SentimentInsightResponse | null }
-  | { ok: false; status: number; detail: string };
-
-export async function fetchSentimentInsight(
-  code: string,
-  refresh = false,
-  locale: Locale = "en",
-): Promise<SentimentInsightResult> {
-  const qs = new URLSearchParams({ locale });
-  if (refresh) qs.set("refresh", "true");
-  const url = `${API_BASE}/api/sentiment-insight/${encodeURIComponent(code)}?${qs}`;
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) {
-    let detail = `${res.status}`;
-    try {
-      const body = await res.json();
-      detail = body.detail ?? detail;
-    } catch {
-      detail = await res.text();
-    }
-    return { ok: false, status: res.status, detail };
-  }
-  const data = (await res.json()) as SentimentInsightResponse;
-  if (data.available === false) return { ok: true, data: null };
-  return { ok: true, data };
-}
-
-// ── dividends / income ledger ────────────────────────────────────────
 
 export interface DividendPayment {
   ex_date: string;
@@ -663,77 +448,12 @@ export async function fetchDividends(): Promise<DividendsResponse> {
   return (await res.json()) as DividendsResponse;
 }
 
-export type HoldingDividendResult =
-  | { ok: true; data: HoldingDividend }
-  | { ok: false; status: number; detail: string };
-
-export async function fetchDividendForCode(
-  code: string,
-): Promise<HoldingDividendResult> {
-  const res = await fetch(
-    `${API_BASE}/api/dividends/${encodeURIComponent(code)}`,
-    { cache: "no-store" },
-  );
-  if (!res.ok) {
-    let detail = `${res.status}`;
-    try {
-      const body = await res.json();
-      detail = body.detail ?? detail;
-    } catch {
-      detail = await res.text();
-    }
-    return { ok: false, status: res.status, detail };
-  }
-  return { ok: true, data: (await res.json()) as HoldingDividend };
-}
-
-export interface DividendsInsightResponse {
-  what: string;
-  meaning: string;
-  watch: string;
-  generated_at: string;
-  cached: boolean;
-}
-
-export type DividendsInsightResult =
-  | { ok: true; data: DividendsInsightResponse }
-  | { ok: false; status: number; detail: string };
-
-export async function fetchDividendsInsight(
-  refresh = false,
-  locale: Locale = "en",
-): Promise<DividendsInsightResult> {
-  const qs = new URLSearchParams({ locale });
-  if (refresh) qs.set("refresh", "true");
-  const url = `${API_BASE}/api/dividends-insight?${qs}`;
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) {
-    let detail = `${res.status}`;
-    try {
-      const body = await res.json();
-      detail = body.detail ?? detail;
-    } catch {
-      detail = await res.text();
-    }
-    return { ok: false, status: res.status, detail };
-  }
-  return { ok: true, data: (await res.json()) as DividendsInsightResponse };
-}
-
-// ── snowflake (P5) ───────────────────────────────────────────────────
-
 export interface SnowflakeScores {
   past: number | null;
   health: number | null;
   dividends: number | null;
   valuation: number | null;
   future: number | null;
-}
-
-export interface SnowflakeStatement {
-  icon: "check" | "warn" | "neutral";
-  headline: string;
-  sub: string | null;
 }
 
 export interface PortfolioSnowflake {
@@ -747,11 +467,6 @@ export interface SnowflakeResponse {
   code: string;
   ticker: string;
   scores: SnowflakeScores;
-  statements: {
-    past: SnowflakeStatement[];
-    health: SnowflakeStatement[];
-    dividend: SnowflakeStatement[];
-  };
   generated_at: string;
   cached: boolean;
   available: boolean;

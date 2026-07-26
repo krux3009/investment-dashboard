@@ -22,6 +22,20 @@ See [moomoo-opend-setup.md](./moomoo-opend-setup.md) for the data-layer foundati
 
 ## Status: v4 SWS rewrite + full en/zh i18n + portfolio study-tabs shipped (last feature ship 2026-05-27; doc refreshed 2026-06-04)
 
+> **2026-07-27 — advisor UI removed.** The owner runs without an
+> `ANTHROPIC_API_KEY` (old key revoked, commented out in `.env`). All
+> Claude-prose surfaces were stripped from the frontend: the home
+> daily-digest section, per-stock InsightBlock recommendations, every
+> [learn more] What/Meaning/Watch expander (foresight, calendar,
+> sentiment, concentration), snowflake statement cards, and the
+> already-unrendered benchmark-block + dividend-ledger-block. Deleted
+> components: `daily-digest` / `insight-block` / `foresight-insight-body`
+> / `benchmark-block` / `dividend-ledger-block` / `statement-card`.
+> Backend advisor modules + routes stay dormant (503 / `available:false`
+> without a key) for a possible future re-enable. Data surfaces
+> (tables, charts, scores, Reddit counts, raw anomalies, events) all
+> remain. Sections below describing digest/insight prose predate this.
+
 End-to-end on **FastAPI + Next.js + Tailwind 4 + Recharts + Anthropic SDK** with USD home currency. Three top-level routes: `/` home (daily glance), `/portfolio` (weekend study), `/watchlist`. The v4 **Simply-Wall-St-style (SWS) rewrite** made dark the default, swapped the accent to gold, added a status palette + Plex Serif display type, and **split `/portfolio` into six query-param tabs** (`holdings` / `returns` / `updates` / `dividends` / `analysis` / `calendar`) — the snowflake hero, KPI strips, dividend ledger, valuation gauges, returns breakdown, and a month calendar. The whole surface is **fully localized en/zh** (client-only locale, `EN`/`中` toggle; backend advisor prose takes a `?locale=` param). The home digest moved from a single LEAD-line to a per-ticker four-tile analyst grid (Fundamentals/News/Sentiment/Technical). Earlier phases still hold: D5 SSE live ticks (20s during US RTH), Reddit sentiment in drill-ins, the 7/30-day foresight feed (now also surfaced as the portfolio `updates` + `calendar` tabs). Mobile responsive (D4) remains parked at `plan/v3-phase-d.md`.
 
 **Stack:** `uv` + Python 3.14 + FastAPI 0.136 + Pydantic 2.13 + DuckDB

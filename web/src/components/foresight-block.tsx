@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import {
   fetchForesight,
-  fetchForesightInsight,
   type ForesightEvent,
   type ForesightKind,
   type ForesightResponse,
@@ -11,10 +10,6 @@ import {
 import { useT } from "@/lib/i18n/use-t";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import type { StringKey } from "@/lib/i18n/strings";
-import {
-  ForesightInsightBody,
-  type InsightState,
-} from "@/components/foresight-insight-body";
 
 interface Props {
   initial: ForesightResponse;
@@ -41,13 +36,9 @@ function formatDate(iso: string, locale: "en" | "zh"): string {
 
 interface RowProps {
   event: ForesightEvent;
-  days: number;
-  expanded: boolean;
-  onToggle: () => void;
-  insight: InsightState | undefined;
 }
 
-function EventRow({ event, days, expanded, onToggle, insight }: RowProps) {
+function EventRow({ event }: RowProps) {
   const t = useT();
   const { locale } = useLocale();
   const daysUntilLabel =
@@ -59,7 +50,7 @@ function EventRow({ event, days, expanded, onToggle, insight }: RowProps) {
 
   return (
     <div className="py-3 border-b border-rule/60 last:border-b-0">
-      <div className="grid grid-cols-[5rem_4rem_minmax(0,1fr)_auto] md:grid-cols-[7rem_5rem_minmax(0,1fr)_auto] gap-x-3 md:gap-x-4 items-baseline">
+      <div className="grid grid-cols-[5rem_4rem_minmax(0,1fr)] md:grid-cols-[7rem_5rem_minmax(0,1fr)] gap-x-3 md:gap-x-4 items-baseline">
         <div className="tabular text-sm">
           <div className="text-ink">{formatDate(event.date, locale)}</div>
           <div className="text-xs text-whisper">{daysUntilLabel}</div>
@@ -78,20 +69,7 @@ function EventRow({ event, days, expanded, onToggle, insight }: RowProps) {
             {event.description}
           </div>
         </div>
-        <button
-          type="button"
-          onClick={onToggle}
-          className="text-xs text-quiet hover:text-ink whitespace-nowrap"
-        >
-          {expanded ? t("common.hide") : t("common.learn_more")}
-        </button>
       </div>
-
-      {expanded && (
-        <div className="mt-3 ml-[5rem] md:ml-[7rem] pl-4 border-l border-rule/60">
-          <ForesightInsightBody insight={insight} />
-        </div>
-      )}
     </div>
   );
 }
@@ -102,8 +80,6 @@ export function ForesightBlock({ initial }: Props) {
   const [data, setData] = useState<ForesightResponse>(initial);
   const [days, setDays] = useState<number>(initial.days);
   const [loading, setLoading] = useState(false);
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [insightById, setInsightById] = useState<Record<string, InsightState>>({});
 
   useEffect(() => {
     // `initial` is server-rendered in English (server can't read the client
@@ -127,39 +103,6 @@ export function ForesightBlock({ initial }: Props) {
       cancelled = true;
     };
   }, [days, locale, initial]);
-
-  useEffect(() => {
-    setExpanded({});
-  }, [days]);
-
-  function toggle(eventId: string) {
-    setExpanded((prev) => {
-      const next = { ...prev, [eventId]: !prev[eventId] };
-      if (next[eventId] && !insightById[eventId]) {
-        void load(eventId);
-      }
-      return next;
-    });
-  }
-
-  async function load(eventId: string) {
-    setInsightById((s) => ({ ...s, [eventId]: { kind: "loading" } }));
-    const result = await fetchForesightInsight(eventId, days, false, locale);
-    setInsightById((s) => ({
-      ...s,
-      [eventId]: result.ok
-        ? { kind: "ready", data: result.data }
-        : result.status === 503
-          ? { kind: "unavailable", detail: result.detail }
-          : { kind: "error", detail: result.detail },
-    }));
-  }
-
-  // When locale flips, invalidate any cached per-event insights so the
-  // next expansion fetches fresh CN/EN prose.
-  useEffect(() => {
-    setInsightById({});
-  }, [locale]);
 
   return (
     <section className="mb-12">
@@ -195,14 +138,7 @@ export function ForesightBlock({ initial }: Props) {
         ) : (
           <div>
             {data.events.map((e) => (
-              <EventRow
-                key={e.event_id}
-                event={e}
-                days={days}
-                expanded={!!expanded[e.event_id]}
-                onToggle={() => toggle(e.event_id)}
-                insight={insightById[e.event_id]}
-              />
+              <EventRow key={e.event_id} event={e} />
             ))}
           </div>
         )}

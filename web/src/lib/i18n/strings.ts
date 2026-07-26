@@ -25,20 +25,7 @@ export const STRINGS = {
     "toggle.locale.aria": "Language: {label}. Click to toggle.",
 
     // ── shared / common ─────────────────────────────────────────────
-    "common.what": "What",
-    "common.meaning": "Meaning",
-    "common.watch": "Takeaway",
-    "common.why": "Why",
-    "common.confidence": "Confidence",
-    "common.risk": "Risk",
-    "confidence.high": "High",
-    "confidence.medium": "Medium",
-    "confidence.low": "Low",
     "common.hide": "[hide]",
-    "common.learn_more": "[learn more]",
-    "common.drafting_commentary": "Drafting commentary…",
-    "common.commentary_unavailable": "commentary unavailable: {detail}",
-    "common.insight_unavailable": "insight unavailable: {detail}",
 
     // ── live indicator ──────────────────────────────────────────────
     "live.connecting": "Connecting…",
@@ -100,28 +87,8 @@ export const STRINGS = {
     "watchlist.col.snow": "Snow",
 
     // ── digest ──────────────────────────────────────────────────────
-    "digest.heading": "Daily digest",
-    "digest.subheading": "Four dimensions per holding · observation only",
-    "digest.drafting_aria": "Drafting digest…",
-    "digest.tile.fundamentals": "Fundamentals",
-    "digest.tile.news": "News",
-    "digest.tile.sentiment": "Sentiment",
-    "digest.tile.technical": "Technical",
-    "digest.cached": "cached {time}",
-    "digest.fresh": "fresh {time}",
-    "digest.refresh": "refresh",
-    "digest.no_open_positions": "No open positions today.",
-    "digest.quiet_across": "quiet across {initials}",
-    "digest.footer_hint":
-      "Expand a holding on the portfolio page for a deeper read of what its numbers mean and what to watch.",
-    "digest.unavailable": "digest unavailable: {detail}",
 
     // ── benchmark ───────────────────────────────────────────────────
-    "benchmark.heading_lead": "Portfolio vs",
-    "benchmark.days_suffix": "{n} days",
-    "benchmark.window.30d": "30D",
-    "benchmark.window.90d": "90D",
-    "benchmark.window.1y": "1Y",
     "benchmark.legend.portfolio": "Portfolio",
 
     // ── foresight ───────────────────────────────────────────────────
@@ -151,8 +118,6 @@ export const STRINGS = {
     "concentration.aria.currency_exposure": "Currency exposure as USD share",
 
     // ── insight ─────────────────────────────────────────────────────
-    "insight.heading": "Recommendation",
-    "insight.drafting": "Drafting recommendation…",
 
     // ── sentiment (Reddit) ──────────────────────────────────────────
     "sentiment.heading": "Reddit discussion · past 7 days",
@@ -161,8 +126,6 @@ export const STRINGS = {
     "sentiment.bucket.cautious": "cautious",
     "sentiment.aria.posts": "{n} {bucket} posts",
     "sentiment.open_reddit": "open on reddit ↗",
-    "sentiment.drafting": "drafting insight…",
-    "sentiment.not_enough": "not enough discussion to interpret yet.",
     "sentiment.loading_discussion": "loading discussion…",
     "sentiment.discussion_load_failed":
       "could not load discussion: {detail}",
@@ -200,10 +163,6 @@ export const STRINGS = {
 
     // ── dividends / income ledger ───────────────────────────────────
     "dividends.heading": "Income ledger",
-    "dividends.summary.ttm": "Trailing 12 months · {amount} received",
-    "dividends.summary.next": "next ex-date {date} ({ticker}, ~{amount})",
-    "dividends.summary.none_next": "no scheduled ex-date in next 90 days",
-    "dividends.summary.no_history": "no distributions on record this year",
     "dividends.col.position": "Position",
     "dividends.col.ccy": "Ccy",
     "dividends.col.last_ex": "Last ex-date",
@@ -502,20 +461,7 @@ export const STRINGS = {
     "toggle.locale.aria": "语言：{label}。点击切换。",
 
     // ── shared / common ─────────────────────────────────────────────
-    "common.what": "情况",
-    "common.meaning": "意义",
-    "common.watch": "要点",
-    "common.why": "理由",
-    "common.confidence": "信心",
-    "common.risk": "风险",
-    "confidence.high": "高",
-    "confidence.medium": "中",
-    "confidence.low": "低",
     "common.hide": "[收起]",
-    "common.learn_more": "[详解]",
-    "common.drafting_commentary": "正在生成解读…",
-    "common.commentary_unavailable": "解读暂不可用：{detail}",
-    "common.insight_unavailable": "解析暂不可用：{detail}",
 
     // ── live indicator ──────────────────────────────────────────────
     "live.connecting": "连接中…",
@@ -577,28 +523,8 @@ export const STRINGS = {
     "watchlist.col.snow": "雪花",
 
     // ── digest ──────────────────────────────────────────────────────
-    "digest.heading": "每日摘要",
-    "digest.subheading": "每只持仓四维度 · 仅作观察",
-    "digest.drafting_aria": "正在生成摘要…",
-    "digest.tile.fundamentals": "基本面",
-    "digest.tile.news": "新闻",
-    "digest.tile.sentiment": "情绪",
-    "digest.tile.technical": "技术",
-    "digest.cached": "缓存于 {time}",
-    "digest.fresh": "新生成 · {time}",
-    "digest.refresh": "刷新",
-    "digest.no_open_positions": "今日无开仓。",
-    "digest.quiet_across": "{initials} 维度静默",
-    "digest.footer_hint":
-      "在投资组合页展开任一持仓，可读取其数字含义与值得关注之处。",
-    "digest.unavailable": "摘要暂不可用：{detail}",
 
     // ── benchmark ───────────────────────────────────────────────────
-    "benchmark.heading_lead": "组合对比",
-    "benchmark.days_suffix": "{n} 天",
-    "benchmark.window.30d": "30 日",
-    "benchmark.window.90d": "90 日",
-    "benchmark.window.1y": "1 年",
     "benchmark.legend.portfolio": "组合",
 
     // ── foresight ───────────────────────────────────────────────────
@@ -627,8 +553,6 @@ export const STRINGS = {
     "concentration.aria.currency_exposure": "以 USD 占比表示的币种敞口",
 
     // ── insight ─────────────────────────────────────────────────────
-    "insight.heading": "建议",
-    "insight.drafting": "正在生成建议…",
 
     // ── sentiment (Reddit) ──────────────────────────────────────────
     "sentiment.heading": "Reddit 讨论 · 过去 7 天",
@@ -637,8 +561,6 @@ export const STRINGS = {
     "sentiment.bucket.cautious": "谨慎",
     "sentiment.aria.posts": "{n} 条{bucket}帖子",
     "sentiment.open_reddit": "在 reddit 打开 ↗",
-    "sentiment.drafting": "正在生成解析…",
-    "sentiment.not_enough": "讨论量不足以解读。",
     "sentiment.loading_discussion": "讨论加载中…",
     "sentiment.discussion_load_failed": "讨论加载失败：{detail}",
     "sentiment.no_discussion": "过去 7 天无相关讨论。",
@@ -675,10 +597,6 @@ export const STRINGS = {
 
     // ── dividends / income ledger ───────────────────────────────────
     "dividends.heading": "分红记录",
-    "dividends.summary.ttm": "过去 12 个月 · 已收 {amount}",
-    "dividends.summary.next": "下次除息日 {date}（{ticker}，约 {amount}）",
-    "dividends.summary.none_next": "未来 90 天无安排除息日",
-    "dividends.summary.no_history": "今年暂无分红记录",
     "dividends.col.position": "持仓",
     "dividends.col.ccy": "币种",
     "dividends.col.last_ex": "上次除息",

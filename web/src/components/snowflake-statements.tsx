@@ -1,20 +1,17 @@
 "use client";
 
-// P6 — per-stock 5-axis snowflake + statement-card grid. Lives inside the
-// holdings / watchlist drill-in, between the price chart and the insight
-// column. Lazy-fetched on row expand; backend caches 6h.
+// P6 — per-stock 5-axis snowflake + score grid. Lives inside the
+// holdings / watchlist drill-in, below the price chart. Lazy-fetched on
+// row expand; backend caches 6h.
 //
 // Five axes in SWS order (Value → Future → Past → Health → Dividend). The
-// backend ships deterministic 0-6 scores for Past / Health / Dividend plus
-// Claude statement bullets; Valuation + Future stay null until the peer-PE /
-// analyst-forecast data layers land, so they render as greyed "not yet
-// available" stubs. The pentagon always renders — even without an Anthropic
-// key the deterministic scores draw the shape, statements just collapse.
+// backend ships deterministic 0-6 scores for Past / Health / Dividend;
+// Valuation + Future stay null until the peer-PE / analyst-forecast data
+// layers land, so they render as greyed "not yet available" stubs.
 
 import { useEffect, useState } from "react";
-import { fetchSnowflake, type SnowflakeResponse, type SnowflakeStatement } from "@/lib/api";
+import { fetchSnowflake, type SnowflakeResponse } from "@/lib/api";
 import { Snowflake } from "./snowflake";
-import { StatementCard, type StatementCategory } from "./statement-card";
 import { useT } from "@/lib/i18n/use-t";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import type { StringKey } from "@/lib/i18n/strings";
@@ -28,19 +25,17 @@ type State =
   | { kind: "ready"; data: SnowflakeResponse }
   | { kind: "error"; detail: string };
 
-// Axis descriptor: ties the snowflake score key, the statements key, the
-// StatementCard category, and the i18n label together. Order matches SWS.
+// Axis descriptor: ties the snowflake score key and the i18n label
+// together. Order matches SWS.
 const AXES: Array<{
   scoreKey: keyof SnowflakeResponse["scores"];
-  stmtKey: keyof SnowflakeResponse["statements"] | null;
-  category: StatementCategory;
   labelKey: StringKey;
 }> = [
-  { scoreKey: "valuation", stmtKey: null, category: "valuation", labelKey: "drillin.axis.valuation" },
-  { scoreKey: "future", stmtKey: null, category: "future", labelKey: "drillin.axis.future" },
-  { scoreKey: "past", stmtKey: "past", category: "past", labelKey: "drillin.axis.past" },
-  { scoreKey: "health", stmtKey: "health", category: "health", labelKey: "drillin.axis.health" },
-  { scoreKey: "dividends", stmtKey: "dividend", category: "dividend", labelKey: "drillin.axis.dividend" },
+  { scoreKey: "valuation", labelKey: "drillin.axis.valuation" },
+  { scoreKey: "future", labelKey: "drillin.axis.future" },
+  { scoreKey: "past", labelKey: "drillin.axis.past" },
+  { scoreKey: "health", labelKey: "drillin.axis.health" },
+  { scoreKey: "dividends", labelKey: "drillin.axis.dividend" },
 ];
 
 function Header({ label }: { label: string }) {
@@ -63,17 +58,13 @@ function ScoreChip({ score }: { score: number | null }) {
 function AxisCluster({
   label,
   score,
-  statements,
-  category,
   pendingLabel,
 }: {
   label: string;
   score: number | null;
-  statements: SnowflakeStatement[] | null;
-  category: StatementCategory;
   pendingLabel: string;
 }) {
-  const greyed = score == null && (!statements || statements.length === 0);
+  const greyed = score == null;
   return (
     <section className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
@@ -86,21 +77,7 @@ function AxisCluster({
         </h4>
         <ScoreChip score={score} />
       </div>
-      {greyed ? (
-        <p className="text-xs text-whisper italic">{pendingLabel}</p>
-      ) : statements && statements.length > 0 ? (
-        <div className="flex flex-col gap-2">
-          {statements.map((s, i) => (
-            <StatementCard
-              key={`${category}-${i}`}
-              icon={s.icon}
-              category={category}
-              headline={s.headline}
-              sub={s.sub ?? undefined}
-            />
-          ))}
-        </div>
-      ) : null}
+      {greyed && <p className="text-xs text-whisper italic">{pendingLabel}</p>}
     </section>
   );
 }
@@ -143,7 +120,7 @@ export function SnowflakeStatements({ code }: Props) {
   // the drill-in (chart, insight, anomalies) stays useful.
   if (state.kind === "error") return null;
 
-  const { scores, statements, available } = state.data;
+  const { scores, available } = state.data;
   const pendingLabel = t("drillin.axis_pending");
 
   return (
@@ -160,8 +137,6 @@ export function SnowflakeStatements({ code }: Props) {
                 key={axis.scoreKey}
                 label={t(axis.labelKey)}
                 score={scores[axis.scoreKey] ?? null}
-                statements={axis.stmtKey ? statements[axis.stmtKey] : null}
-                category={axis.category}
                 pendingLabel={pendingLabel}
               />
             ))}
