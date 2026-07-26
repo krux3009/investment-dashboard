@@ -203,6 +203,11 @@ def translate(
     if locale == "zh":
         return content
 
+    # No key → raw moomoo prose, silently. Not an error worth logging
+    # on every drill-in.
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        return content
+
     key = _hash_key(content, kind)
     cached = _load_cached(key)
     if cached is not None:

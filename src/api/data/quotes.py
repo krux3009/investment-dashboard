@@ -23,6 +23,12 @@ _TTL = timedelta(seconds=30)
 _LOCK = threading.Lock()
 _CACHE: dict[str, tuple["Quote", datetime]] = {}
 
+# Codes whose solo snapshot failed (e.g. no quote permission for that
+# market). Skipped for _BAD_TTL so one dead code can't re-poison every
+# batch and spam the log on each 20s tick.
+_BAD_TTL = timedelta(minutes=10)
+_BAD: dict[str, datetime] = {}
+
 
 @dataclass(frozen=True)
 class Quote:
@@ -61,25 +67,45 @@ def get_quotes(codes: list[str]) -> dict[str, Quote]:
             entry = _CACHE.get(c)
             if entry and (now - entry[1]) < _TTL:
                 out[c] = entry[0]
+            elif c in _BAD and (now - _BAD[c]) < _BAD_TTL:
+                continue
             else:
                 miss.append(c)
 
     if miss:
-        from api.data import anomalies
-
-        try:
-            ret, df = anomalies._quote_ctx().get_market_snapshot(miss)  # noqa: SLF001
-        except Exception as exc:
-            log.warning("get_market_snapshot exception for %s: %s", miss, exc)
-            return out
-        if ret != 0 or df is None or not hasattr(df, "iterrows"):
-            log.warning("get_market_snapshot ret=%s for %s", ret, miss)
-            return out
+        frames = []
+        ret, df = _snapshot(miss)
+        if ret == 0 and df is not None and hasattr(df, "iterrows"):
+            frames.append(df)
+        else:
+            # moomoo fails the whole batch when any one code is bad (e.g.
+            # missing market quote permission) — retry per code to salvage
+            # the rest, and bench the offenders.
+            for c in miss:
+                r, d = _snapshot([c]) if len(miss) > 1 else (ret, df)
+                if r == 0 and d is not None and hasattr(d, "iterrows"):
+                    frames.append(d)
+                else:
+                    _BAD[c] = now
+                    log.warning(
+                        "quote unavailable for %s — benched for %s", c, _BAD_TTL
+                    )
 
         with _LOCK:
-            for _, row in df.iterrows():
-                quote = _from_row(row.to_dict())
-                _CACHE[quote.code] = (quote, now)
-                out[quote.code] = quote
+            for d in frames:
+                for _, row in d.iterrows():
+                    quote = _from_row(row.to_dict())
+                    _CACHE[quote.code] = (quote, now)
+                    out[quote.code] = quote
 
     return out
+
+
+def _snapshot(codes: list[str]):
+    from api.data import anomalies
+
+    try:
+        return anomalies._quote_ctx().get_market_snapshot(codes)  # noqa: SLF001
+    except Exception as exc:
+        log.warning("get_market_snapshot exception for %s: %s", codes, exc)
+        return -1, None

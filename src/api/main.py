@@ -28,6 +28,9 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(name)s: %(message)s",
 )
+# yfinance logs its own ERROR for every 404 (e.g. ETFs with no
+# fundamentals); our wrappers already log actionable warnings.
+logging.getLogger("yfinance").setLevel(logging.CRITICAL)
 
 from api import digest as digest_module
 from api.realtime import broadcaster
@@ -83,7 +86,7 @@ app = FastAPI(title="investment-dashboard API", version="0.1.0", lifespan=lifesp
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",
     allow_methods=["GET", "PUT", "DELETE"],
     allow_headers=["*"],
 )
@@ -129,4 +132,7 @@ def cli() -> None:
         port=8000,
         reload=True,
         reload_dirs=["src"],
+        # Open SSE streams never close on their own; without this a
+        # --reload waits on them forever and the server wedges.
+        timeout_graceful_shutdown=3,
     )

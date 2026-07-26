@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 
+import anthropic
 from fastapi import APIRouter, HTTPException, Query
 
 from api import digest
@@ -30,6 +31,12 @@ async def get_digest(
     except RuntimeError as exc:
         # Most likely: ANTHROPIC_API_KEY missing.
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except anthropic.AuthenticationError as exc:
+        # Invalid/revoked key — same quiet "advisor unavailable" hint as
+        # a missing key, not a 500.
+        raise HTTPException(
+            status_code=503, detail="ANTHROPIC_API_KEY invalid or revoked"
+        ) from exc
     except Exception as exc:
         log.exception("digest generation failed")
         raise HTTPException(status_code=500, detail=str(exc)) from exc

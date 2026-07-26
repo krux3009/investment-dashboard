@@ -27,6 +27,8 @@ import pandas as pd
 
 log = logging.getLogger(__name__)
 
+_KLINE_WARNED: set[str] = set()
+
 _DB_PATH = Path(__file__).resolve().parents[3] / "data" / "prices.duckdb"
 _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
@@ -164,7 +166,11 @@ def _fetch_moomoo_rows(code: str, start: date, end: date) -> list[tuple] | None:
         return None
 
     if ret != 0:
-        log.warning("history_kline %s ret=%s data=%s", code, ret, data)
+        # warn once per code per process — a permission-less code (e.g. an
+        # SG ETF without quote rights) fails on every poll otherwise
+        if code not in _KLINE_WARNED:
+            _KLINE_WARNED.add(code)
+            log.warning("history_kline %s ret=%s data=%s", code, ret, data)
         return None
     if data is None or len(data) == 0:
         return []
