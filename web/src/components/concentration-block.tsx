@@ -7,23 +7,18 @@ interface Props {
   initial: ConcentrationResponse;
 }
 
-const SLICE_VARS = [
-  "var(--slice-1)",
-  "var(--slice-2)",
-  "var(--slice-3)",
-  "var(--slice-4)",
-  "var(--slice-5)",
-  "var(--slice-6)",
-];
-
-const BAR_W = 600;
-const BAR_H = 16;
-
 interface Segment {
   label: string;
   pct: number;
+  // "rest" renders fainter — it means "everything else", not a position.
+  muted?: boolean;
 }
 
+// One graphite tone for every named segment, separated by 2px surface gaps
+// (gap-0.5). The old darkest-to-lightest ramp colored segments by *rank*, so
+// a holding that overtook another swapped colors between visits, and the
+// palest steps dropped below 2:1 against the surface. Width + the ordered
+// label row underneath carry the identity; color no longer re-encodes size.
 function StackedBar({
   segments,
   ariaLabel,
@@ -31,36 +26,26 @@ function StackedBar({
   segments: Segment[];
   ariaLabel: string;
 }) {
-  let cursor = 0;
   return (
-    <svg
-      viewBox={`0 0 ${BAR_W} ${BAR_H}`}
-      width="100%"
-      height={BAR_H}
+    <div
       role="img"
       aria-label={ariaLabel}
-      className="block"
+      className="flex gap-0.5 h-4 w-full rounded-sm overflow-hidden"
     >
-      {segments.map((seg, i) => {
-        const w = seg.pct * BAR_W;
-        const x = cursor;
-        cursor += w;
-        return (
-          <rect
-            key={`${seg.label}-${i}`}
-            x={x}
-            y={0}
-            width={Math.max(w, 0.5)}
-            height={BAR_H}
-            fill={SLICE_VARS[i % SLICE_VARS.length]}
-            stroke="var(--surface)"
-            strokeWidth={0.75}
-          >
-            <title>{`${seg.label} · ${(seg.pct * 100).toFixed(1)}%`}</title>
-          </rect>
-        );
-      })}
-    </svg>
+      {segments.map((seg, i) => (
+        <div
+          key={`${seg.label}-${i}`}
+          className="h-full"
+          style={{
+            width: `${Math.max(seg.pct * 100, 0.25)}%`,
+            // slice-7 is the lightest ramp step that still clears 2:1 vs the
+            // surface — rule sat at ~1.4:1 and the segment could vanish.
+            background: seg.muted ? "var(--slice-7)" : "var(--quiet)",
+          }}
+          title={`${seg.label} · ${(seg.pct * 100).toFixed(1)}%`}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -73,7 +58,7 @@ export function ConcentrationBlock({ initial }: Props) {
   const segments: Segment[] = [
     ...initial.top_names.map((n) => ({ label: n.ticker, pct: n.pct })),
   ];
-  if (restPct > 0.001) segments.push({ label: "rest", pct: restPct });
+  if (restPct > 0.001) segments.push({ label: "rest", pct: restPct, muted: true });
 
   const ccyEntries = Object.entries(initial.currency_exposure).sort(
     ([, a], [, b]) => b - a,
