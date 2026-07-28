@@ -86,3 +86,9 @@ export function useLocale(): LocaleContextValue {
   }
   return ctx;
 }
+
+// Map the app locale to a BCP-47 tag for Intl formatters. One home for the
+// "zh" → "zh-CN" mapping instead of per-component ternaries.
+export function intlLocale(locale: Locale): string {
+  return locale === "zh" ? "zh-CN" : "en-US";
+}

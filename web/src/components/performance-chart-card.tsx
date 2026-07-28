@@ -14,8 +14,9 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { fetchBenchmark, type BenchmarkResponse } from "@/lib/api";
+import { useFetch } from "@/lib/use-fetch";
 import { BenchmarkChart } from "./benchmark-chart";
 import { useT } from "@/lib/i18n/use-t";
 import { fmtPct, fmtUsd, directionClass } from "@/lib/format";
@@ -57,27 +58,17 @@ export function PerformanceChartCard({
   const [subTab, setSubTab] = useState<SubTab>("vs-market");
   const initialDays: RangeDays = initial?.days === 30 ? 30 : initial?.days === 365 ? 365 : 90;
   const [days, setDays] = useState<RangeDays>(initialDays);
-  const [data, setData] = useState<BenchmarkResponse | null>(initial);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (data && data.days === days) return;
-    let cancelled = false;
-    setLoading(true);
-    (async () => {
-      try {
-        const next = await fetchBenchmark(days);
-        if (!cancelled) setData(next);
-      } catch (e) {
-        console.warn("PerformanceChartCard benchmark fetch failed:", e);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [days, data]);
+  // Errors stay silent (data keeps the last window) — matches the SSR
+  // fallback behavior where a failed benchmark hides the chart only.
+  const fetched = useFetch<BenchmarkResponse | null>(
+    () =>
+      initial && initial.days === days
+        ? Promise.resolve(initial)
+        : fetchBenchmark(days),
+    [days],
+  );
+  const data = fetched.data ?? initial;
+  const loading = fetched.loading;
 
   const todaySign = todayPnlPct == null ? "flat" : todayPnlPct > 0 ? "pos" : todayPnlPct < 0 ? "neg" : "flat";
   const totalSign = totalPnlPct > 0 ? "pos" : totalPnlPct < 0 ? "neg" : "flat";
@@ -180,7 +171,7 @@ export function PerformanceChartCard({
           <BenchmarkChart data={data} portfolioLabel={t("benchmark.legend.portfolio")} />
         ) : (
           <div className="text-sm text-whisper italic h-[200px] flex items-center justify-center">
-            no benchmark series
+            {t("portfolio.perf.no_series")}
           </div>
         )}
       </div>
@@ -234,10 +225,11 @@ function LegendDot({ color, label }: { color: string; label: string }) {
 }
 
 function ValueOverTimePlaceholder() {
+  const t = useT();
   return (
     <div className="h-[200px] flex flex-col items-center justify-center gap-1 border border-dashed border-rule rounded-md">
-      <p className="text-xs text-quiet">Cost-basis ledger pending</p>
-      <p className="text-[11px] text-whisper italic">P5 — /api/returns/series wires the chart.</p>
+      <p className="text-xs text-quiet">{t("portfolio.perf.value_placeholder")}</p>
+      <p className="text-[11px] text-whisper italic">{t("portfolio.perf.value_placeholder_sub")}</p>
     </div>
   );
 }

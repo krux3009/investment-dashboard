@@ -10,8 +10,7 @@
 
 import type { Locale } from "./locale-provider";
 
-export const STRINGS = {
-  en: {
+const EN = {
     // ── nav / chrome ────────────────────────────────────────────────
     "nav.brand": "quiet ledger",
     "nav.home": "home",
@@ -445,9 +444,27 @@ export const STRINGS = {
     "portfolio.snowflake.summary_live": "USD-weighted aggregate over current holdings.",
     "portfolio.snowflake.summary_unreachable":
       "Backend unreachable — scores will reload when /api/snowflake/portfolio responds.",
-  },
 
-  zh: {
+    // ── chart aria / fallback text (was hardcoded English) ──────────
+    "chart.sparkline_aria": "30-day price trend, {direction}",
+    "chart.direction.gain": "up",
+    "chart.direction.loss": "down",
+    "chart.direction.quiet": "flat",
+    "chart.donut_aria": "Portfolio allocation across {n} positions",
+    "chart.benchmark_aria": "Portfolio versus {symbols} over {days} days",
+    "chart.snowflake_aria": "Snowflake: {axes}",
+    "drillin.no_price_data": "no price data available",
+    "returns.download_csv": "Download CSV",
+    "portfolio.perf.no_series": "no benchmark series",
+    "portfolio.perf.value_placeholder": "Cost-basis ledger pending",
+    "portfolio.perf.value_placeholder_sub": "P5 — /api/returns/series wires the chart.",
+} as const;
+
+export type StringKey = keyof typeof EN;
+
+// Compile-time completeness check: zh must define every EN key (a missing
+// key is a type error here, not a silent English fallback at runtime).
+const ZH: Record<StringKey, string> = {
     // ── nav / chrome ────────────────────────────────────────────────
     "nav.brand": "静账",
     "nav.home": "首页",
@@ -876,7 +893,23 @@ export const STRINGS = {
     "portfolio.snowflake.summary_live": "按 USD 权重对当前持仓的汇总。",
     "portfolio.snowflake.summary_unreachable":
       "后端无法连接 — /api/snowflake/portfolio 响应后评分将重新加载。",
-  },
-} as const satisfies Record<Locale, Record<string, string>>;
 
-export type StringKey = keyof (typeof STRINGS)["en"];
+    // ── chart aria / fallback text (was hardcoded English) ──────────
+    "chart.sparkline_aria": "30 日价格趋势，{direction}",
+    "chart.direction.gain": "上行",
+    "chart.direction.loss": "下行",
+    "chart.direction.quiet": "持平",
+    "chart.donut_aria": "投资组合在 {n} 个持仓间的配置",
+    "chart.benchmark_aria": "组合与 {symbols} 过去 {days} 天的对比",
+    "chart.snowflake_aria": "雪花图：{axes}",
+    "drillin.no_price_data": "暂无价格数据",
+    "returns.download_csv": "下载 CSV",
+    "portfolio.perf.no_series": "暂无基准序列",
+    "portfolio.perf.value_placeholder": "成本账本待接入",
+    "portfolio.perf.value_placeholder_sub": "P5 — /api/returns/series 接入后显示图表。",
+};
+
+export const STRINGS: Record<Locale, Record<StringKey, string>> = {
+  en: EN,
+  zh: ZH,
+};

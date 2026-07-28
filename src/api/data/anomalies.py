@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -55,28 +56,30 @@ class Anomaly:
 
 _CACHE: dict[tuple[str, AnomalyKind, int, int], Anomaly] = {}
 _QUOTE_CTX: Any = None
+_QUOTE_CTX_LOCK = threading.Lock()
 
 
-def _quote_ctx():
-    """Lazy module-level OpenQuoteContext. One connection shared across all
-    anomaly fetches for the session. Closed automatically when the process
-    exits (Dash dev mode kills python on reload, which is fine).
+def quote_ctx():
+    """Lazy module-level OpenQuoteContext — the one quote connection the
+    whole dashboard shares (prices, quotes, watchlist resolution all
+    borrow it). Closed automatically when the process exits.
     """
     global _QUOTE_CTX
-    if _QUOTE_CTX is None:
-        from moomoo import OpenQuoteContext
+    with _QUOTE_CTX_LOCK:
+        if _QUOTE_CTX is None:
+            from moomoo import OpenQuoteContext
 
-        _QUOTE_CTX = OpenQuoteContext(
-            host=os.environ.get("MOOMOO_HOST", "127.0.0.1"),
-            port=int(os.environ.get("MOOMOO_PORT", "11111")),
-        )
+            _QUOTE_CTX = OpenQuoteContext(
+                host=os.environ.get("MOOMOO_HOST", "127.0.0.1"),
+                port=int(os.environ.get("MOOMOO_PORT", "11111")),
+            )
     return _QUOTE_CTX
 
 
 def _fetch_one(code: str, kind: AnomalyKind, time_range: int, language_id: int) -> Anomaly:
     method_name = _METHOD_FOR_KIND[kind]
     try:
-        method = getattr(_quote_ctx(), method_name)
+        method = getattr(quote_ctx(), method_name)
         ret, data = method(code, time_range=time_range, language_id=language_id)
     except Exception as exc:
         log.warning("anomaly %s/%s exception: %s", code, kind, exc)

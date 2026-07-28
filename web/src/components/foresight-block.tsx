@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   fetchForesight,
   type ForesightEvent,
   type ForesightKind,
   type ForesightResponse,
 } from "@/lib/api";
+import { useFetch } from "@/lib/use-fetch";
 import { useT } from "@/lib/i18n/use-t";
-import { useLocale } from "@/lib/i18n/locale-provider";
+import { intlLocale, useLocale } from "@/lib/i18n/locale-provider";
 import type { StringKey } from "@/lib/i18n/strings";
 
 interface Props {
@@ -29,7 +30,7 @@ const KIND_LABEL_KEY: Record<ForesightKind, StringKey> = {
 
 function formatDate(iso: string, locale: "en" | "zh"): string {
   return new Date(iso + "T00:00:00").toLocaleDateString(
-    locale === "zh" ? "zh-CN" : "en-US",
+    intlLocale(locale),
     { weekday: "short", month: "short", day: "numeric" },
   );
 }
@@ -77,32 +78,19 @@ function EventRow({ event }: RowProps) {
 export function ForesightBlock({ initial }: Props) {
   const t = useT();
   const { locale } = useLocale();
-  const [data, setData] = useState<ForesightResponse>(initial);
   const [days, setDays] = useState<number>(initial.days);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    // `initial` is server-rendered in English (server can't read the client
-    // locale). Use it only for the default window in English; otherwise
-    // refetch with the active locale so event labels/descriptions localize.
-    if (days === initial.days && locale === "en") {
-      setData(initial);
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    (async () => {
-      try {
-        const next = await fetchForesight(days, locale);
-        if (!cancelled) setData(next);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [days, locale, initial]);
+  // `initial` is server-rendered in English (server can't read the client
+  // locale). Use it only for the default window in English; otherwise
+  // refetch with the active locale so event labels/descriptions localize.
+  const fetched = useFetch<ForesightResponse>(
+    () =>
+      days === initial.days && locale === "en"
+        ? Promise.resolve(initial)
+        : fetchForesight(days, locale),
+    [days, locale, initial],
+  );
+  const data = fetched.data ?? initial;
+  const loading = fetched.loading;
 
   return (
     <section className="mb-12">

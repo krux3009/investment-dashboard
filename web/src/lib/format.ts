@@ -45,6 +45,13 @@ export function fmtPct(value: number | null, decimals = 2) {
   return `${sign}${(Math.abs(value) * 100).toFixed(decimals)}%`;
 }
 
+// Value already in percent units (3.4 → "3.4%"), unsigned. For yields and
+// ratios where a +/− would read as a change rather than a level.
+export function fmtPctPlain(value: number | null, decimals = 2) {
+  if (value == null) return "–";
+  return `${value.toFixed(decimals)}%`;
+}
+
 export function arrowFor(value: number | null): "↑" | "↓" | "–" {
   if (value === null || value === 0) return "–";
   return value > 0 ? "↑" : "↓";
@@ -55,18 +62,4 @@ export function arrowFor(value: number | null): "↑" | "↓" | "–" {
 export function directionClass(value: number | null): string {
   if (value === null || value === 0) return "text-quiet";
   return value > 0 ? "text-gain" : "text-loss";
-}
-
-export function timeSince(iso: string): string {
-  const then = new Date(iso).getTime();
-  const now = Date.now();
-  const seconds = Math.floor((now - then) / 1000);
-  if (seconds < 5) return "just now";
-  if (seconds < 60) return "moments ago";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} hr ago`;
-  const days = Math.floor(hours / 24);
-  return `${days} day ago`;
 }

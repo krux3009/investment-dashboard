@@ -9,10 +9,10 @@ Borrows the role-decomposition pattern from TauricResearch/TradingAgents
 (prompt structure only — no LangGraph, no debate, no Trader synthesis,
 no action language).
 
-Cache: `digest_tiles_cache` table in `prices.duckdb`, keyed on
-`(code, prompt_version)`. 6h TTL, single-writer via `prices._DB_LOCK`.
-The old single-blob `digest_cache` table is left in place — harmless
-residue, no longer read.
+Cache: `kv_digest_tiles` table via `api.data.cache`, keyed on
+`code|prompt_version-locale`. 6h TTL. The old `digest_tiles_cache` /
+`digest_cache` tables are left in place — harmless residue, no longer
+read.
 
 Concurrency: per-ticker, 4 tiles fan out via `asyncio.gather`. Across
 tickers, a `Semaphore(4)` keeps Claude QPS sane — 4 holdings × 4 tiles
@@ -25,7 +25,6 @@ analysts import it lazily.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import os
 import threading
@@ -34,8 +33,9 @@ from datetime import datetime, timedelta
 
 from api.analysts import fundamentals, news, sentiment, technical
 from api.analysts._base import AnalystOutput, is_quiet_sentence
-from api.data import prices
+from api.data import cache
 from api.data.moomoo_client import get_summary
+from api.data.prices import _to_yfinance_symbol
 from api.i18n import DEFAULT_LOCALE, Locale, prompt_version_with_locale
 
 log = logging.getLogger(__name__)
@@ -57,7 +57,11 @@ log = logging.getLogger(__name__)
 # only framing, magnitude/pace/forward-look prohibitions, the trading-action
 # ban tail, and all role-specific bans; the only active post-check ban is the
 # shared anti-hype list (FORBIDDEN_HYPE). Cache keys "v7-recommend-en" / "-zh".
-_PROMPT_VERSION = "v7-recommend"
+# v7 → v8-recommend (2026-07-28): analysts/_base retry path moved onto the
+# shared advisor engine — the retry suffix is now RETRY_SUFFIX_HYPE_* (matches
+# the recommendation era; the old inline "observational language only" text
+# contradicted it). Prompt-copy change on the retry path → version bump.
+_PROMPT_VERSION = "v8-recommend"
 _TTL = timedelta(hours=6)
 
 # Bound across-ticker concurrency. 4 tickers × 4 tiles = 16 inflight calls
@@ -96,29 +100,6 @@ class AnalystTiledDigest:
     generated_at: datetime
     holdings: list[TickerTiles]
     cached: bool = False
-
-
-# ── Symbol mapping (moomoo code → yfinance symbol) ──────────────────────────
-
-
-def _to_yfinance_symbol(code: str) -> str | None:
-    if "." not in code:
-        return code
-    market, ticker = code.split(".", 1)
-    market = market.upper()
-    if market == "US":
-        return ticker
-    if market == "HK":
-        return f"{ticker.zfill(4)}.HK"
-    if market == "SG":
-        return f"{ticker}.SI"
-    if market == "JP":
-        return f"{ticker}.T"
-    if market == "CN":
-        if ticker.startswith("6"):
-            return f"{ticker}.SS"
-        return f"{ticker}.SZ"
-    return None
 
 
 # ── News fetch (yfinance) — shared across analysts/news + analysts/sentiment
@@ -167,65 +148,42 @@ def _fetch_news(code: str, limit: int = 3) -> list[dict]:
     return out
 
 
-# ── DuckDB cache (single-writer, shared with prices.py) ─────────────────────
+# ── Tile cache (shared DuckDB KV via api.data.cache) ────────────────────────
+
+_CACHE_TABLE = "kv_digest_tiles"
 
 
-def _ensure_cache_table() -> None:
-    with prices._DB_LOCK:
-        prices._db().execute(
-            """
-            CREATE TABLE IF NOT EXISTS digest_tiles_cache (
-                code VARCHAR NOT NULL,
-                prompt_version VARCHAR NOT NULL,
-                fundamentals VARCHAR,
-                news VARCHAR,
-                sentiment VARCHAR,
-                technical VARCHAR,
-                generated_at TIMESTAMP,
-                PRIMARY KEY (code, prompt_version)
-            )
-            """
-        )
+def _cache_key(code: str, locale: Locale) -> str:
+    return f"{code}|{prompt_version_with_locale(_PROMPT_VERSION, locale)}"
 
 
 def _load_cached_tiles(
     code: str, locale: Locale = DEFAULT_LOCALE
 ) -> tuple[str, str, str, str, datetime] | None:
-    _ensure_cache_table()
-    pv = prompt_version_with_locale(_PROMPT_VERSION, locale)
-    with prices._DB_LOCK:
-        row = prices._db().execute(
-            "SELECT fundamentals, news, sentiment, technical, generated_at "
-            "FROM digest_tiles_cache "
-            "WHERE code = ? AND prompt_version = ?",
-            [code, pv],
-        ).fetchone()
-    if not row:
+    row = cache.get(_CACHE_TABLE, _cache_key(code, locale), _TTL)
+    if row is None:
         return None
-    fundamentals, news_, sentiment_, technical_, generated_at = row
-    if datetime.now() - generated_at > _TTL:
-        return None
-    return fundamentals, news_, sentiment_, technical_, generated_at
+    payload, generated_at = row
+    return (
+        payload["fundamentals"],
+        payload["news"],
+        payload["sentiment"],
+        payload["technical"],
+        generated_at,
+    )
 
 
-def _save_cached_tiles(
-    tiles: TickerTiles, generated_at: datetime, locale: Locale = DEFAULT_LOCALE
-) -> None:
-    _ensure_cache_table()
-    pv = prompt_version_with_locale(_PROMPT_VERSION, locale)
-    with prices._DB_LOCK:
-        prices._db().execute(
-            "INSERT OR REPLACE INTO digest_tiles_cache VALUES (?, ?, ?, ?, ?, ?, ?)",
-            [
-                tiles.code,
-                pv,
-                tiles.fundamentals,
-                tiles.news,
-                tiles.sentiment,
-                tiles.technical,
-                generated_at,
-            ],
-        )
+def _save_cached_tiles(tiles: TickerTiles, locale: Locale = DEFAULT_LOCALE) -> None:
+    cache.put(
+        _CACHE_TABLE,
+        _cache_key(tiles.code, locale),
+        {
+            "fundamentals": tiles.fundamentals,
+            "news": tiles.news,
+            "sentiment": tiles.sentiment,
+            "technical": tiles.technical,
+        },
+    )
 
 
 # ── Per-ticker orchestration ────────────────────────────────────────────────
@@ -271,7 +229,7 @@ async def _build_tiles_one(
         sentiment_quiet=results[2].is_quiet,
         technical_quiet=results[3].is_quiet,
     )
-    _save_cached_tiles(tiles, datetime.now(), locale)
+    _save_cached_tiles(tiles, locale)
     return tiles
 
 
@@ -289,18 +247,10 @@ async def get_digest_async(
             holdings=[],
         )
 
-    pv = prompt_version_with_locale(_PROMPT_VERSION, locale)
     if force_refresh:
         # Drop cache rows for current holdings so the next save overwrites.
-        codes = [p.code for p in summary.positions]
-        _ensure_cache_table()
-        with prices._DB_LOCK:
-            prices._db().execute(
-                "DELETE FROM digest_tiles_cache WHERE prompt_version = ? AND code IN ("
-                + ",".join("?" for _ in codes)
-                + ")",
-                [pv, *codes],
-            )
+        for p in summary.positions:
+            cache.clear(_CACHE_TABLE, _cache_key(p.code, locale))
 
     # Snapshot cache state BEFORE fan-out so `cached` reflects whether work
     # was done, not the post-write state (every ticker is "cached" after save).

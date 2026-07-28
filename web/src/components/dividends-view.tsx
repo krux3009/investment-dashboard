@@ -15,20 +15,8 @@ import {
 } from "@/lib/api";
 import { DividendsForecastSwitcher } from "./dividends-forecast-switcher";
 import { useT } from "@/lib/i18n/use-t";
+import { fmtPctPlain as fmtPct, fmtUsd } from "@/lib/format";
 
-function fmtUsd(value: number, fractionDigits = 0): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: fractionDigits,
-    maximumFractionDigits: fractionDigits,
-  }).format(value);
-}
-
-function fmtPct(value: number | null, fractionDigits = 2): string {
-  if (value == null) return "—";
-  return `${value.toFixed(fractionDigits)}%`;
-}
 
 interface Props {
   ledger: DividendsResponse | null;
@@ -103,7 +91,7 @@ function IncomeHero({
 
       <div className="flex items-baseline gap-3">
         <span className="font-serif text-4xl font-medium text-[var(--accent-primary)] tabular">
-          {fmtUsd(forecast.total_usd, 0)}
+          {fmtUsd(forecast.total_usd)}
         </span>
         {yoyDelta != null ? (
           <span
@@ -119,7 +107,7 @@ function IncomeHero({
       </div>
 
       <div className="grid grid-cols-3 gap-3 pt-2">
-        <StatTile label={t("dividends.income.monthly")} value={fmtUsd(monthly, 2)} />
+        <StatTile label={t("dividends.income.monthly")} value={fmtUsd(monthly, { decimals: 2 })} />
         <StatTile label={t("dividends.income.current_yield")} value={fmtPct(currentYieldAvg)} />
         <StatTile label={t("dividends.income.yield_on_cost")} value={fmtPct(yieldOnCostAvg)} />
       </div>
@@ -176,7 +164,7 @@ function DividendHistoryBars({ ledger }: { ledger: DividendsResponse }) {
             <div
               key={m.ym}
               className="flex-1 flex flex-col items-center gap-1"
-              title={`${m.ym}: ${fmtUsd(m.total, 2)}`}
+              title={`${m.ym}: ${fmtUsd(m.total, { decimals: 2 })}`}
             >
               {/* Fixed-height track so the bar's % height has a definite
                   parent to resolve against (a bare flex column collapses). */}
@@ -240,7 +228,7 @@ function ContribCard({
             <li key={r.code} className="flex items-baseline justify-between">
               <span className="text-sm text-ink font-medium">{r.ticker}</span>
               <div className="flex items-baseline gap-2 tabular">
-                <span className="text-ink">{fmtUsd(r.payment_12m_usd, 2)}</span>
+                <span className="text-ink">{fmtUsd(r.payment_12m_usd, { decimals: 2 })}</span>
                 <span className="text-[10px] text-quiet">{fmtPct(r.yield_pct)}</span>
               </div>
             </li>
@@ -276,7 +264,7 @@ function QualityBucketsCard({ buckets }: { buckets: DividendQualityResponse | nu
                 {t("dividends.quality.bucket_label", { label: o.label, range: o.scoreRange })}
               </span>
               <span className="tabular text-2xl font-medium text-ink">
-                {fmtUsd(b.total_usd, 2)}
+                {fmtUsd(b.total_usd, { decimals: 2 })}
               </span>
               <span className="text-xs text-quiet">
                 {t("dividends.quality.holdings_count", {

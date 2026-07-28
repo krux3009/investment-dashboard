@@ -107,6 +107,27 @@ export function applyMarketStatus(market: MarketStatus, nextOpenIso: string | nu
   emit();
 }
 
+// ── Pulse hashes ───────────────────────────────────────────────────────────
+// The exact fields a tick mutates, owned here next to applyTick so the
+// tables can't silently drift when the stream payload grows a field.
+// useTickPulse(hash) fires when the hash changes.
+
+export function holdingPulseHash(
+  h: Pick<
+    Holding,
+    "current_price" | "today_change_pct" | "market_value_usd" | "total_pnl_pct"
+  >,
+): string {
+  return `${h.current_price}|${h.today_change_pct}|${h.market_value_usd}|${h.total_pnl_pct}`;
+}
+
+export function watchlistPulseHash(
+  last: number | null,
+  today: number | null,
+): string {
+  return `${last ?? ""}|${today ?? ""}`;
+}
+
 // ── Selector hooks ─────────────────────────────────────────────────────────
 
 function useSlice<T>(selector: (s: LiveState) => T): T {

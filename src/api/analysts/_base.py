@@ -10,18 +10,20 @@ The shared call enforces:
   • Forbidden-words post-validation with one retry
   • Quiet fallback string when context is empty (locale-aware)
 
-The same Claude SDK call shape as `api.insight._call_claude`. Reuses
-`ANTHROPIC_DIGEST_MODEL` env var.
+Client construction + guard + retry run through the shared engine in
+`api.advisor` (whole prompt travels in the user message — no system
+prompt, the historical tile shape).
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 from dataclasses import dataclass
+from datetime import timedelta
 
+from api import advisor
 from api._advisor_guard import FORBIDDEN_HYPE
 from api.i18n import Locale
 
@@ -99,17 +101,6 @@ def _word_count(text: str) -> int:
     return len(re.findall(r"\b\w+\b", text))
 
 
-def _has_forbidden(text: str, bans: tuple[str, ...]) -> str | None:
-    """Return the first banned word found (case-insensitive, substring-aware),
-    or None if clean. Substring-aware so 'breakouts' trips on 'breakout'.
-    """
-    lower = text.lower()
-    for word in bans:
-        if word.lower() in lower:
-            return word
-    return None
-
-
 _PROMPT_TEMPLATE_EN = """\
 You are the {role} analyst on a long-horizon investor's reading desk for
 {ticker} ({name}). Write ONE sentence about today's {role_lower} signals
@@ -179,12 +170,6 @@ def call_analyst(
     if is_context_empty:
         return _quiet(role, locale)
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise RuntimeError(
-            "ANTHROPIC_API_KEY not set — add it to .env to enable /api/digest."
-        )
-
     if isinstance(role_specific_bans, dict):
         role_bans = role_specific_bans.get(locale, ())
     else:
@@ -213,30 +198,29 @@ def call_analyst(
         }
 
     prompt = template.format(**prompt_kwargs)
-    sentence = _claude_one_shot(prompt, max_tokens=180)
-    bad = _has_forbidden(sentence, bans)
-    if bad is not None:
-        log.info(
-            "analyst %s/%s/%s: forbidden word %r in first draft, retrying",
-            role, ticker, locale, bad,
+    # Per-call spec: the merged ban tuple varies by role + locale, and the
+    # whole formatted prompt travels as the user message (empty
+    # lang_instruction → engine sends no system prompt at all). This spec
+    # is for complete() ONLY — digest.py owns the tile cache, so never
+    # pass it to advisor.load/save (prompt_version is deliberately empty
+    # and ttl zero, which would make every cache read a miss).
+    spec = advisor.AdvisorSpec(
+        surface="digest",
+        prompt="",
+        prompt_version="",
+        ttl=timedelta(0),
+        max_tokens=180,
+        lang_instruction={"en": "", "zh": ""},
+        bans={locale: bans, ("zh" if locale == "en" else "en"): ()},
+    )
+    body = advisor.complete(spec, prompt, locale, system="")
+    if body is None:
+        log.warning(
+            "analyst %s/%s/%s: forbidden word persisted after retry; quieting",
+            role, ticker, locale,
         )
-        retry_suffix_en = (
-            "\n\nIMPORTANT: your previous draft used the forbidden word "
-            f'"{bad}". Rewrite without it. Plain observational language only.'
-        )
-        retry_suffix_zh = (
-            "\n\n重要：先前的草稿包含禁用词 "
-            f'"{bad}"，请重写并完全避免它。仅使用观察口吻。'
-        )
-        retry_prompt = prompt + (retry_suffix_zh if locale == "zh" else retry_suffix_en)
-        sentence = _claude_one_shot(retry_prompt, max_tokens=180)
-        bad = _has_forbidden(sentence, bans)
-        if bad is not None:
-            log.warning(
-                "analyst %s/%s/%s: forbidden word %r persisted after retry; quieting",
-                role, ticker, locale, bad,
-            )
-            return _quiet(role, locale)
+        return _quiet(role, locale)
+    sentence = body.strip().strip('"').strip("'")
 
     if locale == "en" and _word_count(sentence) > 28:
         log.info(
@@ -245,17 +229,3 @@ def call_analyst(
         )
 
     return AnalystOutput(sentence=sentence, is_quiet=False)
-
-
-def _claude_one_shot(prompt: str, *, max_tokens: int) -> str:
-    from anthropic import Anthropic
-
-    client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-    model = os.environ.get("ANTHROPIC_DIGEST_MODEL", "claude-sonnet-4-6")
-    response = client.messages.create(
-        model=model,
-        max_tokens=max_tokens,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    parts = [b.text for b in response.content if b.type == "text"]
-    return "\n".join(parts).strip().strip('"').strip("'")

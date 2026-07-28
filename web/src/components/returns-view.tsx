@@ -13,7 +13,9 @@ import type {
   ReturnsDetail,
   ReturnsHolding,
 } from "@/lib/api";
+import { fmtPct, fmtUsd } from "@/lib/format";
 import { ReturnsCsvButton } from "./returns-csv-button";
+import { StackedBar } from "./stacked-bar";
 import { useT } from "@/lib/i18n/use-t";
 import type { StringKey } from "@/lib/i18n/strings";
 
@@ -27,25 +29,6 @@ interface Contributor {
 export interface ContributorsResponse {
   highest: Contributor[];
   lowest: Contributor[];
-}
-
-function fmtUsd(value: number, fractionDigits = 0): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: fractionDigits,
-    maximumFractionDigits: fractionDigits,
-  }).format(value);
-}
-
-function fmtUsdSigned(value: number): string {
-  const sign = value > 0 ? "+" : value < 0 ? "−" : "";
-  return `${sign}${fmtUsd(Math.abs(value))}`;
-}
-
-function fmtPct(value: number, sign = true): string {
-  const arrow = sign && value > 0 ? "+" : value < 0 ? "−" : "";
-  return `${arrow}${(Math.abs(value) * 100).toFixed(2)}%`;
 }
 
 function gainClass(value: number): string {
@@ -64,22 +47,19 @@ const TONE_FILL: Record<SegmentBarProps["segments"][number]["tone"], string> = {
   warn: "var(--accent-warn)",
 };
 
-function StackedBar({ segments }: SegmentBarProps) {
+function BreakdownBar({ segments }: SegmentBarProps) {
   const total = segments.reduce((s, x) => s + Math.abs(x.value), 0) || 1;
   return (
-    <div className="flex h-2 w-full rounded-full overflow-hidden bg-surface">
-      {segments.map((s) => {
-        const pct = (Math.abs(s.value) / total) * 100;
-        if (pct < 0.5) return null;
-        return (
-          <div
-            key={s.label}
-            style={{ width: `${pct}%`, background: TONE_FILL[s.tone] }}
-            title={`${s.label}: ${fmtUsd(s.value)}`}
-          />
-        );
-      })}
-    </div>
+    <StackedBar
+      className="h-2 rounded-full bg-surface"
+      minPct={0.5}
+      segments={segments.map((s) => ({
+        key: s.label,
+        pct: (Math.abs(s.value) / total) * 100,
+        color: TONE_FILL[s.tone],
+        title: `${s.label}: ${fmtUsd(s.value)}`,
+      }))}
+    />
   );
 }
 
@@ -135,7 +115,7 @@ function BreakdownCard({
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <BreakdownTile
           label={t("returns.tile.unrealized")}
-          value={fmtUsdSigned(summary.unrealized_usd)}
+          value={fmtUsd(summary.unrealized_usd, { signed: true })}
           tone={summary.unrealized_usd >= 0 ? "pos" : "neg"}
         />
         <BreakdownTile
@@ -146,7 +126,7 @@ function BreakdownCard({
         />
         <BreakdownTile
           label={t("returns.tile.dividends_ttm")}
-          value={fmtUsd(summary.dividends_usd, 2)}
+          value={fmtUsd(summary.dividends_usd, { decimals: 2 })}
           tone="pos"
         />
         <BreakdownTile
@@ -157,14 +137,14 @@ function BreakdownCard({
         />
         <BreakdownTile
           label={t("returns.tile.total")}
-          value={fmtUsdSigned(summary.total_usd)}
+          value={fmtUsd(summary.total_usd, { signed: true })}
           tone={summary.total_usd >= 0 ? "pos" : "neg"}
           highlight
         />
       </div>
 
       <div className="flex flex-col gap-2">
-        <StackedBar segments={segments} />
+        <BreakdownBar segments={segments} />
         <p className="text-[11px] text-whisper italic">{t("returns.breakdown.caveat")}</p>
       </div>
     </section>
@@ -249,7 +229,7 @@ function ContributorsList({
               <span className="text-sm text-ink font-medium">{r.ticker}</span>
               <div className="flex items-baseline gap-2 tabular">
                 <span className={gainClass(r.total_gain_usd)}>
-                  {fmtUsdSigned(r.total_gain_usd)}
+                  {fmtUsd(r.total_gain_usd, { signed: true })}
                 </span>
                 <span className={`text-xs ${gainClass(r.total_gain_pct)}`}>
                   {fmtPct(r.total_gain_pct)}
@@ -308,22 +288,22 @@ function DetailReport({ detail }: { detail: ReturnsDetail }) {
                 <td className="py-3 px-3 text-right tabular text-ink">{h.shares.toFixed(0)}</td>
                 <td className="py-3 px-3 text-right tabular text-quiet">{h.avg_price.toFixed(2)}</td>
                 <td className="py-3 px-3 text-right tabular text-ink">{h.current_price.toFixed(2)}</td>
-                <td className="py-3 px-3 text-right tabular text-ink font-medium">{fmtUsd(h.value_usd, 0)}</td>
-                <td className="py-3 px-3 text-right tabular text-quiet">{fmtUsd(h.cost_basis_usd, 0)}</td>
+                <td className="py-3 px-3 text-right tabular text-ink font-medium">{fmtUsd(h.value_usd)}</td>
+                <td className="py-3 px-3 text-right tabular text-quiet">{fmtUsd(h.cost_basis_usd)}</td>
                 <td className="py-3 px-3 text-right tabular">
                   <div className={`${gainClass(h.unrealized_usd)} font-medium`}>
-                    {fmtUsdSigned(h.unrealized_usd)}
+                    {fmtUsd(h.unrealized_usd, { signed: true })}
                   </div>
                   <div className={`text-[10px] ${gainClass(h.unrealized_pct)}`}>
                     {fmtPct(h.unrealized_pct)}
                   </div>
                 </td>
                 <td className="py-3 px-3 text-right tabular text-quiet">
-                  {h.dividends_ttm_usd > 0 ? fmtUsd(h.dividends_ttm_usd, 2) : "—"}
+                  {h.dividends_ttm_usd > 0 ? fmtUsd(h.dividends_ttm_usd, { decimals: 2 }) : "—"}
                 </td>
                 <td className="py-3 px-3 text-right tabular">
                   <div className={`${gainClass(h.total_gain_usd)} font-medium`}>
-                    {fmtUsdSigned(h.total_gain_usd)}
+                    {fmtUsd(h.total_gain_usd, { signed: true })}
                   </div>
                   <div className={`text-[10px] ${gainClass(h.total_gain_pct)}`}>
                     {fmtPct(h.total_gain_pct)}

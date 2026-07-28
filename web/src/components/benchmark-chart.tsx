@@ -1,4 +1,5 @@
 import type { BenchmarkResponse, SeriesPoint } from "@/lib/api";
+import { useT } from "@/lib/i18n/use-t";
 
 interface Props {
   data: BenchmarkResponse;
@@ -44,6 +45,7 @@ function lastPoint(points: SeriesPoint[], minPct: number, range: number) {
 }
 
 export function BenchmarkChart({ data, portfolioLabel = "Portfolio" }: Props) {
+  const t = useT();
   const allPcts = [
     ...data.portfolio.map((p) => p.pct),
     ...data.benchmarks.flatMap((b) => b.points.map((p) => p.pct)),
@@ -74,7 +76,7 @@ export function BenchmarkChart({ data, portfolioLabel = "Portfolio" }: Props) {
       width="100%"
       height={H}
       role="img"
-      aria-label={`Portfolio versus ${data.symbols.join(", ")} over ${data.days} days`}
+      aria-label={t("chart.benchmark_aria", { symbols: data.symbols.join(", "), days: data.days })}
       className="block"
     >
       <line

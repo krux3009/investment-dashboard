@@ -15,7 +15,7 @@ import {
   type ForesightResponse,
 } from "@/lib/api";
 import { useT } from "@/lib/i18n/use-t";
-import { useLocale } from "@/lib/i18n/locale-provider";
+import { intlLocale, useLocale } from "@/lib/i18n/locale-provider";
 import { useLiveMarket, useLiveTotals } from "@/lib/live-store";
 import type { StringKey } from "@/lib/i18n/strings";
 
@@ -71,7 +71,7 @@ function todayParts() {
 
 function formatDate(iso: string, locale: "en" | "zh"): string {
   return new Date(iso + "T00:00:00").toLocaleDateString(
-    locale === "zh" ? "zh-CN" : "en-US",
+    intlLocale(locale),
     { weekday: "short", month: "short", day: "numeric" },
   );
 }
@@ -282,7 +282,7 @@ export function CalendarView({ initial, dailyPnl, year, month }: Props) {
 
   const monthLabel = useMemo(() => {
     return new Intl.DateTimeFormat(
-      locale === "zh" ? "zh-CN" : "en-US",
+      intlLocale(locale),
       { month: "long", year: "numeric" },
     ).format(new Date(year, month - 1, 1));
   }, [locale, year, month]);

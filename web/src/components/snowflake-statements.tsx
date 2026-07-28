@@ -9,8 +9,8 @@
 // Valuation + Future stay null until the peer-PE / analyst-forecast data
 // layers land, so they render as greyed "not yet available" stubs.
 
-import { useEffect, useState } from "react";
 import { fetchSnowflake, type SnowflakeResponse } from "@/lib/api";
+import { useFetch } from "@/lib/use-fetch";
 import { Snowflake } from "./snowflake";
 import { useT } from "@/lib/i18n/use-t";
 import { useLocale } from "@/lib/i18n/locale-provider";
@@ -19,11 +19,6 @@ import type { StringKey } from "@/lib/i18n/strings";
 interface Props {
   code: string;
 }
-
-type State =
-  | { kind: "loading" }
-  | { kind: "ready"; data: SnowflakeResponse }
-  | { kind: "error"; detail: string };
 
 // Axis descriptor: ties the snowflake score key and the i18n label
 // together. Order matches SWS.
@@ -85,23 +80,7 @@ function AxisCluster({
 export function SnowflakeStatements({ code }: Props) {
   const t = useT();
   const { locale } = useLocale();
-  const [state, setState] = useState<State>({ kind: "loading" });
-
-  useEffect(() => {
-    let cancelled = false;
-    setState({ kind: "loading" });
-    (async () => {
-      try {
-        const data = await fetchSnowflake(code, locale);
-        if (!cancelled) setState({ kind: "ready", data });
-      } catch (e) {
-        if (!cancelled) setState({ kind: "error", detail: String(e) });
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [code, locale]);
+  const { state } = useFetch(() => fetchSnowflake(code, locale), [code, locale]);
 
   const heading = t("drillin.snowflake_heading");
 

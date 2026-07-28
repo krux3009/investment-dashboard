@@ -2,7 +2,8 @@
 
 Three lines — What / Meaning / Watch — describing the event, how it
 connects to the held book, and a concrete, actionable takeaway for the
-holder as the date approaches. Cached on event_id, 6h TTL.
+holder as the date approaches. Cached on event_id, 6h TTL. Engine
+(client, guard, cache) lives in `api.advisor`.
 
 The educational-only guardrail was dropped (2026-06-06): the prose may
 now give a direct, actionable view on what the event could mean. The
@@ -12,39 +13,19 @@ so the model can recommend but never pump.
 
 from __future__ import annotations
 
-import logging
-import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from api import foresight
-from api._advisor_guard import (
-    FORBIDDEN_HYPE,
-    RETRY_SUFFIX_HYPE_EN,
-    RETRY_SUFFIX_HYPE_ZH,
-    has_forbidden,
-)
-from api.data import prices
+from api import advisor, foresight
 from api.data.moomoo_client import get_summary
-from api.i18n import DEFAULT_LOCALE, Locale, prompt_version_with_locale
+from api.i18n import DEFAULT_LOCALE, Locale
 
-log = logging.getLogger(__name__)
-
-_TTL = timedelta(hours=6)
 # v2-no-em-dash → v3-no-em-dash (2026-05-10): locale-aware prompts.
 # v3-no-em-dash → v4-source-edit (2026-05-13): ported the digest v6
 # source-edit pairs into _PROMPT (en) + _LANG_INSTRUCTION["zh"].
 # v4-source-edit → v5-recommend (2026-06-06): dropped the educational-only
-# guardrail. The prompt no longer forbids prediction, action words, or
-# finance-theory terms; "Watch" now invites a concrete, actionable
-# takeaway. The only surviving post-check ban is FORBIDDEN_HYPE. Cache
-# keys "v5-recommend-en" / "v5-recommend-zh"; old v4 rows orphan and
-# rebuild on next request.
+# guardrail; only the slim anti-hype post-check survives.
 _PROMPT_VERSION = "v5-recommend"
-
-# The only post-check ban now: pump/hype. Prediction, action, and
-# positioning language are all allowed — that is the point of the rework.
-_BANS = FORBIDDEN_HYPE
 
 # Quiet fallback when both Claude attempts hit a hype word.
 _QUIET: dict[Locale, tuple[str, str, str]] = {
@@ -59,7 +40,6 @@ _QUIET: dict[Locale, tuple[str, str, str]] = {
         "发布当日留意公布数据与此前读数的对比。",
     ),
 }
-
 
 _LANG_INSTRUCTION: dict[Locale, str] = {
     "en": "\n\nRespond in English.\n",
@@ -108,6 +88,14 @@ note in a personal ledger. Confident is fine; loud is not.
 Output the three lines only. No preamble, no markdown, no bullets.
 """
 
+_SPEC = advisor.AdvisorSpec(
+    surface="foresight-insight",
+    prompt=_PROMPT,
+    prompt_version=_PROMPT_VERSION,
+    ttl=timedelta(hours=6),
+    lang_instruction=_LANG_INSTRUCTION,
+)
+
 
 @dataclass(frozen=True)
 class ForesightInsight:
@@ -117,59 +105,6 @@ class ForesightInsight:
     watch: str
     generated_at: datetime
     cached: bool = False
-
-
-def _ensure_table() -> None:
-    with prices._DB_LOCK:
-        prices._db().execute(
-            """
-            CREATE TABLE IF NOT EXISTS foresight_insight_cache (
-                event_id VARCHAR NOT NULL,
-                prompt_version VARCHAR NOT NULL,
-                what VARCHAR,
-                meaning VARCHAR,
-                watch VARCHAR,
-                generated_at TIMESTAMP,
-                PRIMARY KEY (event_id, prompt_version)
-            )
-            """
-        )
-
-
-def _load_cached(
-    event_id: str, locale: Locale = DEFAULT_LOCALE
-) -> tuple[str, str, str, datetime] | None:
-    _ensure_table()
-    pv = prompt_version_with_locale(_PROMPT_VERSION, locale)
-    with prices._DB_LOCK:
-        row = prices._db().execute(
-            "SELECT what, meaning, watch, generated_at FROM foresight_insight_cache "
-            "WHERE event_id = ? AND prompt_version = ?",
-            [event_id, pv],
-        ).fetchone()
-    if not row:
-        return None
-    what, meaning, watch, generated_at = row
-    if datetime.now() - generated_at > _TTL:
-        return None
-    return what, meaning, watch, generated_at
-
-
-def _save_cache(
-    event_id: str,
-    what: str,
-    meaning: str,
-    watch: str,
-    generated_at: datetime,
-    locale: Locale = DEFAULT_LOCALE,
-) -> None:
-    _ensure_table()
-    pv = prompt_version_with_locale(_PROMPT_VERSION, locale)
-    with prices._DB_LOCK:
-        prices._db().execute(
-            "INSERT OR REPLACE INTO foresight_insight_cache VALUES (?, ?, ?, ?, ?, ?)",
-            [event_id, pv, what, meaning, watch, generated_at],
-        )
 
 
 def _build_user_message(ev: foresight.ForesightEvent, holdings: list[str]) -> str:
@@ -185,73 +120,6 @@ def _build_user_message(ev: foresight.ForesightEvent, holdings: list[str]) -> st
     return "\n".join(lines)
 
 
-def _parse_body(body: str) -> tuple[str, str, str]:
-    what = meaning = watch = ""
-    for line in body.splitlines():
-        line = line.strip()
-        lower = line.lower()
-        if lower.startswith("what:"):
-            what = line.split(":", 1)[1].strip()
-        elif lower.startswith("meaning:"):
-            meaning = line.split(":", 1)[1].strip()
-        elif lower.startswith("watch:"):
-            watch = line.split(":", 1)[1].strip()
-    if not (what or meaning or watch):
-        what = body
-    return what, meaning, watch
-
-
-def _call_claude(
-    user_message: str, locale: Locale = DEFAULT_LOCALE
-) -> tuple[str, str, str]:
-    """Returns (what, meaning, watch). Runs FORBIDDEN post-check +
-    one retry; falls back to the locale-specific quiet template on
-    repeated violation.
-    """
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise RuntimeError(
-            "ANTHROPIC_API_KEY not set — add it to .env to enable /api/foresight-insight."
-        )
-
-    from anthropic import Anthropic
-
-    client = Anthropic(api_key=api_key)
-    model = os.environ.get("ANTHROPIC_DIGEST_MODEL", "claude-sonnet-4-6")
-    bans = _BANS[locale]
-    system_prompt = _PROMPT + _LANG_INSTRUCTION[locale]
-
-    def _shot(system: str) -> str:
-        response = client.messages.create(
-            model=model,
-            max_tokens=400,
-            system=system,
-            messages=[{"role": "user", "content": user_message}],
-        )
-        return "\n".join(b.text for b in response.content if b.type == "text").strip()
-
-    body = _shot(system_prompt)
-    bad = has_forbidden(body, bans, locale)
-    if bad is not None:
-        log.info(
-            "foresight_insight: hype %r in first draft, retrying (locale=%s)",
-            bad, locale,
-        )
-        retry_suffix = (
-            RETRY_SUFFIX_HYPE_ZH if locale == "zh" else RETRY_SUFFIX_HYPE_EN
-        ).format(bad=bad)
-        body = _shot(system_prompt + retry_suffix)
-        bad2 = has_forbidden(body, bans, locale)
-        if bad2 is not None:
-            log.warning(
-                "foresight_insight: hype %r persisted after retry, quieting (locale=%s)",
-                bad2, locale,
-            )
-            return _QUIET[locale]
-
-    return _parse_body(body)
-
-
 def get_insight(
     event_id: str,
     days: int = 30,
@@ -259,12 +127,16 @@ def get_insight(
     locale: Locale = DEFAULT_LOCALE,
 ) -> ForesightInsight | None:
     if not force_refresh:
-        cached = _load_cached(event_id, locale)
+        cached = advisor.load(_SPEC, event_id, locale)
         if cached is not None:
-            what, meaning, watch, gen_at = cached
+            payload, gen_at = cached
             return ForesightInsight(
-                event_id=event_id, what=what, meaning=meaning, watch=watch,
-                generated_at=gen_at, cached=True,
+                event_id=event_id,
+                what=payload["what"],
+                meaning=payload["meaning"],
+                watch=payload["watch"],
+                generated_at=gen_at,
+                cached=True,
             )
 
     ev = foresight.find_event(event_id, days=max(days, 30))
@@ -274,9 +146,14 @@ def get_insight(
     summary = get_summary()
     holdings = [p.ticker for p in summary.positions]
 
-    what, meaning, watch = _call_claude(_build_user_message(ev, holdings), locale)
-    now = datetime.now()
-    _save_cache(event_id, what, meaning, watch, now, locale)
+    body = advisor.complete(_SPEC, _build_user_message(ev, holdings), locale)
+    if body is None:
+        what, meaning, watch = _QUIET[locale]
+    else:
+        what, meaning, watch = advisor.parse_wmw(body)
+    now = advisor.save(
+        _SPEC, event_id, {"what": what, "meaning": meaning, "watch": watch}, locale
+    )
     return ForesightInsight(
         event_id=event_id, what=what, meaning=meaning, watch=watch, generated_at=now,
     )

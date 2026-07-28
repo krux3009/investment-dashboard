@@ -9,32 +9,24 @@ Powers the holdings sparkline column today, and the future drill-in
 candlestick + watchlist view (Phase 4 staging in v2 backlog).
 
 Cache location: `data/prices.duckdb` at the repo root, gitignored. The
-file persists across dashboard restarts so Dash dev-mode reloads don't
-re-pay the moomoo API cost.
+file persists across dashboard restarts so dev-mode reloads don't
+re-pay the moomoo API cost. All DB access goes through `api.data.db`
+(single locked connection).
 """
 
 from __future__ import annotations
 
 import logging
-import os
-import threading
 from datetime import date, timedelta
-from pathlib import Path
-from typing import Any
 
-import duckdb
 import pandas as pd
+
+from api.data import db
 
 log = logging.getLogger(__name__)
 
 _KLINE_WARNED: set[str] = set()
 
-_DB_PATH = Path(__file__).resolve().parents[3] / "data" / "prices.duckdb"
-_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-
-_DB: Any = None
-_DB_LOCK = threading.Lock()
-_QUOTE_CTX: Any = None
 # Codes moomoo returns "Unknown stock" for (e.g. SG market without
 # subscription). Cached for the session so we stop hammering on every
 # 30s poll. Cleared on process restart, which gives the operator a
@@ -42,41 +34,40 @@ _QUOTE_CTX: Any = None
 _UNFETCHABLE: set[str] = set()
 
 
-def _db():
-    """A single shared DuckDB connection. Callers MUST hold _DB_LOCK around
-    any execute()/fetchone()/etc. — DuckDB connections are not thread-safe,
-    and Flask under Dash dispatches callbacks across multiple threads.
-    Without serialization, concurrent SELECTs raise opaque internal errors
-    like "Attempted to access index 0 within vector of size 0".
-    """
-    global _DB
-    if _DB is None:
-        _DB = duckdb.connect(str(_DB_PATH))
-        _DB.execute(
-            """
-            CREATE TABLE IF NOT EXISTS daily_prices (
-                code VARCHAR NOT NULL,
-                date DATE NOT NULL,
-                open DOUBLE,
-                close DOUBLE,
-                high DOUBLE,
-                low DOUBLE,
-                volume BIGINT,
-                PRIMARY KEY (code, date)
-            )
-            """
+_ensured = False
+
+
+def _ensure_table() -> None:
+    # Lazy so importing this module never opens the DB file — a second
+    # process (scripts, tooling) can import the tree while uvicorn holds
+    # the DuckDB lock.
+    global _ensured
+    if _ensured:
+        return
+    db.run(
+        """
+        CREATE TABLE IF NOT EXISTS daily_prices (
+            code VARCHAR NOT NULL,
+            date DATE NOT NULL,
+            open DOUBLE,
+            close DOUBLE,
+            high DOUBLE,
+            low DOUBLE,
+            volume BIGINT,
+            PRIMARY KEY (code, date)
         )
-    return _DB
+        """
+    )
+    _ensured = True
 
 
 def _quote_ctx():
-    """Reuse the same OpenQuoteContext that anomalies.py opens, if available;
-    otherwise open our own. moomoo's connection model lets us share a single
-    session across the whole dashboard, so we do.
+    """Reuse the OpenQuoteContext that anomalies.py owns — one quote
+    session shared across the whole dashboard.
     """
     from api.data import anomalies
 
-    return anomalies._quote_ctx()  # noqa: SLF001 — deliberate reuse
+    return anomalies.quote_ctx()
 
 
 def _to_yfinance_symbol(code: str) -> str | None:
@@ -206,11 +197,10 @@ def _fetch_and_cache(code: str, start: date, end: date) -> int:
         _UNFETCHABLE.add(code)
         return 0
 
-    with _DB_LOCK:
-        _db().executemany(
-            "INSERT OR REPLACE INTO daily_prices VALUES (?, ?, ?, ?, ?, ?, ?)",
-            rows,
-        )
+    db.executemany(
+        "INSERT OR REPLACE INTO daily_prices VALUES (?, ?, ?, ?, ?, ?, ?)",
+        rows,
+    )
     # If yfinance rescued a previously-blacklisted code, lift the block.
     _UNFETCHABLE.discard(code)
     return len(rows)
@@ -226,11 +216,11 @@ def get_history(code: str, days: int = 30) -> pd.DataFrame:
     today = date.today()
     start = today - timedelta(days=days)
 
-    with _DB_LOCK:
-        res = _db().execute(
-            "SELECT MIN(date), MAX(date) FROM daily_prices WHERE code = ?",
-            [code],
-        ).fetchone()
+    _ensure_table()
+    res = db.execute_one(
+        "SELECT MIN(date), MAX(date) FROM daily_prices WHERE code = ?",
+        [code],
+    )
     earliest_cached: date | None = res[0] if res and res[0] else None
     last_cached: date | None = res[1] if res and res[1] else None
 
@@ -254,13 +244,11 @@ def get_history(code: str, days: int = 30) -> pd.DataFrame:
             fetch_end = earliest_cached - timedelta(days=1)
         _fetch_and_cache(code, fetch_start, fetch_end)
 
-    with _DB_LOCK:
-        df = _db().execute(
-            "SELECT date, open, close, high, low, volume FROM daily_prices "
-            "WHERE code = ? AND date >= ? ORDER BY date",
-            [code, start],
-        ).fetchdf()
-    return df
+    return db.execute_df(
+        "SELECT date, open, close, high, low, volume FROM daily_prices "
+        "WHERE code = ? AND date >= ? ORDER BY date",
+        [code, start],
+    )
 
 
 def get_close_series(code: str, days: int = 30) -> list[float]:

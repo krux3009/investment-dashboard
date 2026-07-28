@@ -2,9 +2,9 @@
 
 Lazy-fetched behind the [learn more] toggle inside the SentimentBlock
 drill-in panel. Reads `reddit_sentiment.aggregate()` for structured
-context, asks Claude for three plain-English sentences, caches in
-DuckDB on `(code, _PROMPT_VERSION)` with a 6h TTL — same cadence as
-the other insights.
+context, asks Claude for three plain-English sentences, caches on
+`code` with a 6h TTL — same cadence as the other insights. Engine
+(client, guard, cache) lives in `api.advisor`.
 
 Direct, actionable framing (2026-06-06): the dashboard dropped its
 educational-only guardrail. The Meaning line may read the community
@@ -16,35 +16,19 @@ The only surviving post-check ban is a slim anti-hype guard
 
 from __future__ import annotations
 
-import logging
-import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from api import reddit_sentiment
-from api._advisor_guard import (
-    FORBIDDEN_HYPE,
-    RETRY_SUFFIX_HYPE_EN,
-    RETRY_SUFFIX_HYPE_ZH,
-    has_forbidden,
-)
-from api.data import prices
+from api import advisor, reddit_sentiment
 from api.data.moomoo_client import get_summary
-from api.i18n import DEFAULT_LOCALE, Locale, prompt_version_with_locale
+from api.i18n import DEFAULT_LOCALE, Locale
 
-log = logging.getLogger(__name__)
-
-_TTL = timedelta(hours=6)
 # v1 → v2 (2026-05-10): locale-aware prompts (en + zh).
 # v2 → v3-recommend (2026-06-06): dashboard dropped its educational-only
 # guardrail. Meaning may read tone directionally; Watch may carry an
 # actionable takeaway; only an anti-hype post-check survives. Bumping the
 # version invalidates stale cache rows.
 _PROMPT_VERSION = "v3-recommend"
-
-# The only post-check ban now: pump/hype. Directional / actionable
-# language is allowed — that is the whole point of the rework.
-_BANS = FORBIDDEN_HYPE
 
 # Quiet fallback when both Claude attempts hit a hype word. Trio-shaped
 # so the frontend renders uniformly.
@@ -104,6 +88,14 @@ one note in a personal ledger.
 Output the three lines only. No preamble, no markdown, no bullets.
 """
 
+_SPEC = advisor.AdvisorSpec(
+    surface="sentiment-insight",
+    prompt=_PROMPT,
+    prompt_version=_PROMPT_VERSION,
+    ttl=timedelta(hours=6),
+    lang_instruction=_LANG_INSTRUCTION,
+)
+
 
 @dataclass(frozen=True)
 class SentimentInsight:
@@ -113,70 +105,6 @@ class SentimentInsight:
     watch: str
     generated_at: datetime
     cached: bool = False
-
-
-# ── Cache ────────────────────────────────────────────────────────────────────
-
-
-def _ensure_table() -> None:
-    with prices._DB_LOCK:
-        prices._db().execute(
-            """
-            CREATE TABLE IF NOT EXISTS sentiment_insight_cache (
-                code VARCHAR NOT NULL,
-                prompt_version VARCHAR NOT NULL,
-                what VARCHAR,
-                meaning VARCHAR,
-                watch VARCHAR,
-                generated_at TIMESTAMP,
-                PRIMARY KEY (code, prompt_version)
-            )
-            """
-        )
-
-
-def _load_cached(code: str, locale: Locale = DEFAULT_LOCALE) -> SentimentInsight | None:
-    _ensure_table()
-    pv = prompt_version_with_locale(_PROMPT_VERSION, locale)
-    with prices._DB_LOCK:
-        row = prices._db().execute(
-            "SELECT what, meaning, watch, generated_at FROM sentiment_insight_cache "
-            "WHERE code = ? AND prompt_version = ?",
-            [code, pv],
-        ).fetchone()
-    if not row:
-        return None
-    what, meaning, watch, generated_at = row
-    if datetime.now() - generated_at > _TTL:
-        return None
-    return SentimentInsight(
-        code=code,
-        what=what,
-        meaning=meaning,
-        watch=watch,
-        generated_at=generated_at,
-        cached=True,
-    )
-
-
-def _save_cache(insight: SentimentInsight, locale: Locale = DEFAULT_LOCALE) -> None:
-    _ensure_table()
-    pv = prompt_version_with_locale(_PROMPT_VERSION, locale)
-    with prices._DB_LOCK:
-        prices._db().execute(
-            "INSERT OR REPLACE INTO sentiment_insight_cache VALUES (?, ?, ?, ?, ?, ?)",
-            [
-                insight.code,
-                pv,
-                insight.what,
-                insight.meaning,
-                insight.watch,
-                insight.generated_at,
-            ],
-        )
-
-
-# ── Context + Claude ────────────────────────────────────────────────────────
 
 
 def _resolve_name(code: str) -> str:
@@ -216,75 +144,6 @@ def _build_user_message(code: str, summary: reddit_sentiment.SentimentSummary, n
     return "\n".join(lines)
 
 
-def _parse_body(body: str) -> tuple[str, str, str]:
-    what = meaning = watch = ""
-    for line in body.splitlines():
-        line = line.strip()
-        lower = line.lower()
-        if lower.startswith("what:"):
-            what = line.split(":", 1)[1].strip()
-        elif lower.startswith("meaning:"):
-            meaning = line.split(":", 1)[1].strip()
-        elif lower.startswith("watch:"):
-            watch = line.split(":", 1)[1].strip()
-    return what, meaning, watch
-
-
-def _call_claude(
-    user_message: str, locale: Locale = DEFAULT_LOCALE
-) -> tuple[str, str, str]:
-    """Returns (what, meaning, watch).
-
-    Runs the anti-hype post-check + one retry. If both attempts hit a hype
-    word, falls back to the locale-specific quiet trio.
-    """
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise RuntimeError(
-            "ANTHROPIC_API_KEY not set — add it to .env to enable /api/sentiment-insight."
-        )
-
-    from anthropic import Anthropic
-
-    client = Anthropic(api_key=api_key)
-    model = os.environ.get("ANTHROPIC_DIGEST_MODEL", "claude-sonnet-4-6")
-    bans = _BANS[locale]
-    system_prompt = _PROMPT + _LANG_INSTRUCTION[locale]
-
-    def _shot(system: str) -> str:
-        response = client.messages.create(
-            model=model,
-            max_tokens=400,
-            system=system,
-            messages=[{"role": "user", "content": user_message}],
-        )
-        return "\n".join(b.text for b in response.content if b.type == "text").strip()
-
-    body = _shot(system_prompt)
-    bad = has_forbidden(body, bans, locale)
-    if bad is not None:
-        log.info("sentiment-insight: hype %r in first draft, retrying (locale=%s)", bad, locale)
-        retry_suffix = (
-            RETRY_SUFFIX_HYPE_ZH if locale == "zh" else RETRY_SUFFIX_HYPE_EN
-        ).format(bad=bad)
-        body = _shot(system_prompt + retry_suffix)
-        bad2 = has_forbidden(body, bans, locale)
-        if bad2 is not None:
-            log.warning(
-                "sentiment-insight: hype %r persisted after retry, quieting (locale=%s)",
-                bad2, locale,
-            )
-            return _QUIET[locale]
-
-    what, meaning, watch = _parse_body(body)
-    if not (what or meaning or watch):
-        what = body
-    return what, meaning, watch
-
-
-# ── Public API ──────────────────────────────────────────────────────────────
-
-
 def get_insight(
     code: str, force_refresh: bool = False, locale: Locale = DEFAULT_LOCALE
 ) -> SentimentInsight | None:
@@ -295,9 +154,17 @@ def get_insight(
     missing — the route translates that to 503.
     """
     if not force_refresh:
-        cached = _load_cached(code, locale)
+        cached = advisor.load(_SPEC, code, locale)
         if cached is not None:
-            return cached
+            payload, gen_at = cached
+            return SentimentInsight(
+                code=code,
+                what=payload["what"],
+                meaning=payload["meaning"],
+                watch=payload["watch"],
+                generated_at=gen_at,
+                cached=True,
+            )
 
     ticker = code.split(".", 1)[-1]
     name = _resolve_name(code)
@@ -307,13 +174,18 @@ def get_insight(
         return None
     summary = reddit_sentiment.aggregate(code, mentions, days=7)
 
-    what, meaning, watch = _call_claude(_build_user_message(code, summary, name), locale)
-    insight = SentimentInsight(
+    body = advisor.complete(_SPEC, _build_user_message(code, summary, name), locale)
+    if body is None:
+        what, meaning, watch = _QUIET[locale]
+    else:
+        what, meaning, watch = advisor.parse_wmw(body)
+    now = advisor.save(
+        _SPEC, code, {"what": what, "meaning": meaning, "watch": watch}, locale
+    )
+    return SentimentInsight(
         code=code,
         what=what,
         meaning=meaning,
         watch=watch,
-        generated_at=datetime.now(),
+        generated_at=now,
     )
-    _save_cache(insight, locale)
-    return insight

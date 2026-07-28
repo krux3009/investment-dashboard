@@ -18,11 +18,8 @@ This is a direct recommendation surface — the user decides whether to act.
 The grounding rule (recommend only from the signals given; thin signals →
 Hold/Watch + Low confidence) plus the mandatory Confidence + Risk lines are
 the safeguard against a confidently-wrong model. A slim anti-hype guard
-(`FORBIDDEN_HYPE`) keeps the tone calm and blocks pump language.
-
-Cached in `prices.duckdb` table `recommendation_cache`, keyed by
-(code, prompt_version_with_locale). 6h TTL — same cadence as the digest.
-Bump _PROMPT_VERSION to invalidate without dropping the table.
+(`FORBIDDEN_HYPE`) keeps the tone calm and blocks pump language. Engine
+(client, guard, cache) lives in `api.advisor`.
 
 If ANTHROPIC_API_KEY is missing the route returns 503; we never silently
 fall back to a stub because that would be confusing inline with the
@@ -32,35 +29,22 @@ anomaly drill-in.
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from api import dividends, fair_value, snowflake
-from api._advisor_guard import (
-    FORBIDDEN_HYPE,
-    RETRY_SUFFIX_HYPE_EN,
-    RETRY_SUFFIX_HYPE_ZH,
-    has_forbidden,
-)
+from api import advisor, dividends, fair_value, snowflake
 from api.data import anomalies, prices
 from api.data.moomoo_client import get_summary
 from api.digest import _fetch_news
-from api.i18n import DEFAULT_LOCALE, Locale, prompt_version_with_locale
+from api.i18n import DEFAULT_LOCALE, Locale
 
 log = logging.getLogger(__name__)
 
-_TTL = timedelta(hours=6)
 # v5-source-edit (educational Meaning/Watch) → v6-recommend (2026-06-06):
 # the dashboard dropped its educational-only guardrail. This surface now
 # emits a direct recommendation (Action / Why / Confidence / Risk) grounded
-# in the signals we pass. New table `recommendation_cache`; old
-# `insight_cache` rows are left orphaned (harmless, regenerable).
+# in the signals we pass.
 _PROMPT_VERSION = "v6-recommend"
-
-# The only post-check ban now: pump/hype. Action / forecast / target /
-# sizing language is allowed — that is the whole point of the rework.
-_BANS = FORBIDDEN_HYPE
 
 # Quiet fallback when both Claude attempts hit a hype word, or signals are
 # too thin to call. Recommendation-shaped so the frontend renders uniformly.
@@ -152,6 +136,15 @@ neutral valuation), output:
 Output the four lines only. No preamble, no markdown, no bullet characters.
 """
 
+_SPEC = advisor.AdvisorSpec(
+    surface="insight",
+    prompt=_INSIGHT_PROMPT,
+    prompt_version=_PROMPT_VERSION,
+    ttl=timedelta(hours=6),
+    max_tokens=500,
+    lang_instruction=_LANG_INSTRUCTION,
+)
+
 
 @dataclass(frozen=True)
 class Insight:
@@ -164,74 +157,6 @@ class Insight:
     risk: str
     generated_at: datetime
     cached: bool = False
-
-
-# ── Cache ────────────────────────────────────────────────────────────────────
-
-
-def _ensure_table() -> None:
-    with prices._DB_LOCK:
-        prices._db().execute(
-            """
-            CREATE TABLE IF NOT EXISTS recommendation_cache (
-                code VARCHAR NOT NULL,
-                prompt_version VARCHAR NOT NULL,
-                action VARCHAR,
-                action_tone VARCHAR,
-                why VARCHAR,
-                confidence VARCHAR,
-                risk VARCHAR,
-                generated_at TIMESTAMP,
-                PRIMARY KEY (code, prompt_version)
-            )
-            """
-        )
-
-
-def _load_cached(code: str, locale: Locale = DEFAULT_LOCALE) -> Insight | None:
-    _ensure_table()
-    pv = prompt_version_with_locale(_PROMPT_VERSION, locale)
-    with prices._DB_LOCK:
-        row = prices._db().execute(
-            "SELECT action, action_tone, why, confidence, risk, generated_at "
-            "FROM recommendation_cache WHERE code = ? AND prompt_version = ?",
-            [code, pv],
-        ).fetchone()
-    if not row:
-        return None
-    action, action_tone, why, confidence, risk, generated_at = row
-    if datetime.now() - generated_at > _TTL:
-        return None
-    return Insight(
-        code=code,
-        ticker=code.split(".", 1)[-1],
-        action=action,
-        action_tone=action_tone,
-        why=why,
-        confidence=confidence,
-        risk=risk,
-        generated_at=generated_at,
-        cached=True,
-    )
-
-
-def _save_cache(insight: Insight, locale: Locale = DEFAULT_LOCALE) -> None:
-    _ensure_table()
-    pv = prompt_version_with_locale(_PROMPT_VERSION, locale)
-    with prices._DB_LOCK:
-        prices._db().execute(
-            "INSERT OR REPLACE INTO recommendation_cache VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            [
-                insight.code,
-                pv,
-                insight.action,
-                insight.action_tone,
-                insight.why,
-                insight.confidence,
-                insight.risk,
-                insight.generated_at,
-            ],
-        )
 
 
 # ── Signal collection (per-ticker) ──────────────────────────────────────────
@@ -419,66 +344,6 @@ def _parse_body(body: str) -> tuple[str, str, str, str]:
     return action, why, confidence, risk
 
 
-# ── Claude call ─────────────────────────────────────────────────────────────
-
-
-def _call_claude(
-    user_message: str, locale: Locale = DEFAULT_LOCALE
-) -> tuple[str, str, str, str]:
-    """Returns (action, why, confidence, risk).
-
-    Runs the anti-hype post-check + one retry. If both attempts hit a hype
-    word, or the model never produced an Action or Risk line, falls back to
-    the locale-specific quiet recommendation.
-    """
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise RuntimeError(
-            "ANTHROPIC_API_KEY not set — add it to .env to enable /api/insight."
-        )
-
-    from anthropic import Anthropic
-
-    client = Anthropic(api_key=api_key)
-    model = os.environ.get("ANTHROPIC_DIGEST_MODEL", "claude-sonnet-4-6")
-    bans = _BANS[locale]
-    system_prompt = _INSIGHT_PROMPT + _LANG_INSTRUCTION[locale]
-
-    def _shot(system: str) -> str:
-        response = client.messages.create(
-            model=model,
-            max_tokens=500,
-            system=system,
-            messages=[{"role": "user", "content": user_message}],
-        )
-        return "\n".join(b.text for b in response.content if b.type == "text").strip()
-
-    body = _shot(system_prompt)
-    bad = has_forbidden(body, bans, locale)
-    if bad is not None:
-        log.info("recommendation: hype %r in first draft, retrying (locale=%s)", bad, locale)
-        retry_suffix = (
-            RETRY_SUFFIX_HYPE_ZH if locale == "zh" else RETRY_SUFFIX_HYPE_EN
-        ).format(bad=bad)
-        body = _shot(system_prompt + retry_suffix)
-        bad2 = has_forbidden(body, bans, locale)
-        if bad2 is not None:
-            log.warning(
-                "recommendation: hype %r persisted after retry, quieting (locale=%s)",
-                bad2, locale,
-            )
-            return _QUIET[locale]
-
-    action, why, confidence, risk = _parse_body(body)
-    if not action or not risk:
-        log.warning(
-            "recommendation: missing %s line, quieting (locale=%s)",
-            "Action" if not action else "Risk", locale,
-        )
-        return _QUIET[locale]
-    return action, why, confidence, risk
-
-
 # ── Public API ──────────────────────────────────────────────────────────────
 
 
@@ -489,16 +354,37 @@ def get_insight(
     force_refresh. Returns None if `code` isn't a current holding.
     """
     if not force_refresh:
-        cached = _load_cached(code, locale)
+        cached = advisor.load(_SPEC, code, locale)
         if cached is not None:
-            return cached
+            payload, gen_at = cached
+            return Insight(
+                code=code,
+                ticker=code.split(".", 1)[-1],
+                action=payload["action"],
+                action_tone=payload["action_tone"],
+                why=payload["why"],
+                confidence=payload["confidence"],
+                risk=payload["risk"],
+                generated_at=gen_at,
+                cached=True,
+            )
 
     signals = _collect_one(code)
     if signals is None:
         return None
 
-    user_message = _build_user_message(signals)
-    action, why, confidence, risk = _call_claude(user_message, locale)
+    body = advisor.complete(_SPEC, _build_user_message(signals), locale)
+    if body is None:
+        action, why, confidence, risk = _QUIET[locale]
+    else:
+        action, why, confidence, risk = _parse_body(body)
+        if not action or not risk:
+            log.warning(
+                "recommendation: missing %s line, quieting (locale=%s)",
+                "Action" if not action else "Risk", locale,
+            )
+            action, why, confidence, risk = _QUIET[locale]
+
     insight = Insight(
         code=code,
         ticker=signals["ticker"],
@@ -509,5 +395,16 @@ def get_insight(
         risk=risk,
         generated_at=datetime.now(),
     )
-    _save_cache(insight, locale)
+    advisor.save(
+        _SPEC,
+        code,
+        {
+            "action": insight.action,
+            "action_tone": insight.action_tone,
+            "why": insight.why,
+            "confidence": insight.confidence,
+            "risk": insight.risk,
+        },
+        locale,
+    )
     return insight

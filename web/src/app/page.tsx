@@ -1,3 +1,4 @@
+import { fmtUsd } from "@/lib/format";
 import { Suspense } from "react";
 import {
   fetchForesight,
@@ -48,18 +49,6 @@ async function ForesightSection() {
   return foresight ? <ForesightBlock initial={foresight} /> : null;
 }
 
-function fmtUsd(value: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  }).format(value);
-}
-
-function fmtUsdSigned(value: number): string {
-  const sign = value > 0 ? "+" : value < 0 ? "−" : "";
-  return `${sign}${fmtUsd(Math.abs(value))}`;
-}
 
 function signOf(value: number): KpiTileSign {
   if (value > 0) return "pos";
@@ -79,7 +68,7 @@ function buildKpiTiles(returns: ReturnsSummary | null): KpiTileProps[] {
   return [
     {
       label: "Unrealized Returns",
-      value: fmtUsdSigned(returns.unrealized_usd),
+      value: fmtUsd(returns.unrealized_usd, { signed: true }),
       sub: signOf(returns.unrealized_usd) === "pos" ? "gain on paper" : "loss on paper",
     },
     {

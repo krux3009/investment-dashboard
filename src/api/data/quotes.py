@@ -105,7 +105,7 @@ def _snapshot(codes: list[str]):
     from api.data import anomalies
 
     try:
-        return anomalies._quote_ctx().get_market_snapshot(codes)  # noqa: SLF001
+        return anomalies.quote_ctx().get_market_snapshot(codes)
     except Exception as exc:
         log.warning("get_market_snapshot exception for %s: %s", codes, exc)
         return -1, None

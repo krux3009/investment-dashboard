@@ -24,8 +24,8 @@ descriptive narration ("big institutions sold"). The post-check
 tuple stays narrow to avoid retry loops on legitimate descriptive
 prose.
 
-RETRY_SUFFIX_EN / RETRY_SUFFIX_ZH are appended to the original system
-prompt on the second attempt. They name the violating word so the
+RETRY_SUFFIX_HYPE_EN / RETRY_SUFFIX_HYPE_ZH are appended to the original
+system prompt on the second attempt. They name the violating word so the
 model gets explicit feedback. On a second failure the caller falls
 back to a quiet template (each advisor defines its own).
 """
@@ -53,20 +53,6 @@ def has_forbidden(text: str, bans: tuple[str, ...], locale: Locale = "en") -> st
         if needle in haystack:
             return word
     return None
-
-
-RETRY_SUFFIX_EN = (
-    "\n\nIMPORTANT: your previous draft used the forbidden word "
-    '"{bad}". Rewrite the whole output without it. Stay observational, '
-    "no action language, no magnitude characterization, no pace or "
-    "forward-look. Keep the same labelled-line format."
-)
-
-RETRY_SUFFIX_ZH = (
-    "\n\n重要：先前的草稿包含禁用词 "
-    '"{bad}"，请重写整个输出并完全避免它。仅使用观察口吻，'
-    "不得出现行动建议、幅度修饰、节奏或前瞻性表达。保持相同的标签格式。"
-)
 
 
 # ── Recommendation-era guard (2026-06-06) ────────────────────────────────────

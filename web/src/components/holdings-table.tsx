@@ -8,14 +8,22 @@ import type {
   PricePoint,
 } from "@/lib/api";
 import { arrowFor, directionClass, fmtCurrency, fmtPct, fmtUsd } from "@/lib/format";
-import { useLiveHoldingsMap } from "@/lib/live-store";
+import { holdingPulseHash, useLiveHoldingsMap } from "@/lib/live-store";
 import { useTickPulse } from "@/lib/use-tick-pulse";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { DrillIn } from "./drill-in";
+import {
+  cardShellCls,
+  directionFor,
+  expandableProps,
+  rowBgCls,
+  sparkDirectionFor,
+  useExpandedCode,
+} from "./register-shared";
 import { Sparkline } from "./sparkline";
 import { Snowflake, type SnowflakeScores } from "./snowflake";
 import { useT } from "@/lib/i18n/use-t";
-import { useLocale } from "@/lib/i18n/locale-provider";
+import { intlLocale, useLocale } from "@/lib/i18n/locale-provider";
 import type { StringKey } from "@/lib/i18n/strings";
 
 const EARNINGS_SOON_DAYS = 14;
@@ -28,7 +36,7 @@ function EarningsGlyph({ item }: { item: EarningsItem | undefined }) {
   const { locale } = useLocale();
   if (!item || item.days_until > EARNINGS_SOON_DAYS) return null;
   const dateLabel = new Intl.DateTimeFormat(
-    locale === "zh" ? "zh-CN" : "en-US",
+    intlLocale(locale),
     { month: "long", day: "numeric" },
   ).format(new Date(item.date));
   const daysLabel =
@@ -77,7 +85,7 @@ function DividendGlyph({ dividend }: { dividend: HoldingDividend | undefined }) 
   const daysUntil = Math.ceil((ex.getTime() - today.getTime()) / 86_400_000);
   if (daysUntil < 0 || daysUntil > EX_DIV_SOON_DAYS) return null;
   const dateLabel = new Intl.DateTimeFormat(
-    locale === "zh" ? "zh-CN" : "en-US",
+    intlLocale(locale),
     { month: "long", day: "numeric" },
   ).format(ex);
   const daysLabel =
@@ -98,16 +106,6 @@ function DividendGlyph({ dividend }: { dividend: HoldingDividend | undefined }) 
       ƒ
     </span>
   );
-}
-
-// 30-day sparkline trend direction from first vs last close.
-function sparkDirectionFor(points: PricePoint[]): "gain" | "loss" | "quiet" {
-  if (points.length < 2) return "quiet";
-  const first = points[0].close;
-  const last = points[points.length - 1].close;
-  if (last > first) return "gain";
-  if (last < first) return "loss";
-  return "quiet";
 }
 
 type SortKey = "ticker" | "qty" | "current_price" | "today_change_pct" | "market_value_usd" | "total_pnl_pct";
@@ -204,32 +202,15 @@ function HoldingRow({
   dividendSoon,
   snowflakeScores,
 }: HoldingRowProps) {
-  const pulseHash = `${h.current_price}|${h.today_change_pct}|${h.market_value_usd}|${h.total_pnl_pct}`;
-  const pulsing = useTickPulse(pulseHash);
+  const pulsing = useTickPulse(holdingPulseHash(h));
   const pulseCls = pulsing ? "tick-pulse-cell" : "";
   const isUsd = h.currency === "USD";
-
-  // Zebra tint via :nth-child(even). The register's alternating-row
-  // pattern is the structural cue. Expanded + hover states win in the
-  // cascade because their utility classes are emitted later than `even:`.
-  const rowBgCls = isExpanded
-    ? "bg-surface-expanded"
-    : "even:bg-surface-zebra hover:bg-surface-hover";
 
   return (
     <Fragment>
       <tr
-        className={`border-b border-rule cursor-pointer transition-colors ${rowBgCls}`}
-        onClick={() => onToggle(h.code)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onToggle(h.code);
-          }
-        }}
-        tabIndex={0}
-        role="button"
-        aria-expanded={isExpanded}
+        className={`border-b border-rule cursor-pointer transition-colors ${rowBgCls(isExpanded)}`}
+        {...expandableProps(h.code, isExpanded, onToggle)}
       >
         {/* Glyph margin column — register left margin. Always present
             so the row's left edge reads as structural, even when no
@@ -335,16 +316,7 @@ function HoldingRow({
       {isExpanded && (
         <tr>
           <td colSpan={9} className="p-0">
-            <DrillIn
-              code={h.code}
-              direction={
-                h.total_pnl_pct > 0
-                  ? "gain"
-                  : h.total_pnl_pct < 0
-                  ? "loss"
-                  : "quiet"
-              }
-            />
+            <DrillIn code={h.code} direction={directionFor(h.total_pnl_pct)} />
           </td>
         </tr>
       )}
@@ -368,8 +340,7 @@ function HoldingCard({
   snowflakeScores,
 }: HoldingRowProps) {
   const t = useT();
-  const pulseHash = `${h.current_price}|${h.today_change_pct}|${h.market_value_usd}|${h.total_pnl_pct}`;
-  const pulsing = useTickPulse(pulseHash);
+  const pulsing = useTickPulse(holdingPulseHash(h));
   const pulseCls = pulsing ? "tick-pulse-cell" : "";
   const isUsd = h.currency === "USD";
   const noToday =
@@ -379,21 +350,8 @@ function HoldingCard({
   return (
     <div>
       <div
-        className={`rounded-xl border px-4 py-3 cursor-pointer transition-colors ${
-          isExpanded
-            ? "bg-surface-expanded border-ink/30"
-            : "bg-surface-raised border-rule hover:bg-surface-hover"
-        }`}
-        onClick={() => onToggle(h.code)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onToggle(h.code);
-          }
-        }}
-        tabIndex={0}
-        role="button"
-        aria-expanded={isExpanded}
+        className={cardShellCls(isExpanded)}
+        {...expandableProps(h.code, isExpanded, onToggle)}
       >
         <div className="flex items-start justify-between gap-3">
           <div className="flex flex-col gap-0.5 min-w-0">
@@ -449,12 +407,7 @@ function HoldingCard({
       </div>
 
       {isExpanded && (
-        <DrillIn
-          code={h.code}
-          direction={
-            h.total_pnl_pct > 0 ? "gain" : h.total_pnl_pct < 0 ? "loss" : "quiet"
-          }
-        />
+        <DrillIn code={h.code} direction={directionFor(h.total_pnl_pct)} />
       )}
     </div>
   );
@@ -534,7 +487,7 @@ export function HoldingsTable({
 }: Props) {
   const t = useT();
   const [sort, setSort] = useState<SortState | null>(null);
-  const [expandedCode, setExpandedCode] = useState<string | null>(null);
+  const { expandedCode, toggle: handleRowToggle } = useExpandedCode();
 
   // Restore saved sort on mount (client-only).
   useEffect(() => {
@@ -571,10 +524,6 @@ export function HoldingsTable({
       if (prev.dir === "desc") return { key, dir: "asc" };
       return null; // third click clears the sort
     });
-  };
-
-  const handleRowToggle = (code: string) => {
-    setExpandedCode((prev) => (prev === code ? null : code));
   };
 
   if (holdings.length === 0) return null;

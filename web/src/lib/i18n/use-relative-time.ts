@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
-import { useLocale } from "./locale-provider";
+import { intlLocale, useLocale } from "./locale-provider";
 import { useT } from "./use-t";
 
 // Coarse buckets — used by Hero ("updated 5 hr ago") and DailyDigest
@@ -38,7 +38,7 @@ export function useFormatRelative() {
       if (minutes < 60) return t("time.minutes_ago", { n: minutes });
       const hours = Math.round(minutes / 60);
       if (hours < 24) return t("time.hours_ago_short", { n: hours });
-      return then.toLocaleString(locale === "zh" ? "zh-CN" : "en-US");
+      return then.toLocaleString(intlLocale(locale));
     },
     [t, locale],
   );

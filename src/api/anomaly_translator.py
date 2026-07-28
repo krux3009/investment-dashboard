@@ -8,14 +8,15 @@ We rewrite that into:
     "Around May 1 the price climbed quickly enough that several
      measures suggest it may pause."
 
-Cache is keyed by sha256(content + kind) and lives in the same
-prices.duckdb file (single-writer rule from CLAUDE.md). 7-day TTL —
-moomoo's content tends to be stable for a day or two; if the source
-text changes, the hash changes and a fresh translation runs.
+Cache is keyed by sha256(prompt_version + kind + content) in the shared
+DuckDB KV cache. 7-day TTL — moomoo's content tends to be stable for a
+day or two; if the source text changes, the hash changes and a fresh
+translation runs.
 
 If the Anthropic call fails for any reason (no API key, network,
 malformed response) we return the original content. Stale jargon is
-strictly better than a broken drill-in.
+strictly better than a broken drill-in. No anti-hype post-check on this
+surface (single short sentence) — the spec passes empty ban tuples.
 """
 
 from __future__ import annotations
@@ -23,10 +24,11 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Literal
 
-from api.data import prices
+from api import advisor
+from api.data import cache
 from api.i18n import DEFAULT_LOCALE, Locale
 
 log = logging.getLogger(__name__)
@@ -34,14 +36,13 @@ log = logging.getLogger(__name__)
 AnomalyKind = Literal["technical", "capital"]
 
 _TTL = timedelta(days=7)
+_CACHE_TABLE = "kv_anomaly_translation"
 
 # Bumped whenever _TRANSLATOR_PROMPT is rewritten so the cache key
-# changes and old translations aren't served. The actual cached row
-# stays in DuckDB until the 7d TTL expires; we just stop reading it.
+# changes and old translations aren't served.
 # v3-no-em-dash → v4-recommend (2026-06-06): dropped the observation-only
 # guardrail. The translation may now add a short plain "so what" (what
-# this could mean / what to watch). Still anti-hype in tone; no
-# has_forbidden post-check on this surface (single short sentence).
+# this could mean / what to watch). Still anti-hype in tone.
 _PROMPT_VERSION = "v4-recommend"
 
 # The translator's system prompt. Mirrors the digest prompt's banned
@@ -102,21 +103,18 @@ context"), output exactly: "Nothing notable today."
 Tone: matter-of-fact, calm, like writing one line in a personal ledger.
 """
 
-
-# ── Cache ────────────────────────────────────────────────────────────────────
-
-
-def _ensure_table() -> None:
-    with prices._DB_LOCK:
-        prices._db().execute(
-            """
-            CREATE TABLE IF NOT EXISTS anomaly_translation_cache (
-                content_hash VARCHAR PRIMARY KEY,
-                plain_content VARCHAR,
-                translated_at TIMESTAMP
-            )
-            """
-        )
+_SPEC = advisor.AdvisorSpec(
+    surface="anomaly-translator",
+    prompt=_TRANSLATOR_PROMPT,
+    prompt_version=_PROMPT_VERSION,
+    ttl=_TTL,
+    max_tokens=180,
+    # No language instruction appended (the bare prompt already reads as
+    # English; zh never reaches Claude — see translate()); empty ban
+    # tuples skip the hype guard by design.
+    lang_instruction={"en": "", "zh": ""},
+    bans={"en": (), "zh": ()},
+)
 
 
 def _hash_key(content: str, kind: AnomalyKind) -> str:
@@ -127,60 +125,6 @@ def _hash_key(content: str, kind: AnomalyKind) -> str:
     h.update(b"\x00")
     h.update(content.encode("utf-8"))
     return h.hexdigest()
-
-
-def _load_cached(key: str) -> str | None:
-    _ensure_table()
-    with prices._DB_LOCK:
-        row = prices._db().execute(
-            "SELECT plain_content, translated_at FROM anomaly_translation_cache "
-            "WHERE content_hash = ?",
-            [key],
-        ).fetchone()
-    if not row:
-        return None
-    plain, translated_at = row
-    if datetime.now() - translated_at > _TTL:
-        return None
-    return plain
-
-
-def _save_cache(key: str, plain: str) -> None:
-    _ensure_table()
-    with prices._DB_LOCK:
-        prices._db().execute(
-            "INSERT OR REPLACE INTO anomaly_translation_cache VALUES (?, ?, ?)",
-            [key, plain, datetime.now()],
-        )
-
-
-# ── Claude call ─────────────────────────────────────────────────────────────
-
-
-def _call_claude(content: str, kind: AnomalyKind) -> str:
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise RuntimeError("ANTHROPIC_API_KEY not set")
-
-    from anthropic import Anthropic
-
-    client = Anthropic(api_key=api_key)
-    model = os.environ.get("ANTHROPIC_DIGEST_MODEL", "claude-sonnet-4-6")
-
-    user_message = f"Category: {kind}\n\nText to rewrite:\n{content.strip()}"
-
-    response = client.messages.create(
-        model=model,
-        max_tokens=180,
-        system=_TRANSLATOR_PROMPT,
-        messages=[{"role": "user", "content": user_message}],
-    )
-
-    parts = [block.text for block in response.content if block.type == "text"]
-    return "\n".join(parts).strip()
-
-
-# ── Public API ──────────────────────────────────────────────────────────────
 
 
 def translate(
@@ -209,12 +153,13 @@ def translate(
         return content
 
     key = _hash_key(content, kind)
-    cached = _load_cached(key)
+    cached = cache.get(_CACHE_TABLE, key, _TTL)
     if cached is not None:
-        return cached
+        return cached[0]
 
+    user_message = f"Category: {kind}\n\nText to rewrite:\n{content.strip()}"
     try:
-        plain = _call_claude(content, kind)
+        plain = advisor.complete(_SPEC, user_message, "en")
     except Exception as exc:
         log.warning("anomaly translation failed (%s): %s", kind, exc)
         return content
@@ -222,5 +167,5 @@ def translate(
     if not plain:
         return content
 
-    _save_cache(key, plain)
+    cache.put(_CACHE_TABLE, key, plain)
     return plain

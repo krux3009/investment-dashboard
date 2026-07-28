@@ -2,10 +2,21 @@
 
 import type { PriceHistory, PricePoint, Quote } from "@/lib/api";
 import { arrowFor, directionClass, fmtPct } from "@/lib/format";
-import { useLiveWatchlistMap, type LiveWatchlistQuote } from "@/lib/live-store";
+import {
+  useLiveWatchlistMap,
+  watchlistPulseHash,
+  type LiveWatchlistQuote,
+} from "@/lib/live-store";
 import { useTickPulse } from "@/lib/use-tick-pulse";
-import { Fragment, useState } from "react";
+import { Fragment } from "react";
 import { DrillIn } from "./drill-in";
+import {
+  cardShellCls,
+  directionFor,
+  expandableProps,
+  rowBgCls,
+  useExpandedCode,
+} from "./register-shared";
 import { Sparkline } from "./sparkline";
 import { Snowflake, type SnowflakeScores } from "./snowflake";
 import { useT } from "@/lib/i18n/use-t";
@@ -42,8 +53,7 @@ function deriveWatchlistRow(
   const first = has ? points[0].close : null;
   const change30 =
     has && first && first !== 0 ? (sparkLast! - first) / first : null;
-  const direction: "gain" | "loss" | "quiet" =
-    change30 === null ? "quiet" : change30 > 0 ? "gain" : change30 < 0 ? "loss" : "quiet";
+  const direction = directionFor(change30);
   const last = liveQuote?.last_price ?? quote?.last_price ?? sparkLast;
   const today = liveQuote?.today_change_pct ?? quote?.today_change_pct ?? null;
   return {
@@ -89,31 +99,14 @@ function WatchlistRow({
   const { ticker, market, change30, direction, last, today } =
     deriveWatchlistRow(code, points, quote, liveQuote);
 
-  const pulseHash = `${last ?? ""}|${today ?? ""}`;
-  const pulsing = useTickPulse(pulseHash);
+  const pulsing = useTickPulse(watchlistPulseHash(last, today));
   const pulseCls = pulsing ? "tick-pulse-cell" : "";
-
-  // Zebra cascade mirrors holdings-table: expanded overrides; otherwise
-  // even rows tint, hover darkens further. Hover + expanded utilities
-  // emit later than `even:` so the cascade resolves correctly.
-  const rowBgCls = isExpanded
-    ? "bg-surface-expanded"
-    : "even:bg-surface-zebra hover:bg-surface-hover";
 
   return (
     <Fragment>
       <tr
-        className={`border-b border-rule cursor-pointer transition-colors ${rowBgCls}`}
-        onClick={() => onToggle(code)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onToggle(code);
-          }
-        }}
-        tabIndex={0}
-        role="button"
-        aria-expanded={isExpanded}
+        className={`border-b border-rule cursor-pointer transition-colors ${rowBgCls(isExpanded)}`}
+        {...expandableProps(code, isExpanded, onToggle)}
       >
         {/* Glyph margin column — reserved for future earnings/ex-div marks
             once /api/watchlist carries those dates. Keeps watchlist rows
@@ -198,28 +191,14 @@ function WatchlistCard({
   const t = useT();
   const { ticker, market, change30, direction, last, today } =
     deriveWatchlistRow(code, points, quote, liveQuote);
-  const pulseHash = `${last ?? ""}|${today ?? ""}`;
-  const pulsing = useTickPulse(pulseHash);
+  const pulsing = useTickPulse(watchlistPulseHash(last, today));
   const pulseCls = pulsing ? "tick-pulse-cell" : "";
 
   return (
     <div>
       <div
-        className={`rounded-xl border px-4 py-3 cursor-pointer transition-colors ${
-          isExpanded
-            ? "bg-surface-expanded border-ink/30"
-            : "bg-surface-raised border-rule hover:bg-surface-hover"
-        }`}
-        onClick={() => onToggle(code)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            onToggle(code);
-          }
-        }}
-        tabIndex={0}
-        role="button"
-        aria-expanded={isExpanded}
+        className={cardShellCls(isExpanded)}
+        {...expandableProps(code, isExpanded, onToggle)}
       >
         <div className="flex items-start justify-between gap-3">
           <div className="flex flex-col gap-0.5 min-w-0">
@@ -280,13 +259,10 @@ export function WatchlistTable({
   snowflakeScoresByCode = {},
 }: Props) {
   const t = useT();
-  const [expandedCode, setExpandedCode] = useState<string | null>(null);
+  const { expandedCode, toggle } = useExpandedCode();
   const liveMap = useLiveWatchlistMap();
 
   if (codes.length === 0) return null;
-
-  const toggle = (code: string) =>
-    setExpandedCode((prev) => (prev === code ? null : code));
 
   return (
     <section className="mt-16">

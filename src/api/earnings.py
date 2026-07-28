@@ -13,9 +13,8 @@ We normalize to a flat record + days_until. Past dates are dropped
 (yfinance sometimes returns the most recent past report when no
 forward date is published).
 
-Cache: `earnings_cache` table in `prices.duckdb`, keyed by code, 24h
-TTL. Single-writer rule per CLAUDE.md is preserved by reusing
-`prices._db()` + `prices._DB_LOCK`.
+Cache: shared DuckDB KV (`kv_earnings` via `api.data.cache`), keyed by
+code, 24h TTL.
 
 Coverage gaps: HK/SG tickers often return Earnings Date with all
 estimate fields = None. We surface them anyway but the UI hides
@@ -24,18 +23,19 @@ estimate sections for those rows.
 
 from __future__ import annotations
 
-import json
 import logging
 from dataclasses import asdict, dataclass
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from api.data import prices
+from api.data import cache
 from api.data.moomoo_client import get_summary
+from api.data.prices import _to_yfinance_symbol
 
 log = logging.getLogger(__name__)
 
 _TTL = timedelta(hours=24)
+_CACHE_TABLE = "kv_earnings"
 
 
 @dataclass(frozen=True)
@@ -53,76 +53,24 @@ class Earnings:
     revenue_avg: float | None
 
 
-def _to_yfinance_symbol(code: str) -> str | None:
-    """Mirror api.digest._to_yfinance_symbol — kept duplicated here to
-    avoid coupling earnings to the digest module's import surface.
-    """
-    if "." not in code:
-        return code
-    market, ticker = code.split(".", 1)
-    market = market.upper()
-    if market == "US":
-        return ticker
-    if market == "HK":
-        return f"{ticker.zfill(4)}.HK"
-    if market == "SG":
-        return f"{ticker}.SI"
-    if market == "JP":
-        return f"{ticker}.T"
-    if market == "CN":
-        if ticker.startswith("6"):
-            return f"{ticker}.SS"
-        return f"{ticker}.SZ"
-    return None
-
-
 # ── Cache ────────────────────────────────────────────────────────────────────
 
 
-def _ensure_table() -> None:
-    with prices._DB_LOCK:
-        prices._db().execute(
-            """
-            CREATE TABLE IF NOT EXISTS earnings_cache (
-                code VARCHAR PRIMARY KEY,
-                payload VARCHAR,
-                fetched_at TIMESTAMP
-            )
-            """
-        )
-
-
 def _load_cached(code: str) -> dict | None:
-    _ensure_table()
-    with prices._DB_LOCK:
-        row = prices._db().execute(
-            "SELECT payload, fetched_at FROM earnings_cache WHERE code = ?",
-            [code],
-        ).fetchone()
-    if not row:
-        return None
-    payload, fetched_at = row
-    if datetime.now() - fetched_at > _TTL:
-        return None
-    if not payload:
-        return {}
-    return json.loads(payload)
+    row = cache.get(_CACHE_TABLE, code, _TTL)
+    return row[0] if row is not None else None
 
 
 def _save_cache(code: str, payload: dict) -> None:
-    _ensure_table()
-    with prices._DB_LOCK:
-        prices._db().execute(
-            "INSERT OR REPLACE INTO earnings_cache VALUES (?, ?, ?)",
-            [code, json.dumps(payload), datetime.now()],
-        )
+    cache.put(_CACHE_TABLE, code, payload)
 
 
 # ── yfinance fetch ──────────────────────────────────────────────────────────
 
 
-def _fetch_one(code: str) -> dict | None:
-    """Cached calendar fetch, normalized to a serializable dict.
+def fetch_next(code: str) -> dict | None:
+    """Cached calendar fetch, normalized to a serializable dict. Public —
+    the watchlist domain uses it for non-held codes.
 
     Returns None if yfinance has no symbol for this code.
     Returns {} if yfinance has the symbol but no future earnings date.
@@ -190,7 +138,7 @@ def get_all() -> list[Earnings]:
     out: list[Earnings] = []
 
     for p in summary.positions:
-        payload = _fetch_one(p.code)
+        payload = fetch_next(p.code)
         if not payload:
             continue
         try:

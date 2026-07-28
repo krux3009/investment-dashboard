@@ -12,8 +12,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from api import fx
+from api.data.moomoo_client import get_summary
+from api.holdings_payload import build_holdings_response
 from api.models import HoldingsResponse
-from api.routes.holdings import list_holdings
 
 
 @dataclass(frozen=True)
@@ -85,4 +86,4 @@ def _compute(h: HoldingsResponse) -> Concentration:
 
 
 def get_concentration() -> Concentration:
-    return _compute(list_holdings())
+    return _compute(build_holdings_response(get_summary()))

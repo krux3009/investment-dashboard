@@ -22,6 +22,7 @@ import {
 import { ComparisonGauge } from "./comparison-gauge";
 import { AnalysisSubTabs } from "./analysis-sub-tabs";
 import { useT } from "@/lib/i18n/use-t";
+import { fmtUsd } from "@/lib/format";
 import type { StringKey } from "@/lib/i18n/strings";
 
 // yfinance GICS sector names → i18n key. Falls back to the raw English when
@@ -48,14 +49,6 @@ const REGION_KEY: Record<string, StringKey> = {
   "ROW": "analysis.region.row",
 };
 
-function fmtUsd(v: number, fractionDigits = 0): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: fractionDigits,
-    maximumFractionDigits: fractionDigits,
-  }).format(v);
-}
 
 interface Props {
   valuation: ValuationResponse | null;
@@ -695,7 +688,7 @@ function TopHoldingsCard({ topHoldings }: { topHoldings: TopHolding[] | null }) 
             </div>
             <div className="tabular text-right text-sm w-28">
               <div className="text-ink">{h.weight_pct.toFixed(1)}%</div>
-              <div className="text-[10px] text-quiet">{fmtUsd(h.value_usd, 0)}</div>
+              <div className="text-[10px] text-quiet">{fmtUsd(h.value_usd)}</div>
             </div>
           </li>
         ))}

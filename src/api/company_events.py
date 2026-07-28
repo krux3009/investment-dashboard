@@ -5,28 +5,30 @@ launches, investor days, conference talks (CES / GTC / JPM Healthcare),
 pre-announced earnings call dates, board meetings, lock-up expirations.
 No speculation — confirmed dates only.
 
-Cached in `prices.duckdb` table `company_events_cache`, 24h TTL,
-keyed by (code, prompt_version). Bump _PROMPT_VERSION to invalidate.
-Empty results are also cached so we don't re-call Claude for tickers
-that genuinely have nothing scheduled.
+Cached in the shared DuckDB KV cache (`kv_company_events`), 24h TTL,
+keyed per (code, prompt_version, locale). Bump _PROMPT_VERSION to
+invalidate. Empty results from a SUCCESSFUL Claude call are cached so we
+don't re-call for tickers with genuinely nothing scheduled; a failed
+call is NOT cached (previously a transient failure poisoned the cache
+with `[]` for 24h).
 
 503 (missing ANTHROPIC_API_KEY) propagates to caller; foresight.py
-swallows it and continues with earnings + macro only.
+swallows it and continues with earnings + macro only. Engine lives in
+`api.advisor`.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import os
 from dataclasses import asdict, dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 
-from api.data import prices
+from api import advisor
+from api.i18n import DEFAULT_LOCALE, Locale
 
 log = logging.getLogger(__name__)
 
-_TTL = timedelta(hours=24)
 _PROMPT_VERSION = "v1"
 
 
@@ -63,6 +65,18 @@ Output format — STRICT JSON ONLY, no preamble, no markdown, no prose:
 If no confirmed events exist, output exactly: []
 """
 
+_SPEC = advisor.AdvisorSpec(
+    surface="company-events",
+    prompt=_PROMPT,
+    prompt_version=_PROMPT_VERSION,
+    ttl=timedelta(hours=24),
+    max_tokens=512,
+    # Locale is handled with an inline user-message note (JSON keys stay
+    # English); empty ban tuples skip the hype guard — factual JSON only.
+    lang_instruction={"en": "", "zh": ""},
+    bans={"en": (), "zh": ()},
+)
+
 
 @dataclass(frozen=True)
 class CompanyEvent:
@@ -70,76 +84,6 @@ class CompanyEvent:
     kind: str
     label: str
     description: str
-
-
-def _ensure_table() -> None:
-    with prices._DB_LOCK:
-        prices._db().execute(
-            """
-            CREATE TABLE IF NOT EXISTS company_events_cache (
-                code VARCHAR NOT NULL,
-                prompt_version VARCHAR NOT NULL,
-                payload VARCHAR,
-                generated_at TIMESTAMP,
-                PRIMARY KEY (code, prompt_version)
-            )
-            """
-        )
-
-
-def _load_cached(code: str, prompt_version: str) -> list[CompanyEvent] | None:
-    _ensure_table()
-    with prices._DB_LOCK:
-        row = prices._db().execute(
-            "SELECT payload, generated_at FROM company_events_cache "
-            "WHERE code = ? AND prompt_version = ?",
-            [code, prompt_version],
-        ).fetchone()
-    if not row:
-        return None
-    payload, generated_at = row
-    if datetime.now() - generated_at > _TTL:
-        return None
-    try:
-        items = json.loads(payload) if payload else []
-    except Exception:
-        return None
-    return [CompanyEvent(**i) for i in items]
-
-
-def _save_cache(code: str, events: list[CompanyEvent], prompt_version: str) -> None:
-    _ensure_table()
-    with prices._DB_LOCK:
-        prices._db().execute(
-            "INSERT OR REPLACE INTO company_events_cache VALUES (?, ?, ?, ?)",
-            [
-                code,
-                prompt_version,
-                json.dumps([asdict(e) for e in events]),
-                datetime.now(),
-            ],
-        )
-
-
-def _call_claude(user_message: str) -> str:
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise RuntimeError(
-            "ANTHROPIC_API_KEY not set — add it to .env to enable company events."
-        )
-
-    from anthropic import Anthropic
-
-    client = Anthropic(api_key=api_key)
-    model = os.environ.get("ANTHROPIC_DIGEST_MODEL", "claude-sonnet-4-6")
-
-    response = client.messages.create(
-        model=model,
-        max_tokens=512,
-        system=_PROMPT,
-        messages=[{"role": "user", "content": user_message}],
-    )
-    return "\n".join(b.text for b in response.content if b.type == "text").strip()
 
 
 def _parse(body: str) -> list[CompanyEvent]:
@@ -176,15 +120,18 @@ def _parse(body: str) -> list[CompanyEvent]:
 
 
 def get_for_ticker(
-    code: str, ticker: str, name: str, days_window: int = 30, locale: str = "en"
+    code: str,
+    ticker: str,
+    name: str,
+    days_window: int = 30,
+    locale: Locale = DEFAULT_LOCALE,
+    force_refresh: bool = False,
 ) -> list[CompanyEvent]:
-    # Cache per locale: zh + en `label`/`description` are generated separately
-    # and must not collide. Dates/kinds are locale-independent but stored
-    # alongside the localized text, so a per-locale row is simplest.
-    prompt_version = f"{_PROMPT_VERSION}-{locale}"
-    cached = _load_cached(code, prompt_version)
-    if cached is not None:
-        return cached
+    if not force_refresh:
+        cached = advisor.load(_SPEC, code, locale)
+        if cached is not None:
+            payload, _gen_at = cached
+            return [CompanyEvent(**i) for i in payload]
 
     today = date.today()
     horizon = today + timedelta(days=days_window)
@@ -201,14 +148,15 @@ def get_for_ticker(
         f"{lang_note}"
     )
     try:
-        body = _call_claude(user_message)
+        body = advisor.complete(_SPEC, user_message, locale)
     except RuntimeError:
         raise
     except Exception as exc:
+        # Transient failure: return empty WITHOUT caching so the next
+        # request retries instead of serving a poisoned [] for 24h.
         log.warning("company_events Claude call failed for %s: %s", code, exc)
-        _save_cache(code, [], prompt_version)
         return []
 
-    events = _parse(body)
-    _save_cache(code, events, prompt_version)
+    events = _parse(body or "")
+    advisor.save(_SPEC, code, [asdict(e) for e in events], locale)
     return events

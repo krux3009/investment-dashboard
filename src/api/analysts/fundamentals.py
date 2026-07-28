@@ -9,7 +9,6 @@ date. Valuation jargon is forbidden ("cheap", "expensive", "undervalued",
 
 from __future__ import annotations
 
-from datetime import date
 
 from api.analysts._base import AnalystOutput, call_analyst
 from api.data import anomalies

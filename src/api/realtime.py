@@ -148,9 +148,9 @@ def _format_event(event: str, data: dict[str, Any]) -> str:
 
 
 def _resolve_watchlist_codes() -> list[str]:
-    from api.routes.watchlist import _watchlist_codes
+    from api.watchlist import watchlist_codes
     try:
-        return _watchlist_codes()
+        return watchlist_codes()
     except Exception as exc:
         log.warning("watchlist resolution failed: %s", exc)
         return []

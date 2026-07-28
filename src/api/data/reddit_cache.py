@@ -1,8 +1,7 @@
 """DuckDB-cached Reddit mentions per ticker.
 
-Mirrors `data/prices.py`'s single-writer pattern: every write goes through
-`prices._DB_LOCK`, every connection is `prices._db()`. The cache table
-shares the prices.duckdb file. Single moomoo / digest / reddit writer
+The cache table shares the prices.duckdb file; all access goes through
+`api.data.db` (single locked connection), so the single-writer
 guarantee from CLAUDE.md still holds.
 
 The cache key is `(code, post_id)` so the same Reddit post about NVDA
@@ -15,7 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Literal
 
-from api.data import prices
+from api.data import db
 
 Classification = Literal["positive", "neutral", "negative"]
 
@@ -36,25 +35,24 @@ class Mention:
 
 
 def _ensure_table() -> None:
-    with prices._DB_LOCK:
-        prices._db().execute(
-            """
-            CREATE TABLE IF NOT EXISTS reddit_mentions (
-                code VARCHAR NOT NULL,
-                post_id VARCHAR NOT NULL,
-                fetched_at TIMESTAMP,
-                created_at TIMESTAMP,
-                subreddit VARCHAR,
-                title VARCHAR,
-                body VARCHAR,
-                url VARCHAR,
-                score INTEGER,
-                num_comments INTEGER,
-                classification VARCHAR,
-                PRIMARY KEY (code, post_id)
-            )
-            """
+    db.run(
+        """
+        CREATE TABLE IF NOT EXISTS reddit_mentions (
+            code VARCHAR NOT NULL,
+            post_id VARCHAR NOT NULL,
+            fetched_at TIMESTAMP,
+            created_at TIMESTAMP,
+            subreddit VARCHAR,
+            title VARCHAR,
+            body VARCHAR,
+            url VARCHAR,
+            score INTEGER,
+            num_comments INTEGER,
+            classification VARCHAR,
+            PRIMARY KEY (code, post_id)
         )
+        """
+    )
 
 
 def get_recent(code: str, days: int = 7) -> list[Mention]:
@@ -66,21 +64,16 @@ def get_recent(code: str, days: int = 7) -> list[Mention]:
     """
     _ensure_table()
     cutoff = datetime.now() - timedelta(days=days)
-    with prices._DB_LOCK:
-        rows = (
-            prices._db()
-            .execute(
-                """
-                SELECT subreddit, post_id, title, body, url, score, num_comments,
-                       classification, created_at, fetched_at
-                FROM reddit_mentions
-                WHERE code = ? AND created_at >= ?
-                ORDER BY created_at DESC
-                """,
-                [code, cutoff],
-            )
-            .fetchall()
-        )
+    rows = db.execute(
+        """
+        SELECT subreddit, post_id, title, body, url, score, num_comments,
+               classification, created_at, fetched_at
+        FROM reddit_mentions
+        WHERE code = ? AND created_at >= ?
+        ORDER BY created_at DESC
+        """,
+        [code, cutoff],
+    )
     out: list[Mention] = []
     for r in rows:
         (
@@ -134,11 +127,10 @@ def put_batch(mentions: list[Mention]) -> int:
         )
         for m in mentions
     ]
-    with prices._DB_LOCK:
-        prices._db().executemany(
-            "INSERT OR REPLACE INTO reddit_mentions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            rows,
-        )
+    db.executemany(
+        "INSERT OR REPLACE INTO reddit_mentions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        rows,
+    )
     return len(rows)
 
 
@@ -150,10 +142,9 @@ def latest_fetched_at(code: str) -> datetime | None:
     empty filtered set in certain connection states.
     """
     _ensure_table()
-    with prices._DB_LOCK:
-        row = prices._db().execute(
-            "SELECT fetched_at FROM reddit_mentions WHERE code = ? "
-            "ORDER BY fetched_at DESC LIMIT 1",
-            [code],
-        ).fetchone()
+    row = db.execute_one(
+        "SELECT fetched_at FROM reddit_mentions WHERE code = ? "
+        "ORDER BY fetched_at DESC LIMIT 1",
+        [code],
+    )
     return row[0] if row and row[0] else None

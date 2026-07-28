@@ -1,3 +1,4 @@
+import { fmtUsd } from "@/lib/format";
 import {
   fetchBenchmark,
   fetchConcentration,
@@ -12,17 +13,9 @@ import {
   fetchSnowflake,
 } from "@/lib/api";
 import type {
-  BenchmarkResponse,
-  ConcentrationResponse,
-  DailyPnlResponse,
-  DividendsResponse,
   EarningsItem,
-  EarningsResponse,
-  ForesightResponse,
   HoldingDividend,
-  PortfolioSnowflake,
   PriceHistory,
-  ReturnsSummary,
   SnowflakeScores,
 } from "@/lib/api";
 import { Suspense } from "react";
@@ -50,56 +43,12 @@ function parseTab(raw: string | undefined): PortfolioTab {
   return (TAB_KEYS as string[]).includes(raw) ? (raw as PortfolioTab) : "holdings";
 }
 
-async function safeFetchEarnings(): Promise<EarningsResponse> {
+// SSR fetches degrade to null (section hidden) instead of failing the page.
+async function safe<T>(label: string, fn: () => Promise<T>): Promise<T | null> {
   try {
-    return await fetchEarnings();
+    return await fn();
   } catch (e) {
-    console.warn("fetchEarnings failed, hiding strip:", e);
-    return { items: [], next_within_14: false };
-  }
-}
-
-async function safeFetchBenchmark(): Promise<BenchmarkResponse | null> {
-  try {
-    return await fetchBenchmark(90);
-  } catch (e) {
-    console.warn("fetchBenchmark failed, hiding block:", e);
-    return null;
-  }
-}
-
-async function safeFetchConcentration(): Promise<ConcentrationResponse | null> {
-  try {
-    return await fetchConcentration();
-  } catch (e) {
-    console.warn("fetchConcentration failed, hiding block:", e);
-    return null;
-  }
-}
-
-async function safeFetchDividends(): Promise<DividendsResponse | null> {
-  try {
-    return await fetchDividends();
-  } catch (e) {
-    console.warn("fetchDividends failed, hiding block:", e);
-    return null;
-  }
-}
-
-async function safeFetchPortfolioSnowflake(): Promise<PortfolioSnowflake | null> {
-  try {
-    return await fetchPortfolioSnowflake();
-  } catch (e) {
-    console.warn("fetchPortfolioSnowflake failed:", e);
-    return null;
-  }
-}
-
-async function safeFetchReturns(): Promise<ReturnsSummary | null> {
-  try {
-    return await fetchReturnsSummary();
-  } catch (e) {
-    console.warn("fetchReturnsSummary failed:", e);
+    console.warn(`${label} failed, hiding section:`, e);
     return null;
   }
 }
@@ -115,50 +64,6 @@ async function fetchSnowflakeMap(
     }
   });
   return map;
-}
-
-async function safeFetchDailyPnl(
-  opts: { start: string; end: string },
-): Promise<DailyPnlResponse> {
-  try {
-    return await fetchDailyPnl(opts);
-  } catch (e) {
-    console.warn("fetchDailyPnl failed, calendar omits P&L:", e);
-    const now = new Date();
-    return {
-      start: opts.start,
-      end: opts.end,
-      as_of: now.toISOString().slice(0, 10),
-      entries: [],
-    };
-  }
-}
-
-async function safeFetchForesight(
-  opts: { days?: number } | { start: string; end: string },
-): Promise<ForesightResponse> {
-  try {
-    return await fetchForesight(opts);
-  } catch (e) {
-    console.warn("fetchForesight failed, calendar shows empty:", e);
-    const now = new Date();
-    const days =
-      "start" in opts
-        ? Math.max(
-            0,
-            Math.round(
-              (new Date(opts.end).getTime() - new Date(opts.start).getTime()) /
-                86_400_000,
-            ),
-          )
-        : opts.days ?? 7;
-    return {
-      days,
-      as_of: now.toISOString().slice(0, 10),
-      holdings_covered: [],
-      events: [],
-    };
-  }
 }
 
 async function fetchSparklineMap(
@@ -229,14 +134,26 @@ async function renderTabContent(
   if (tab === "calendar") {
     const { year, month } = parseMonth(sp.month);
     const window = calendarWindow(year, month);
+    const today = new Date().toISOString().slice(0, 10);
+    const windowDays = Math.max(
+      0,
+      Math.round(
+        (new Date(window.end).getTime() - new Date(window.start).getTime()) /
+          86_400_000,
+      ),
+    );
     const [foresight, dailyPnl] = await Promise.all([
-      safeFetchForesight(window),
-      safeFetchDailyPnl(window),
+      safe("fetchForesight", () => fetchForesight(window)),
+      safe("fetchDailyPnl", () => fetchDailyPnl(window)),
     ]);
     return (
       <CalendarView
-        initial={foresight}
-        dailyPnl={dailyPnl}
+        initial={
+          foresight ?? {
+            days: windowDays, as_of: today, holdings_covered: [], events: [],
+          }
+        }
+        dailyPnl={dailyPnl ?? { ...window, as_of: today, entries: [] }}
         year={year}
         month={month}
       />
@@ -260,15 +177,16 @@ async function renderTabContent(
   }
 
   // ── Holdings tab (default) ──────────────────────────────────────
-  const [data, earnings, dividends, benchmark, portfolioSnowflake, returns] =
+  const [data, earningsRaw, dividends, benchmark, portfolioSnowflake, returns] =
     await Promise.all([
       fetchHoldings(),
-      safeFetchEarnings(),
-      safeFetchDividends(),
-      safeFetchBenchmark(),
-      safeFetchPortfolioSnowflake(),
-      safeFetchReturns(),
+      safe("fetchEarnings", fetchEarnings),
+      safe("fetchDividends", fetchDividends),
+      safe("fetchBenchmark", () => fetchBenchmark(90)),
+      safe("fetchPortfolioSnowflake", () => fetchPortfolioSnowflake()),
+      safe("fetchReturnsSummary", fetchReturnsSummary),
     ]);
+  const earnings = earningsRaw ?? { items: [], next_within_14: false };
 
   const codes = data.holdings.map((h) => h.code);
   const [sparklines, snowflakeScores] = await Promise.all([
@@ -319,7 +237,7 @@ async function renderTabContent(
        *  stubbed until transaction-history layer ships). */}
       <HoldingsKpiStrip
         available={returns != null}
-        unrealizedValue={returns ? fmtUsdSigned(returns.unrealized_usd) : "—"}
+        unrealizedValue={returns ? fmtUsd(returns.unrealized_usd, { signed: true }) : "—"}
         unrealizedSign={returns ? (returns.unrealized_usd >= 0 ? "pos" : "neg") : null}
         dividendsValue={returns ? fmtUsd(returns.dividends_usd) : "—"}
         partial={returns?.partial ?? false}
@@ -343,20 +261,8 @@ async function renderTabContent(
 }
 
 async function ConcentrationSection() {
-  const concentration = await safeFetchConcentration();
+  const concentration = await safe("fetchConcentration", fetchConcentration);
   return concentration ? <ConcentrationBlock initial={concentration} /> : null;
 }
 
-function fmtUsd(value: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  }).format(value);
-}
-
-function fmtUsdSigned(value: number): string {
-  const sign = value > 0 ? "+" : value < 0 ? "−" : "";
-  return `${sign}${fmtUsd(Math.abs(value))}`;
-}
 

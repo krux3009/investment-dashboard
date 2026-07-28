@@ -11,7 +11,9 @@ import {
   type DividendForecastResponse,
   type Horizon,
 } from "@/lib/api";
+import { useFetch } from "@/lib/use-fetch";
 import { useT } from "@/lib/i18n/use-t";
+import { fmtPctPlain as fmtPct, fmtUsd } from "@/lib/format";
 import type { StringKey } from "@/lib/i18n/strings";
 
 const HORIZONS: { key: Horizon; labelKey: StringKey }[] = [
@@ -20,19 +22,6 @@ const HORIZONS: { key: Horizon; labelKey: StringKey }[] = [
   { key: "36m", labelKey: "dividends.forecast.horizon.36m" },
 ];
 
-function fmtUsd(value: number, fractionDigits = 0): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: fractionDigits,
-    maximumFractionDigits: fractionDigits,
-  }).format(value);
-}
-
-function fmtPct(value: number | null, fractionDigits = 2): string {
-  if (value == null) return "—";
-  return `${value.toFixed(fractionDigits)}%`;
-}
 
 function scoreClass(score: number | null): string {
   if (score == null) return "text-quiet";
@@ -48,22 +37,15 @@ interface Props {
 export function DividendsForecastSwitcher({ initial }: Props) {
   const t = useT();
   const [horizon, setHorizon] = useState<Horizon>("12m");
-  const [data, setData] = useState<DividendForecastResponse>(initial);
-  const [loading, setLoading] = useState(false);
-
-  async function onSelect(h: Horizon) {
-    if (h === horizon) return;
-    setHorizon(h);
-    setLoading(true);
-    try {
-      const next = await fetchDividendForecast(h);
-      setData(next);
-    } catch (e) {
-      console.warn("forecast horizon fetch failed:", e);
-    } finally {
-      setLoading(false);
-    }
-  }
+  const fetched = useFetch<DividendForecastResponse>(
+    () =>
+      horizon === initial.horizon
+        ? Promise.resolve(initial)
+        : fetchDividendForecast(horizon),
+    [horizon],
+  );
+  const data = fetched.data ?? initial;
+  const loading = fetched.loading;
 
   return (
     <section className="rounded-xl border border-rule bg-surface-raised p-6 flex flex-col gap-4">
@@ -79,7 +61,7 @@ export function DividendsForecastSwitcher({ initial }: Props) {
               <button
                 key={h.key}
                 type="button"
-                onClick={() => onSelect(h.key)}
+                onClick={() => setHorizon(h.key)}
                 className={
                   "uppercase tracking-[0.06em] py-1 " +
                   (active
@@ -96,8 +78,8 @@ export function DividendsForecastSwitcher({ initial }: Props) {
 
       <p className={"text-[11px] " + (loading ? "text-quiet" : "text-whisper")}>
         {t("dividends.forecast.summary", {
-          total: fmtUsd(data.total_usd, 0),
-          monthly: fmtUsd(data.monthly_avg_usd, 2),
+          total: fmtUsd(data.total_usd),
+          monthly: fmtUsd(data.monthly_avg_usd, { decimals: 2 }),
         })}
         {loading ? t("dividends.forecast.loading_suffix") : ""}
       </p>
@@ -131,7 +113,7 @@ export function DividendsForecastSwitcher({ initial }: Props) {
                   <p className="text-[10px] text-quiet">{h.name}</p>
                 </td>
                 <td className="py-3 px-3 text-right tabular text-ink">
-                  {h.payment_12m_usd > 0 ? fmtUsd(h.payment_12m_usd, 2) : "—"}
+                  {h.payment_12m_usd > 0 ? fmtUsd(h.payment_12m_usd, { decimals: 2 }) : "—"}
                 </td>
                 <td className="py-3 px-3 text-right tabular text-quiet">{fmtPct(h.yield_pct)}</td>
                 <td className="py-3 px-3 text-right tabular text-quiet">{fmtPct(h.yield_on_cost_pct)}</td>

@@ -279,6 +279,43 @@ web/
       strings, use-t)
 ```
 
+## 2026-07-28 seam refactor (read before touching src/api or web/src)
+
+A deep-module pass reshaped the plumbing; old patterns are gone:
+
+- **DB access:** `api.data.db` (`run/execute/execute_one/execute_df/
+  executemany`, lock inside) is the ONLY way to touch `prices.duckdb`.
+  `prices._DB_LOCK` / `prices._db()` no longer exist. JSON TTL caches go
+  through `api.data.cache` (`get/put/clear`, `kv_*` tables); old
+  `*_cache` tables are orphaned residue.
+- **Advisor surfaces:** every Claude call runs through `api.advisor`
+  (`AdvisorSpec` + `complete()` — key check, anti-hype guard + one
+  retry, injectable `client=` test seam; `load/save` cache keyed
+  `key|prompt_version-locale`). Surface modules keep only data
+  gathering, prompt copy, parse shape, quiet fallback. digest prompt
+  version is now `v8-recommend`.
+- **yfinance metrics:** `api.yf_fetch` owns the timeout wrapper +
+  dual-TTL cache for fair_value / fundamentals / portfolio_metrics;
+  `_to_yfinance_symbol` lives ONLY in `api.data.prices`.
+- **Watchlist:** domain logic in `api.watchlist` (`watchlist_codes`,
+  `get_mark`); `routes/watchlist.py` is a thin adapter. Domain modules
+  never import route modules. `anomalies.quote_ctx()` is the public
+  shared quote context (was `_quote_ctx`).
+- **Frontend:** all GET fetchers go through `apiGet<T>` in `lib/api.ts`
+  (one throw convention; notes/reddit keep Result unions). Client lazy
+  fetches use `lib/use-fetch.ts` (`useFetch` → state/data/loading/
+  error). Tick-pulse field lists live in `live-store.ts`
+  (`holdingPulseHash` / `watchlistPulseHash`). Table expand/aria/zebra
+  vocabulary in `components/register-shared.tsx`; proportional bars use
+  `components/stacked-bar.tsx` (concentration stays SVG per the SSR
+  convention). Formatters come from `lib/format.ts` only (`fmtUsd` /
+  `fmtPct` / `fmtPctPlain`, U+2212 minus); `intlLocale()` in
+  `lib/i18n/locale-provider` maps zh→zh-CN. `strings.ts` is `EN` const
+  + `ZH: Record<StringKey, string>` — a missing zh key is now a type
+  error.
+- **Tests:** `uv run python tests/test_seams.py` smoke-checks db/cache/
+  advisor (redirects the DuckDB path; safe with the server running).
+
 ## Conventions to remember
 
 - **Charts that ship in SSR HTML are hand-rolled SVG.** Sparklines,

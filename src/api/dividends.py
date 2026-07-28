@@ -28,7 +28,7 @@ this is honest.
 Cache: `dividends_cache` keyed `(code, ex_date)` for the per-payment
 history (absorbs yfinance revisions via INSERT OR REPLACE), and
 `dividends_fetch_log` keyed by code for the per-name 24h TTL + next-ex
-marker. Single-writer rule preserved via `prices._db()` + `_DB_LOCK`.
+marker. All DB access goes through `api.data.db`.
 """
 
 from __future__ import annotations
@@ -39,8 +39,9 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 from api import fx
-from api.data import prices
+from api.data import db
 from api.data.moomoo_client import get_summary
+from api.data.prices import _to_yfinance_symbol
 
 log = logging.getLogger(__name__)
 
@@ -89,29 +90,6 @@ class DividendsResponse:
     rates_used: dict[str, float]
 
 
-def _to_yfinance_symbol(code: str) -> str | None:
-    """Duplicate of api.earnings._to_yfinance_symbol — kept duplicated to
-    avoid coupling dividends to earnings' import surface.
-    """
-    if "." not in code:
-        return code
-    market, ticker = code.split(".", 1)
-    market = market.upper()
-    if market == "US":
-        return ticker
-    if market == "HK":
-        return f"{ticker.zfill(4)}.HK"
-    if market == "SG":
-        return f"{ticker}.SI"
-    if market == "JP":
-        return f"{ticker}.T"
-    if market == "CN":
-        if ticker.startswith("6"):
-            return f"{ticker}.SS"
-        return f"{ticker}.SZ"
-    return None
-
-
 def _is_reit(symbol: str, position_name: str) -> bool:
     """REIT heuristic from the symbol suffix + the moomoo-reported
     instrument name. SGX `.SI` suffix is a strong signal for REITs in
@@ -132,41 +110,39 @@ def _is_reit(symbol: str, position_name: str) -> bool:
 
 
 def _ensure_tables() -> None:
-    with prices._DB_LOCK:
-        prices._db().execute(
-            """
-            CREATE TABLE IF NOT EXISTS dividends_cache (
-                code VARCHAR NOT NULL,
-                ex_date DATE NOT NULL,
-                amount_per_share DOUBLE,
-                currency VARCHAR,
-                fetched_at TIMESTAMP,
-                PRIMARY KEY (code, ex_date)
-            )
-            """
+    db.run(
+        """
+        CREATE TABLE IF NOT EXISTS dividends_cache (
+            code VARCHAR NOT NULL,
+            ex_date DATE NOT NULL,
+            amount_per_share DOUBLE,
+            currency VARCHAR,
+            fetched_at TIMESTAMP,
+            PRIMARY KEY (code, ex_date)
         )
-        prices._db().execute(
-            """
-            CREATE TABLE IF NOT EXISTS dividends_fetch_log (
-                code VARCHAR PRIMARY KEY,
-                fetched_at TIMESTAMP,
-                next_ex_date DATE,
-                next_amount_per_share DOUBLE,
-                is_reit BOOLEAN,
-                currency VARCHAR
-            )
-            """
+        """
+    )
+    db.run(
+        """
+        CREATE TABLE IF NOT EXISTS dividends_fetch_log (
+            code VARCHAR PRIMARY KEY,
+            fetched_at TIMESTAMP,
+            next_ex_date DATE,
+            next_amount_per_share DOUBLE,
+            is_reit BOOLEAN,
+            currency VARCHAR
         )
+        """
+    )
 
 
 def _read_log(code: str) -> dict | None:
     _ensure_tables()
-    with prices._DB_LOCK:
-        row = prices._db().execute(
-            "SELECT fetched_at, next_ex_date, next_amount_per_share, is_reit, currency "
-            "FROM dividends_fetch_log WHERE code = ?",
-            [code],
-        ).fetchone()
+    row = db.execute_one(
+        "SELECT fetched_at, next_ex_date, next_amount_per_share, is_reit, currency "
+        "FROM dividends_fetch_log WHERE code = ?",
+        [code],
+    )
     if not row:
         return None
     fetched_at, next_ex_date, next_amount, is_reit, currency = row
@@ -184,12 +160,11 @@ def _read_log(code: str) -> dict | None:
 def _read_history(code: str) -> list[tuple[date, float, str | None]]:
     """Return cached history oldest-first. Caller reverses for display."""
     _ensure_tables()
-    with prices._DB_LOCK:
-        rows = prices._db().execute(
-            "SELECT ex_date, amount_per_share, currency FROM dividends_cache "
-            "WHERE code = ? ORDER BY ex_date ASC",
-            [code],
-        ).fetchall()
+    rows = db.execute(
+        "SELECT ex_date, amount_per_share, currency FROM dividends_cache "
+        "WHERE code = ? ORDER BY ex_date ASC",
+        [code],
+    )
     return [(r[0], float(r[1] or 0), r[2]) for r in rows]
 
 
@@ -201,11 +176,10 @@ def _write_log(
     currency: str | None,
 ) -> None:
     _ensure_tables()
-    with prices._DB_LOCK:
-        prices._db().execute(
-            "INSERT OR REPLACE INTO dividends_fetch_log VALUES (?, ?, ?, ?, ?, ?)",
-            [code, datetime.now(), next_ex_date, next_amount, is_reit, currency],
-        )
+    db.run(
+        "INSERT OR REPLACE INTO dividends_fetch_log VALUES (?, ?, ?, ?, ?, ?)",
+        [code, datetime.now(), next_ex_date, next_amount, is_reit, currency],
+    )
 
 
 def _write_history(code: str, currency: str | None, history: list[tuple[date, float]]) -> None:
@@ -213,19 +187,19 @@ def _write_history(code: str, currency: str | None, history: list[tuple[date, fl
         return
     _ensure_tables()
     now = datetime.now()
-    with prices._DB_LOCK:
-        prices._db().executemany(
-            "INSERT OR REPLACE INTO dividends_cache VALUES (?, ?, ?, ?, ?)",
-            [(code, d, amt, currency, now) for d, amt in history],
-        )
+    db.executemany(
+        "INSERT OR REPLACE INTO dividends_cache VALUES (?, ?, ?, ?, ?)",
+        [(code, d, amt, currency, now) for d, amt in history],
+    )
 
 
 # ── yfinance fetch ──────────────────────────────────────────────────────────
 
 
-def _fetch_one(code: str, currency: str, position_name: str) -> dict | None:
+def fetch_one(code: str, currency: str, position_name: str) -> dict | None:
     """Fetch + cache one holding's dividend history + estimated next
-    ex-date. Skips `Ticker.info` entirely — that call is unreliable and
+    ex-date. Public — the watchlist domain uses it for non-held codes.
+    Skips `Ticker.info` entirely — that call is unreliable and
     routinely hangs. Currency comes from the caller (the moomoo
     Position); next ex-date is estimated from history cadence.
 
@@ -353,7 +327,7 @@ def _compute_ttm(history: list[tuple[date, float]], today: date) -> tuple[float,
 def _build_holding(p: Any) -> HoldingDividend:
     """Build one HoldingDividend row off a Position from PortfolioSummary."""
     native_ccy = (p.currency or "?").upper()
-    result = _fetch_one(p.code, native_ccy, p.name or "") or {
+    result = fetch_one(p.code, native_ccy, p.name or "") or {
         "currency": native_ccy,
         "is_reit": False,
         "next_ex_date": None,
@@ -460,7 +434,7 @@ def get_payments_between(start: date, end: date) -> dict[str, float]:
 
     # Prime caches: ensure each code's history is loaded into dividends_cache.
     for p in summary.positions:
-        _fetch_one(p.code, (p.currency or "?").upper(), p.name or "")
+        fetch_one(p.code, (p.currency or "?").upper(), p.name or "")
 
     qty_by_code = {p.code: p.qty for p in summary.positions}
     ccy_by_code = {p.code: (p.currency or "?").upper() for p in summary.positions}

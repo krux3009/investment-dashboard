@@ -12,31 +12,29 @@ HK / SG tickers return mostly null `.info` — frontend gauges grey out
 on null. Market reference defaults to SPY's forwardPE (refreshed once
 per 24h alongside holdings).
 
-Cache: `fair_value_cache (code, payload_json, fetched_at)` PK code,
-24h TTL on populated rows, 10min TTL on empty markers.
+Cache: shared DuckDB KV `kv_fair_value` via `api.yf_fetch` (24h TTL on
+populated rows, 10min on empty markers).
 """
 
 from __future__ import annotations
 
-import json
 import logging
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 from dataclasses import dataclass
-from datetime import datetime, timedelta
 
-from api import fx
-from api.data import prices
+from api import fx, yf_fetch
 from api.data.moomoo_client import get_summary
-from api.dividends import _to_yfinance_symbol
+from api.data.prices import _to_yfinance_symbol
 from api.holdings_payload import build_holdings_response
+from api.yf_fetch import to_float as _to_float
 
 log = logging.getLogger(__name__)
 
-_TTL_OK = timedelta(hours=24)
-_TTL_EMPTY = timedelta(minutes=10)
-_INFO_TIMEOUT_S = 5.0
-
+_CACHE_TABLE = "kv_fair_value"
 _INFO_KEYS = ("forwardPE", "priceToSalesTrailing12Months", "pegRatio", "targetMeanPrice")
+
+
+def _has_data(payload: dict) -> bool:
+    return any(payload.get(k) is not None for k in _INFO_KEYS)
 
 
 @dataclass(frozen=True)
@@ -48,36 +46,7 @@ class ValuationMetrics:
     target_mean_price: float | None
 
 
-def _ensure_table() -> None:
-    with prices._DB_LOCK:
-        prices._db().execute(
-            """
-            CREATE TABLE IF NOT EXISTS fair_value_cache (
-                code VARCHAR PRIMARY KEY,
-                payload_json VARCHAR,
-                fetched_at TIMESTAMP
-            )
-            """
-        )
-
-
-def _load_cached(code: str) -> ValuationMetrics | None:
-    _ensure_table()
-    with prices._DB_LOCK:
-        row = prices._db().execute(
-            "SELECT payload_json, fetched_at FROM fair_value_cache WHERE code = ?",
-            [code],
-        ).fetchone()
-    if not row:
-        return None
-    payload_json, fetched_at = row
-    payload = json.loads(payload_json) if payload_json else {}
-    has_data = any(payload.get(k) is not None for k in _INFO_KEYS)
-    age = datetime.now() - fetched_at
-    if has_data and age > _TTL_OK:
-        return None
-    if not has_data and age > _TTL_EMPTY:
-        return None
+def _from_payload(code: str, payload: dict) -> ValuationMetrics:
     return ValuationMetrics(
         code=code,
         forward_pe=payload.get("forwardPE"),
@@ -88,49 +57,17 @@ def _load_cached(code: str) -> ValuationMetrics | None:
 
 
 def _save_cache(metrics: ValuationMetrics) -> None:
-    _ensure_table()
-    payload = json.dumps({
+    yf_fetch.save_cached(_CACHE_TABLE, metrics.code, {
         "forwardPE": metrics.forward_pe,
         "priceToSalesTrailing12Months": metrics.price_to_sales,
         "pegRatio": metrics.peg,
         "targetMeanPrice": metrics.target_mean_price,
     })
-    with prices._DB_LOCK:
-        prices._db().execute(
-            "INSERT OR REPLACE INTO fair_value_cache VALUES (?, ?, ?)",
-            [metrics.code, payload, datetime.now()],
-        )
 
 
-def _fetch_info(symbol: str) -> dict:
-    import yfinance as yf
-
-    def _work() -> dict:
-        info = yf.Ticker(symbol).info or {}
-        return {k: info.get(k) for k in _INFO_KEYS}
-
-    with ThreadPoolExecutor(max_workers=1) as pool:
-        future = pool.submit(_work)
-        try:
-            return future.result(timeout=_INFO_TIMEOUT_S)
-        except FuturesTimeout:
-            log.info("fair_value: Ticker.info timeout for %s", symbol)
-            return {}
-        except Exception as exc:
-            log.warning("fair_value: Ticker.info failed for %s: %s", symbol, exc)
-            return {}
-
-
-def _to_float(value) -> float | None:
-    if value is None:
-        return None
-    try:
-        f = float(value)
-    except (TypeError, ValueError):
-        return None
-    if f != f or f in (float("inf"), float("-inf")):
-        return None
-    return f
+def _load_cached(code: str) -> ValuationMetrics | None:
+    payload = yf_fetch.load_cached(_CACHE_TABLE, code, _has_data)
+    return _from_payload(code, payload) if payload is not None else None
 
 
 def get_metrics(code: str) -> ValuationMetrics:
@@ -142,7 +79,7 @@ def get_metrics(code: str) -> ValuationMetrics:
         metrics = ValuationMetrics(code=code, forward_pe=None, price_to_sales=None, peg=None, target_mean_price=None)
         _save_cache(metrics)
         return metrics
-    info = _fetch_info(symbol)
+    info = yf_fetch.fetch_info_keys(symbol, _INFO_KEYS, label="fair_value")
     metrics = ValuationMetrics(
         code=code,
         forward_pe=_to_float(info.get("forwardPE")),

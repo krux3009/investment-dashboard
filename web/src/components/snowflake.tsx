@@ -127,9 +127,11 @@ export function Snowflake({
       width={size}
       height={size}
       role="img"
-      aria-label={`Snowflake: ${axisData
-        .map((a) => `${a.label} ${a.value ?? "n/a"}/${MAX_SCORE}`)
-        .join(", ")}`}
+      aria-label={t("chart.snowflake_aria", {
+        axes: axisData
+          .map((a) => `${a.label} ${a.value ?? "n/a"}/${MAX_SCORE}`)
+          .join(", "),
+      })}
       className={className}
       {...rest}
     >

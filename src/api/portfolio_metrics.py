@@ -7,28 +7,23 @@ the holding lands with `sector=None, country=None` and the cache
 records a short-lived empty marker so we don't re-hammer the same
 ticker on the next request.
 
-Cache: `portfolio_metadata_cache (code, payload_json, fetched_at)`
-PK code, 24h TTL on successful payloads, 10min TTL on empty markers.
+Cache: shared DuckDB KV `kv_portfolio_metadata` via `api.yf_fetch`
+(24h TTL on successful payloads, 10min on empty markers).
 """
 
 from __future__ import annotations
 
-import json
 import logging
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 from dataclasses import dataclass
-from datetime import datetime, timedelta
 
-from api.data import prices
+from api import yf_fetch
 from api.data.moomoo_client import get_summary
-from api.dividends import _to_yfinance_symbol
+from api.data.prices import _to_yfinance_symbol
 from api.holdings_payload import build_holdings_response
 
 log = logging.getLogger(__name__)
 
-_TTL_OK = timedelta(hours=24)
-_TTL_EMPTY = timedelta(minutes=10)
-_INFO_TIMEOUT_S = 5.0
+_CACHE_TABLE = "kv_portfolio_metadata"
 
 _REGION_BY_COUNTRY: dict[str, str] = {
     "United States": "N.America", "Canada": "N.America",
@@ -54,35 +49,13 @@ class HoldingMetadata:
     region: str | None
 
 
-def _ensure_table() -> None:
-    with prices._DB_LOCK:
-        prices._db().execute(
-            """
-            CREATE TABLE IF NOT EXISTS portfolio_metadata_cache (
-                code VARCHAR PRIMARY KEY,
-                payload_json VARCHAR,
-                fetched_at TIMESTAMP
-            )
-            """
-        )
+def _has_data(payload: dict) -> bool:
+    return bool(payload.get("sector") or payload.get("country"))
 
 
 def _load_cached(code: str) -> HoldingMetadata | None:
-    _ensure_table()
-    with prices._DB_LOCK:
-        row = prices._db().execute(
-            "SELECT payload_json, fetched_at FROM portfolio_metadata_cache WHERE code = ?",
-            [code],
-        ).fetchone()
-    if not row:
-        return None
-    payload_json, fetched_at = row
-    payload = json.loads(payload_json) if payload_json else {}
-    has_data = bool(payload.get("sector") or payload.get("country"))
-    age = datetime.now() - fetched_at
-    if has_data and age > _TTL_OK:
-        return None
-    if not has_data and age > _TTL_EMPTY:
+    payload = yf_fetch.load_cached(_CACHE_TABLE, code, _has_data)
+    if payload is None:
         return None
     country = payload.get("country")
     return HoldingMetadata(
@@ -95,40 +68,9 @@ def _load_cached(code: str) -> HoldingMetadata | None:
 
 
 def _save_cache(meta: HoldingMetadata) -> None:
-    _ensure_table()
-    payload = json.dumps({
+    yf_fetch.save_cached(_CACHE_TABLE, meta.code, {
         "sector": meta.sector, "industry": meta.industry, "country": meta.country,
     })
-    with prices._DB_LOCK:
-        prices._db().execute(
-            "INSERT OR REPLACE INTO portfolio_metadata_cache VALUES (?, ?, ?)",
-            [meta.code, payload, datetime.now()],
-        )
-
-
-def _fetch_info_keys(symbol: str, keys: tuple[str, ...]) -> dict:
-    """Pull a small slice of Ticker.info with a hard timeout.
-
-    Returns {} on timeout or yfinance failure so the caller can cache
-    the empty marker.
-    """
-    import yfinance as yf
-
-    def _work() -> dict:
-        ticker = yf.Ticker(symbol)
-        info = ticker.info or {}
-        return {k: info.get(k) for k in keys}
-
-    with ThreadPoolExecutor(max_workers=1) as pool:
-        future = pool.submit(_work)
-        try:
-            return future.result(timeout=_INFO_TIMEOUT_S)
-        except FuturesTimeout:
-            log.info("portfolio_metrics: Ticker.info timeout for %s", symbol)
-            return {}
-        except Exception as exc:
-            log.warning("portfolio_metrics: Ticker.info failed for %s: %s", symbol, exc)
-            return {}
 
 
 def _fetch_metadata(code: str) -> HoldingMetadata:
@@ -138,7 +80,9 @@ def _fetch_metadata(code: str) -> HoldingMetadata:
         _save_cache(meta)
         return meta
 
-    info = _fetch_info_keys(symbol, ("sector", "industry", "country"))
+    info = yf_fetch.fetch_info_keys(
+        symbol, ("sector", "industry", "country"), label="portfolio_metrics"
+    )
     country = info.get("country")
     meta = HoldingMetadata(
         code=code,

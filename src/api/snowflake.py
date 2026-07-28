@@ -15,10 +15,8 @@ Two halves:
     educational-only ban is gone; only the shared anti-hype floor
     (`FORBIDDEN_HYPE` in `_advisor_guard`) is enforced post-check.
 
-Cache: `snowflake_cache (code, prompt_version, scores_json,
-statements_json, generated_at)`, locale-keyed prompt_version so EN +
-ZH statement language coexist. 6h TTL. Single-writer rule preserved
-via `prices._db()` + `_DB_LOCK`.
+Cache: shared DuckDB KV (`kv_snowflake` via `api.advisor`), locale-keyed
+prompt_version so EN + ZH statement language coexist. 6h TTL.
 
 JSON parse: prefix-tolerant — strip leading non-`{` chars before
 `json.loads`. On parse failure, statements drop to empty per axis;
@@ -29,39 +27,22 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 
-from api._advisor_guard import (
-    FORBIDDEN_HYPE,
-    RETRY_SUFFIX_HYPE_EN,
-    RETRY_SUFFIX_HYPE_ZH,
-    has_forbidden,
-)
+from api import advisor
 from api.data import anomalies, prices
 from api.data.moomoo_client import get_summary
 from api.dividends import get_one as get_dividend_for
 from api.holdings_payload import build_holdings_response
-from api.i18n import DEFAULT_LOCALE, Locale, prompt_version_with_locale
+from api.i18n import DEFAULT_LOCALE, Locale
 
 log = logging.getLogger(__name__)
 
-_TTL = timedelta(hours=6)
 _PROMPT_VERSION = "v4-recommend"
 
 # Per-axis cap so the UI's vertical real estate stays bounded.
 _MAX_BULLETS = 5
-
-
-# Post-check bans for statement bullets. The educational-only guardrail
-# is gone — directional / actionable language (buy / sell / trim / target
-# / bullish / bearish, etc.) is now allowed. Only the anti-hype floor
-# remains: the statements must stay calm and grounded, never pump. So the
-# post-check reuses the shared FORBIDDEN_HYPE list (guarantees, certainty
-# claims, "to the moon", etc.), same convention insight.py uses.
-_STATEMENT_BANS_EN: tuple[str, ...] = FORBIDDEN_HYPE["en"]
-_STATEMENT_BANS_ZH: tuple[str, ...] = FORBIDDEN_HYPE["zh"]
 
 
 # ── Score buckets ────────────────────────────────────────────────────────────
@@ -235,46 +216,21 @@ class PortfolioSnowflake:
     weights: dict[str, float] = field(default_factory=dict)
 
 
-# ── Cache ────────────────────────────────────────────────────────────────────
-
-
-def _ensure_table() -> None:
-    with prices._DB_LOCK:
-        prices._db().execute(
-            """
-            CREATE TABLE IF NOT EXISTS snowflake_cache (
-                code VARCHAR NOT NULL,
-                prompt_version VARCHAR NOT NULL,
-                scores_json VARCHAR,
-                statements_json VARCHAR,
-                generated_at TIMESTAMP,
-                PRIMARY KEY (code, prompt_version)
-            )
-            """
-        )
+# ── Cache (shared DuckDB KV via api.advisor) ────────────────────────────────
 
 
 def _load_cached(code: str, locale: Locale) -> Snowflake | None:
-    _ensure_table()
-    pv = prompt_version_with_locale(_PROMPT_VERSION, locale)
-    with prices._DB_LOCK:
-        row = prices._db().execute(
-            "SELECT scores_json, statements_json, generated_at "
-            "FROM snowflake_cache WHERE code = ? AND prompt_version = ?",
-            [code, pv],
-        ).fetchone()
-    if not row:
+    cached = advisor.load(_SPEC, code, locale)
+    if cached is None:
         return None
-    scores_json, statements_json, generated_at = row
-    if datetime.now() - generated_at > _TTL:
-        return None
+    payload, generated_at = cached
     try:
-        scores = SnowflakeScores(**json.loads(scores_json))
+        scores = SnowflakeScores(**payload["scores"])
         statements = {
             axis: [Statement(**s) for s in bullets]
-            for axis, bullets in json.loads(statements_json).items()
+            for axis, bullets in payload["statements"].items()
         }
-    except (TypeError, ValueError, json.JSONDecodeError) as exc:
+    except (TypeError, ValueError, KeyError) as exc:
         log.warning("snowflake cache decode failed for %s: %s", code, exc)
         return None
     return Snowflake(
@@ -288,16 +244,18 @@ def _load_cached(code: str, locale: Locale) -> Snowflake | None:
 
 
 def _save_cache(snow: Snowflake, locale: Locale) -> None:
-    _ensure_table()
-    pv = prompt_version_with_locale(_PROMPT_VERSION, locale)
-    statements_json = json.dumps(
-        {axis: [asdict(s) for s in bullets] for axis, bullets in snow.statements.items()}
+    advisor.save(
+        _SPEC,
+        snow.code,
+        {
+            "scores": asdict(snow.scores),
+            "statements": {
+                axis: [asdict(s) for s in bullets]
+                for axis, bullets in snow.statements.items()
+            },
+        },
+        locale,
     )
-    with prices._DB_LOCK:
-        prices._db().execute(
-            "INSERT OR REPLACE INTO snowflake_cache VALUES (?, ?, ?, ?, ?)",
-            [snow.code, pv, json.dumps(asdict(snow.scores)), statements_json, snow.generated_at],
-        )
 
 
 # ── Score computation ───────────────────────────────────────────────────────
@@ -372,6 +330,15 @@ _STATEMENTS_PROMPT_ZH_SUFFIX = (
     "允许使用判断性语言（如 \"良好\"、\"稳健\"、\"债务温和\"），"
     "也允许带有简短的方向性或可执行倾向（如估值偏低适合介入、估值偏高、值得减持），"
     "但须保持冷静、有据的口吻：不得夸大、不作保证、不作必然性表述。"
+)
+
+_SPEC = advisor.AdvisorSpec(
+    surface="snowflake",
+    prompt=_STATEMENTS_PROMPT,
+    prompt_version=_PROMPT_VERSION,
+    ttl=timedelta(hours=6),
+    max_tokens=1200,
+    lang_instruction={"en": "", "zh": _STATEMENTS_PROMPT_ZH_SUFFIX},
 )
 
 
@@ -459,46 +426,16 @@ def _call_claude_statements(
     context: str,
     locale: Locale,
 ) -> dict[str, list[Statement]]:
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        return dict(_EMPTY_STATEMENTS)
-
-    from anthropic import Anthropic
-
-    client = Anthropic(api_key=api_key)
-    model = os.environ.get("ANTHROPIC_DIGEST_MODEL", "claude-sonnet-4-6")
-    bans = _STATEMENT_BANS_ZH if locale == "zh" else _STATEMENT_BANS_EN
-    system_prompt = _STATEMENTS_PROMPT + (_STATEMENTS_PROMPT_ZH_SUFFIX if locale == "zh" else "")
-
-    def _shot(system: str) -> str:
-        response = client.messages.create(
-            model=model,
-            max_tokens=1200,
-            system=system,
-            messages=[{"role": "user", "content": context}],
-        )
-        return "\n".join(b.text for b in response.content if b.type == "text").strip()
-
+    """Degrading wrapper around the engine: missing key, SDK failure, or
+    a persisted hype hit all fall back to empty statements — the
+    deterministic scores still ship (unique among advisor surfaces)."""
     try:
-        body = _shot(system_prompt)
+        body = advisor.complete(_SPEC, context, locale)
     except Exception as exc:
-        log.warning("snowflake Claude call failed: %s", exc)
+        log.info("snowflake statements unavailable: %s", exc)
         return dict(_EMPTY_STATEMENTS)
-
-    bad = has_forbidden(body, bans, locale)
-    if bad is not None:
-        log.info("snowflake: hype %r in first draft, retrying (locale=%s)", bad, locale)
-        retry_suffix = (RETRY_SUFFIX_HYPE_ZH if locale == "zh" else RETRY_SUFFIX_HYPE_EN).format(bad=bad)
-        try:
-            body = _shot(system_prompt + retry_suffix)
-        except Exception as exc:
-            log.warning("snowflake retry failed: %s", exc)
-            return dict(_EMPTY_STATEMENTS)
-        bad2 = has_forbidden(body, bans, locale)
-        if bad2 is not None:
-            log.warning("snowflake: hype %r persisted, dropping statements", bad2)
-            return dict(_EMPTY_STATEMENTS)
-
+    if body is None:
+        return dict(_EMPTY_STATEMENTS)
     return _parse_statements(body)
 
 

@@ -8,24 +8,20 @@
 // No green / red, single ink family for the bar; principle-#2
 // calm-under-volatility holds.
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   fetchReddit,
   type RedditMention,
-  type RedditResponse,
   type SentimentBucket,
 } from "@/lib/api";
+import { useFetch } from "@/lib/use-fetch";
+import { StackedBar } from "./stacked-bar";
 import { useT } from "@/lib/i18n/use-t";
 import type { StringKey } from "@/lib/i18n/strings";
 
 interface Props {
   code: string;
 }
-
-type FetchState =
-  | { kind: "loading" }
-  | { kind: "ready"; data: RedditResponse }
-  | { kind: "error"; detail: string };
 
 const BUCKET_LABEL_KEY: Record<SentimentBucket, StringKey> = {
   positive: "sentiment.bucket.favourable",
@@ -49,7 +45,7 @@ function Header({ label }: { label: string }) {
   );
 }
 
-function StackedBar({
+function SentimentBar({
   buckets,
   total,
 }: {
@@ -60,23 +56,17 @@ function StackedBar({
   if (total === 0) return null;
   const order: SentimentBucket[] = ["positive", "neutral", "negative"];
   return (
-    <div className="flex h-1.5 w-full overflow-hidden rounded-sm bg-rule/40">
-      {order.map((b) => {
-        const w = (buckets[b] / total) * 100;
-        if (w === 0) return null;
-        return (
-          <div
-            key={b}
-            className={BUCKET_BG[b]}
-            style={{ width: `${w}%` }}
-            aria-label={t("sentiment.aria.posts", {
-              n: buckets[b],
-              bucket: t(BUCKET_LABEL_KEY[b]),
-            })}
-          />
-        );
-      })}
-    </div>
+    <StackedBar
+      segments={order.map((b) => ({
+        key: b,
+        pct: (buckets[b] / total) * 100,
+        className: BUCKET_BG[b],
+        ariaLabel: t("sentiment.aria.posts", {
+          n: buckets[b],
+          bucket: t(BUCKET_LABEL_KEY[b]),
+        }),
+      }))}
+    />
   );
 }
 
@@ -113,25 +103,12 @@ function MentionRow({ m }: { m: RedditMention }) {
 
 export function SentimentBlock({ code }: Props) {
   const t = useT();
-  const [state, setState] = useState<FetchState>({ kind: "loading" });
-  const headerLabel = t("sentiment.heading");
-
-  useEffect(() => {
-    let cancelled = false;
-    setState({ kind: "loading" });
-    (async () => {
-      const result = await fetchReddit(code, 7);
-      if (cancelled) return;
-      if (result.ok) {
-        setState({ kind: "ready", data: result.data });
-      } else {
-        setState({ kind: "error", detail: result.detail });
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+  const { state } = useFetch(async () => {
+    const result = await fetchReddit(code, 7);
+    if (!result.ok) throw new Error(result.detail);
+    return result.data;
   }, [code]);
+  const headerLabel = t("sentiment.heading");
 
   if (state.kind === "loading") {
     return (
@@ -176,7 +153,7 @@ export function SentimentBlock({ code }: Props) {
         <span>{data.buckets.negative}</span>
         <span className="text-whisper"> {t("sentiment.bucket.cautious")}</span>
       </div>
-      <StackedBar buckets={data.buckets} total={data.total_mentions} />
+      <SentimentBar buckets={data.buckets} total={data.total_mentions} />
       {data.top_mentions.length > 0 && (
         <ul className="mt-4 flex flex-col gap-2">
           {data.top_mentions.map((m) => (

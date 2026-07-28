@@ -1,4 +1,5 @@
 import type { Holding } from "@/lib/api";
+import { useT } from "@/lib/i18n/use-t";
 
 interface Props {
   holdings: Holding[];
@@ -59,6 +60,7 @@ function arcPath(
 }
 
 export function Donut({ holdings, size = 200 }: Props) {
+  const t = useT();
   if (holdings.length === 0) return null;
 
   // Largest first → darkest tint, per SLICE_TINTS convention.
@@ -100,7 +102,7 @@ export function Donut({ holdings, size = 200 }: Props) {
       height={view}
       viewBox={`0 0 ${view} ${view}`}
       role="img"
-      aria-label={`Portfolio allocation across ${holdings.length} positions`}
+      aria-label={t("chart.donut_aria", { n: holdings.length })}
     >
       {slices.map((s) => (
         <path

@@ -421,14 +421,20 @@ def get_summary() -> PortfolioSummary:
     return summary
 
 
+_CLIENT_LOCK = threading.Lock()
+
+
 def _live_client() -> MoomooClient:
+    # Lock so two cold concurrent requests can't construct two clients
+    # (each opens its own moomoo trade contexts).
     global _CLIENT
-    if _CLIENT is None:
-        _CLIENT = MoomooClient(
-            host=os.environ.get("MOOMOO_HOST", "127.0.0.1"),
-            port=int(os.environ.get("MOOMOO_PORT", "11111")),
-            security_firm=os.environ.get("MOOMOO_SECURITY_FIRM", "FUTUSG"),
-            trd_env=os.environ.get("MOOMOO_TRD_ENV", "SIMULATE"),
-            markets=tuple(os.environ.get("MOOMOO_MARKETS", "US,HK").split(",")),
-        )
+    with _CLIENT_LOCK:
+        if _CLIENT is None:
+            _CLIENT = MoomooClient(
+                host=os.environ.get("MOOMOO_HOST", "127.0.0.1"),
+                port=int(os.environ.get("MOOMOO_PORT", "11111")),
+                security_firm=os.environ.get("MOOMOO_SECURITY_FIRM", "FUTUSG"),
+                trd_env=os.environ.get("MOOMOO_TRD_ENV", "SIMULATE"),
+                markets=tuple(os.environ.get("MOOMOO_MARKETS", "US,HK").split(",")),
+            )
     return _CLIENT

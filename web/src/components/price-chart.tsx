@@ -1,5 +1,7 @@
 "use client";
 
+import { useT } from "@/lib/i18n/use-t";
+
 import { useEffect, useRef, useState } from "react";
 
 import type { PricePoint } from "@/lib/api";
@@ -44,6 +46,7 @@ const fmtPrice = (n: number) =>
   n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export function PriceChart({ points, height = 220, direction = "quiet" }: Props) {
+  const t = useT();
   // Measure our wrapper ourselves rather than rely on Recharts'
   // ResponsiveContainer. ResponsiveContainer reports width(-1) height(-1)
   // on the first paint inside a freshly-expanded drill-in (the parent
@@ -67,7 +70,7 @@ export function PriceChart({ points, height = 220, direction = "quiet" }: Props)
         className="flex items-center justify-center text-quiet text-sm"
         style={{ height }}
       >
-        no price data available
+        {t("drillin.no_price_data")}
       </div>
     );
   }

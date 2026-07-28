@@ -7,12 +7,11 @@
   Health  — balance_sheet Total Debt / Stockholders Equity → debt-to-equity;
             Current Assets / Current Liabilities → current ratio
 
-Same hard-timeout + DuckDB-cache shape as `fair_value.py`: a single
-ThreadPoolExecutor worker pulls all five yfinance frames under one
-timeout, results cached in `fundamentals_cache (code, payload_json,
-fetched_at)` PK code, 24h TTL on populated rows / 10min on empty
-markers. HK / SG tickers return mostly null frames → the frontend
-greys out. Single-writer rule preserved via `prices._DB_LOCK`.
+Hard-timeout + dual-TTL cache scaffolding shared via `api.yf_fetch`:
+a single worker pulls all five yfinance frames under one timeout,
+results cached in the `kv_fundamentals` KV table (24h TTL on populated
+rows / 10min on empty markers). HK / SG tickers return mostly null
+frames → the frontend greys out.
 
 Dividends axis is NOT here — it reuses `dividends.py` /
 `dividends_extended.py`, which already own the dividend cache.
@@ -20,21 +19,18 @@ Dividends axis is NOT here — it reuses `dividends.py` /
 
 from __future__ import annotations
 
-import json
 import logging
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
-from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta
+from dataclasses import dataclass
 
-from api.data import prices
-from api.dividends import _to_yfinance_symbol
-from api.holdings_payload import build_holdings_response
+from api import yf_fetch
 from api.data.moomoo_client import get_summary
+from api.data.prices import _to_yfinance_symbol
+from api.holdings_payload import build_holdings_response
+from api.yf_fetch import to_float as _to_float
 
 log = logging.getLogger(__name__)
 
-_TTL_OK = timedelta(hours=24)
-_TTL_EMPTY = timedelta(minutes=10)
+_CACHE_TABLE = "kv_fundamentals"
 # Five yfinance frames per ticker → a touch more headroom than fair_value's
 # single .info call.
 _FETCH_TIMEOUT_S = 14.0
@@ -75,62 +71,22 @@ class Fundamentals:
 # ── Cache ────────────────────────────────────────────────────────────────────
 
 
-def _ensure_table() -> None:
-    with prices._DB_LOCK:
-        prices._db().execute(
-            """
-            CREATE TABLE IF NOT EXISTS fundamentals_cache (
-                code VARCHAR PRIMARY KEY,
-                payload_json VARCHAR,
-                fetched_at TIMESTAMP
-            )
-            """
-        )
+def _has_data(payload: dict) -> bool:
+    return any(payload.get(k) is not None for k in _PAYLOAD_KEYS)
 
 
 def _load_cached(code: str) -> Fundamentals | None:
-    _ensure_table()
-    with prices._DB_LOCK:
-        row = prices._db().execute(
-            "SELECT payload_json, fetched_at FROM fundamentals_cache WHERE code = ?",
-            [code],
-        ).fetchone()
-    if not row:
-        return None
-    payload_json, fetched_at = row
-    payload = json.loads(payload_json) if payload_json else {}
-    has_data = any(payload.get(k) is not None for k in _PAYLOAD_KEYS)
-    age = datetime.now() - fetched_at
-    if has_data and age > _TTL_OK:
-        return None
-    if not has_data and age > _TTL_EMPTY:
+    payload = yf_fetch.load_cached(_CACHE_TABLE, code, _has_data)
+    if payload is None:
         return None
     return Fundamentals(code=code, **{k: payload.get(k) for k in _PAYLOAD_KEYS})
 
 
 def _save_cache(f: Fundamentals) -> None:
-    _ensure_table()
-    payload = json.dumps({k: getattr(f, k) for k in _PAYLOAD_KEYS})
-    with prices._DB_LOCK:
-        prices._db().execute(
-            "INSERT OR REPLACE INTO fundamentals_cache VALUES (?, ?, ?)",
-            [f.code, payload, datetime.now()],
-        )
+    yf_fetch.save_cached(_CACHE_TABLE, f.code, {k: getattr(f, k) for k in _PAYLOAD_KEYS})
 
 
 # ── yfinance extraction helpers ──────────────────────────────────────────────
-
-
-def _to_float(value) -> float | None:
-    if value is None:
-        return None
-    try:
-        f = float(value)
-    except (TypeError, ValueError):
-        return None
-    if f != f or f in (float("inf"), float("-inf")):  # NaN / inf
-        return None
-    return f
 
 
 def _cell(df, period: str, col: str) -> float | None:
@@ -220,16 +176,7 @@ def _fetch(symbol: str) -> dict:
             log.debug("fundamentals: balance_sheet %s: %s", symbol, exc)
         return out
 
-    with ThreadPoolExecutor(max_workers=1) as pool:
-        future = pool.submit(_work)
-        try:
-            return future.result(timeout=_FETCH_TIMEOUT_S)
-        except FuturesTimeout:
-            log.info("fundamentals: yfinance timeout for %s", symbol)
-            return {}
-        except Exception as exc:  # noqa: BLE001
-            log.warning("fundamentals: yfinance failed for %s: %s", symbol, exc)
-            return {}
+    return yf_fetch.fetch_with_timeout(_work, _FETCH_TIMEOUT_S, f"fundamentals:{symbol}")
 
 
 def get_fundamentals(code: str) -> Fundamentals:

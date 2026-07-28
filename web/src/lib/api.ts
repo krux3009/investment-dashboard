@@ -1,5 +1,10 @@
 // API client for the FastAPI backend.
 // Types mirror api/models.py — keep in sync.
+//
+// One error convention: every fetcher goes through `apiGet<T>` and throws
+// `Error("<path> <status>: <body>")` on a non-ok response. The only
+// exceptions are the notes + reddit fetchers, which return a Result union
+// because their callers render 404/503 states inline instead of erroring.
 
 import type { Locale } from "@/lib/i18n/locale-provider";
 
@@ -44,6 +49,14 @@ export interface HoldingsResponse {
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE ?? "http://127.0.0.1:8000";
 
+async function apiGet<T>(path: string): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`${path.split("?")[0]} ${res.status}: ${await res.text()}`);
+  }
+  return (await res.json()) as T;
+}
+
 // Network-level failure (backend down, CORS) → error result instead of an
 // unhandled rejection inside the component effect that fired the fetch.
 const NETWORK_ERR = {
@@ -60,12 +73,17 @@ async function fetchOrNull(url: string): Promise<Response | null> {
   }
 }
 
-export async function fetchHoldings(): Promise<HoldingsResponse> {
-  const res = await fetch(`${API_BASE}/api/holdings`, { cache: "no-store" });
-  if (!res.ok) {
-    throw new Error(`/api/holdings ${res.status}: ${await res.text()}`);
+async function errDetail(res: Response): Promise<string> {
+  try {
+    const body = await res.json();
+    return body.detail ?? `${res.status}`;
+  } catch {
+    return await res.text();
   }
-  return (await res.json()) as HoldingsResponse;
+}
+
+export function fetchHoldings(): Promise<HoldingsResponse> {
+  return apiGet("/api/holdings");
 }
 
 export interface PricePoint {
@@ -79,13 +97,8 @@ export interface PriceHistory {
   points: PricePoint[];
 }
 
-export async function fetchPrices(code: string, days = 30): Promise<PriceHistory> {
-  const url = `${API_BASE}/api/prices/${encodeURIComponent(code)}?days=${days}`;
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) {
-    throw new Error(`/api/prices/${code} ${res.status}: ${await res.text()}`);
-  }
-  return (await res.json()) as PriceHistory;
+export function fetchPrices(code: string, days = 30): Promise<PriceHistory> {
+  return apiGet(`/api/prices/${encodeURIComponent(code)}?days=${days}`);
 }
 
 export interface AnomalyItem {
@@ -100,28 +113,19 @@ export interface AnomaliesResponse {
   time_range: number;
 }
 
-export async function fetchAnomalies(
+export function fetchAnomalies(
   code: string,
   locale: Locale = "en",
 ): Promise<AnomaliesResponse> {
-  const url = `${API_BASE}/api/anomalies/${encodeURIComponent(code)}?locale=${locale}`;
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) {
-    throw new Error(`/api/anomalies/${code} ${res.status}: ${await res.text()}`);
-  }
-  return (await res.json()) as AnomaliesResponse;
+  return apiGet(`/api/anomalies/${encodeURIComponent(code)}?locale=${locale}`);
 }
 
 export interface WatchlistResponse {
   codes: string[];
 }
 
-export async function fetchWatchlist(): Promise<WatchlistResponse> {
-  const res = await fetch(`${API_BASE}/api/watchlist`, { cache: "no-store" });
-  if (!res.ok) {
-    throw new Error(`/api/watchlist ${res.status}: ${await res.text()}`);
-  }
-  return (await res.json()) as WatchlistResponse;
+export function fetchWatchlist(): Promise<WatchlistResponse> {
+  return apiGet("/api/watchlist");
 }
 
 export interface Quote {
@@ -138,12 +142,7 @@ export interface QuotesResponse {
 
 export async function fetchQuotes(codes: string[]): Promise<QuotesResponse> {
   if (codes.length === 0) return { quotes: {} };
-  const url = `${API_BASE}/api/quotes?codes=${encodeURIComponent(codes.join(","))}`;
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) {
-    throw new Error(`/api/quotes ${res.status}: ${await res.text()}`);
-  }
-  return (await res.json()) as QuotesResponse;
+  return apiGet(`/api/quotes?codes=${encodeURIComponent(codes.join(","))}`);
 }
 
 export interface EarningsItem {
@@ -165,12 +164,8 @@ export interface EarningsResponse {
   next_within_14: boolean;
 }
 
-export async function fetchEarnings(): Promise<EarningsResponse> {
-  const res = await fetch(`${API_BASE}/api/earnings`, { cache: "no-store" });
-  if (!res.ok) {
-    throw new Error(`/api/earnings ${res.status}: ${await res.text()}`);
-  }
-  return (await res.json()) as EarningsResponse;
+export function fetchEarnings(): Promise<EarningsResponse> {
+  return apiGet("/api/earnings");
 }
 
 export interface Note {
@@ -188,14 +183,7 @@ export async function fetchNote(code: string): Promise<NoteResult> {
   const res = await fetchOrNull(url);
   if (!res) return NETWORK_ERR;
   if (!res.ok) {
-    let detail = `${res.status}`;
-    try {
-      const body = await res.json();
-      detail = body.detail ?? detail;
-    } catch {
-      detail = await res.text();
-    }
-    return { ok: false, status: res.status, detail };
+    return { ok: false, status: res.status, detail: await errDetail(res) };
   }
   const note = (await res.json()) as Note;
   // Backend now returns 200 with body="" when no note exists yet.
@@ -218,14 +206,7 @@ export async function putNote(code: string, body: string): Promise<PutNoteResult
   });
   if (res.status === 204) return { ok: true, data: null };
   if (!res.ok) {
-    let detail = `${res.status}`;
-    try {
-      const j = await res.json();
-      detail = j.detail ?? detail;
-    } catch {
-      detail = await res.text();
-    }
-    return { ok: false, status: res.status, detail };
+    return { ok: false, status: res.status, detail: await errDetail(res) };
   }
   return { ok: true, data: (await res.json()) as Note };
 }
@@ -255,18 +236,13 @@ export interface BenchmarkResponse {
   weighting_caveat: string;
 }
 
-export async function fetchBenchmark(
+export function fetchBenchmark(
   days = 90,
   symbols?: string,
 ): Promise<BenchmarkResponse> {
   const qs = new URLSearchParams({ days: String(days) });
   if (symbols) qs.set("symbols", symbols);
-  const url = `${API_BASE}/api/benchmark?${qs}`;
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) {
-    throw new Error(`/api/benchmark ${res.status}: ${await res.text()}`);
-  }
-  return (await res.json()) as BenchmarkResponse;
+  return apiGet(`/api/benchmark?${qs}`);
 }
 
 export interface TopName {
@@ -286,12 +262,8 @@ export interface ConcentrationResponse {
   single_name_max: TopName | null;
 }
 
-export async function fetchConcentration(): Promise<ConcentrationResponse> {
-  const res = await fetch(`${API_BASE}/api/concentration`, { cache: "no-store" });
-  if (!res.ok) {
-    throw new Error(`/api/concentration ${res.status}: ${await res.text()}`);
-  }
-  return (await res.json()) as ConcentrationResponse;
+export function fetchConcentration(): Promise<ConcentrationResponse> {
+  return apiGet("/api/concentration");
 }
 
 export type ForesightKind = "earnings" | "macro" | "company_event" | "exdiv";
@@ -328,22 +300,17 @@ export interface DailyPnlResponse {
   entries: DailyPnlEntry[];
 }
 
-export async function fetchDailyPnl(
+export function fetchDailyPnl(
   opts: { start: string; end: string },
 ): Promise<DailyPnlResponse> {
-  const url = `${API_BASE}/api/daily-pnl?start=${opts.start}&end=${opts.end}`;
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) {
-    throw new Error(`/api/daily-pnl ${res.status}: ${await res.text()}`);
-  }
-  return (await res.json()) as DailyPnlResponse;
+  return apiGet(`/api/daily-pnl?start=${opts.start}&end=${opts.end}`);
 }
 
 export type ForesightFetchOpts =
   | { days?: number }
   | { start: string; end: string };
 
-export async function fetchForesight(
+export function fetchForesight(
   opts: ForesightFetchOpts | number = 7,
   locale: Locale = "en",
 ): Promise<ForesightResponse> {
@@ -353,13 +320,7 @@ export async function fetchForesight(
     "start" in normalized
       ? `start=${normalized.start}&end=${normalized.end}`
       : `days=${normalized.days ?? 7}`;
-  const res = await fetch(`${API_BASE}/api/foresight?${qs}&locale=${locale}`, {
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    throw new Error(`/api/foresight ${res.status}: ${await res.text()}`);
-  }
-  return (await res.json()) as ForesightResponse;
+  return apiGet(`/api/foresight?${qs}&locale=${locale}`);
 }
 
 export type SentimentBucket = "positive" | "neutral" | "negative";
@@ -393,14 +354,7 @@ export async function fetchReddit(code: string, days = 7): Promise<RedditResult>
   const res = await fetchOrNull(url);
   if (!res) return NETWORK_ERR;
   if (!res.ok) {
-    let detail = `${res.status}`;
-    try {
-      const body = await res.json();
-      detail = body.detail ?? detail;
-    } catch {
-      detail = await res.text();
-    }
-    return { ok: false, status: res.status, detail };
+    return { ok: false, status: res.status, detail: await errDetail(res) };
   }
   return { ok: true, data: (await res.json()) as RedditResponse };
 }
@@ -440,12 +394,8 @@ export interface DividendsResponse {
   rates_used: Record<string, number>;
 }
 
-export async function fetchDividends(): Promise<DividendsResponse> {
-  const res = await fetch(`${API_BASE}/api/dividends`, { cache: "no-store" });
-  if (!res.ok) {
-    throw new Error(`/api/dividends ${res.status}: ${await res.text()}`);
-  }
-  return (await res.json()) as DividendsResponse;
+export function fetchDividends(): Promise<DividendsResponse> {
+  return apiGet("/api/dividends");
 }
 
 export interface SnowflakeScores {
@@ -472,27 +422,17 @@ export interface SnowflakeResponse {
   available: boolean;
 }
 
-export async function fetchPortfolioSnowflake(
+export function fetchPortfolioSnowflake(
   locale: Locale = "en",
 ): Promise<PortfolioSnowflake> {
-  const url = `${API_BASE}/api/snowflake/portfolio?locale=${locale}`;
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) {
-    throw new Error(`/api/snowflake/portfolio ${res.status}: ${await res.text()}`);
-  }
-  return (await res.json()) as PortfolioSnowflake;
+  return apiGet(`/api/snowflake/portfolio?locale=${locale}`);
 }
 
-export async function fetchSnowflake(
+export function fetchSnowflake(
   code: string,
   locale: Locale = "en",
 ): Promise<SnowflakeResponse> {
-  const url = `${API_BASE}/api/snowflake/${encodeURIComponent(code)}?locale=${locale}`;
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) {
-    throw new Error(`/api/snowflake/${code} ${res.status}: ${await res.text()}`);
-  }
-  return (await res.json()) as SnowflakeResponse;
+  return apiGet(`/api/snowflake/${encodeURIComponent(code)}?locale=${locale}`);
 }
 
 // ── returns (P5) ─────────────────────────────────────────────────────
@@ -529,20 +469,12 @@ export interface ReturnsDetail {
   holdings: ReturnsHolding[];
 }
 
-export async function fetchReturnsSummary(): Promise<ReturnsSummary> {
-  const res = await fetch(`${API_BASE}/api/returns/summary`, { cache: "no-store" });
-  if (!res.ok) {
-    throw new Error(`/api/returns/summary ${res.status}: ${await res.text()}`);
-  }
-  return (await res.json()) as ReturnsSummary;
+export function fetchReturnsSummary(): Promise<ReturnsSummary> {
+  return apiGet("/api/returns/summary");
 }
 
-export async function fetchReturnsDetail(): Promise<ReturnsDetail> {
-  const res = await fetch(`${API_BASE}/api/returns/detail`, { cache: "no-store" });
-  if (!res.ok) {
-    throw new Error(`/api/returns/detail ${res.status}: ${await res.text()}`);
-  }
-  return (await res.json()) as ReturnsDetail;
+export function fetchReturnsDetail(): Promise<ReturnsDetail> {
+  return apiGet("/api/returns/detail");
 }
 
 // ── dividends forecast + buckets (P5/P3) ─────────────────────────────
@@ -568,13 +500,8 @@ export interface DividendForecastResponse {
 
 export type Horizon = "12m" | "24m" | "36m";
 
-export async function fetchDividendForecast(horizon: Horizon = "12m"): Promise<DividendForecastResponse> {
-  const url = `${API_BASE}/api/dividends/forecast?horizon=${horizon}`;
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) {
-    throw new Error(`/api/dividends/forecast ${res.status}: ${await res.text()}`);
-  }
-  return (await res.json()) as DividendForecastResponse;
+export function fetchDividendForecast(horizon: Horizon = "12m"): Promise<DividendForecastResponse> {
+  return apiGet(`/api/dividends/forecast?horizon=${horizon}`);
 }
 
 export interface DividendBucketStats {
@@ -593,12 +520,8 @@ export interface DividendQualityResponse {
   };
 }
 
-export async function fetchDividendQualityBuckets(): Promise<DividendQualityResponse> {
-  const res = await fetch(`${API_BASE}/api/dividends/quality-buckets`, { cache: "no-store" });
-  if (!res.ok) {
-    throw new Error(`/api/dividends/quality-buckets ${res.status}: ${await res.text()}`);
-  }
-  return (await res.json()) as DividendQualityResponse;
+export function fetchDividendQualityBuckets(): Promise<DividendQualityResponse> {
+  return apiGet("/api/dividends/quality-buckets");
 }
 
 // ── portfolio metrics + fair value (P5/P3) ───────────────────────────
@@ -616,12 +539,8 @@ export interface SectorBucket {
   tickers: SectorTicker[];
 }
 
-export async function fetchSectors(): Promise<SectorBucket[]> {
-  const res = await fetch(`${API_BASE}/api/portfolio/sectors`, { cache: "no-store" });
-  if (!res.ok) {
-    throw new Error(`/api/portfolio/sectors ${res.status}: ${await res.text()}`);
-  }
-  return (await res.json()) as SectorBucket[];
+export function fetchSectors(): Promise<SectorBucket[]> {
+  return apiGet("/api/portfolio/sectors");
 }
 
 export interface GeographyTicker {
@@ -637,12 +556,8 @@ export interface GeographyBucket {
   tickers: GeographyTicker[];
 }
 
-export async function fetchGeography(): Promise<GeographyBucket[]> {
-  const res = await fetch(`${API_BASE}/api/portfolio/geography`, { cache: "no-store" });
-  if (!res.ok) {
-    throw new Error(`/api/portfolio/geography ${res.status}: ${await res.text()}`);
-  }
-  return (await res.json()) as GeographyBucket[];
+export function fetchGeography(): Promise<GeographyBucket[]> {
+  return apiGet("/api/portfolio/geography");
 }
 
 export interface TopHolding {
@@ -652,12 +567,8 @@ export interface TopHolding {
   value_usd: number;
 }
 
-export async function fetchTopHoldings(n = 10): Promise<TopHolding[]> {
-  const res = await fetch(`${API_BASE}/api/portfolio/top-holdings?n=${n}`, { cache: "no-store" });
-  if (!res.ok) {
-    throw new Error(`/api/portfolio/top-holdings ${res.status}: ${await res.text()}`);
-  }
-  return (await res.json()) as TopHolding[];
+export function fetchTopHoldings(n = 10): Promise<TopHolding[]> {
+  return apiGet(`/api/portfolio/top-holdings?n=${n}`);
 }
 
 export interface ValuationHolding {
@@ -677,12 +588,8 @@ export interface ValuationResponse {
   total_count: number;
 }
 
-export async function fetchValuation(): Promise<ValuationResponse> {
-  const res = await fetch(`${API_BASE}/api/portfolio/valuation`, { cache: "no-store" });
-  if (!res.ok) {
-    throw new Error(`/api/portfolio/valuation ${res.status}: ${await res.text()}`);
-  }
-  return (await res.json()) as ValuationResponse;
+export function fetchValuation(): Promise<ValuationResponse> {
+  return apiGet("/api/portfolio/valuation");
 }
 
 export interface GaugeResponse {
@@ -694,22 +601,16 @@ export interface GaugeResponse {
   label: string;
 }
 
-export async function fetchPeGauge(): Promise<GaugeResponse> {
-  const res = await fetch(`${API_BASE}/api/portfolio/pe-vs-market`, { cache: "no-store" });
-  if (!res.ok) throw new Error(`/api/portfolio/pe-vs-market ${res.status}`);
-  return (await res.json()) as GaugeResponse;
+export function fetchPeGauge(): Promise<GaugeResponse> {
+  return apiGet("/api/portfolio/pe-vs-market");
 }
 
-export async function fetchPsGauge(): Promise<GaugeResponse> {
-  const res = await fetch(`${API_BASE}/api/portfolio/ps-vs-market`, { cache: "no-store" });
-  if (!res.ok) throw new Error(`/api/portfolio/ps-vs-market ${res.status}`);
-  return (await res.json()) as GaugeResponse;
+export function fetchPsGauge(): Promise<GaugeResponse> {
+  return apiGet("/api/portfolio/ps-vs-market");
 }
 
-export async function fetchPegGauge(): Promise<GaugeResponse> {
-  const res = await fetch(`${API_BASE}/api/portfolio/peg-vs-market`, { cache: "no-store" });
-  if (!res.ok) throw new Error(`/api/portfolio/peg-vs-market ${res.status}`);
-  return (await res.json()) as GaugeResponse;
+export function fetchPegGauge(): Promise<GaugeResponse> {
+  return apiGet("/api/portfolio/peg-vs-market");
 }
 
 // ── Analysis axis sub-tabs (v5): Future / Past / Health ──────────────────────
@@ -733,10 +634,8 @@ export interface FutureResponse {
   total_count: number;
 }
 
-export async function fetchFuture(): Promise<FutureResponse> {
-  const res = await fetch(`${API_BASE}/api/portfolio/future`, { cache: "no-store" });
-  if (!res.ok) throw new Error(`/api/portfolio/future ${res.status}`);
-  return (await res.json()) as FutureResponse;
+export function fetchFuture(): Promise<FutureResponse> {
+  return apiGet("/api/portfolio/future");
 }
 
 export interface PastHolding {
@@ -756,10 +655,8 @@ export interface PastResponse {
   total_count: number;
 }
 
-export async function fetchPast(): Promise<PastResponse> {
-  const res = await fetch(`${API_BASE}/api/portfolio/past`, { cache: "no-store" });
-  if (!res.ok) throw new Error(`/api/portfolio/past ${res.status}`);
-  return (await res.json()) as PastResponse;
+export function fetchPast(): Promise<PastResponse> {
+  return apiGet("/api/portfolio/past");
 }
 
 export interface HealthHolding {
@@ -779,8 +676,6 @@ export interface HealthResponse {
   total_count: number;
 }
 
-export async function fetchHealth(): Promise<HealthResponse> {
-  const res = await fetch(`${API_BASE}/api/portfolio/health`, { cache: "no-store" });
-  if (!res.ok) throw new Error(`/api/portfolio/health ${res.status}`);
-  return (await res.json()) as HealthResponse;
+export function fetchHealth(): Promise<HealthResponse> {
+  return apiGet("/api/portfolio/health");
 }

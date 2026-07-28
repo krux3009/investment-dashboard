@@ -10,9 +10,9 @@ Caveat baked into the response: the portfolio path uses current
 weights — historical reweighting would need position-history
 persistence the dashboard doesn't have.
 
-Cache: `benchmark_prices(symbol, trade_date, close)` in prices.duckdb,
-single-writer through prices._DB_LOCK. Refetches when the last cached
-row for a symbol is more than 1 calendar day stale.
+Cache: `benchmark_prices(symbol, trade_date, close)` in prices.duckdb
+via `api.data.db` (single locked connection). Refetches when the last
+cached row for a symbol is more than 1 calendar day stale.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ import os
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
-from api.data import prices
+from api.data import db, prices
 from api.data.moomoo_client import get_summary
 
 log = logging.getLogger(__name__)
@@ -35,27 +35,25 @@ class SeriesPoint:
 
 
 def _ensure_table() -> None:
-    with prices._DB_LOCK:
-        prices._db().execute(
-            """
-            CREATE TABLE IF NOT EXISTS benchmark_prices (
-                symbol VARCHAR NOT NULL,
-                trade_date DATE NOT NULL,
-                close DOUBLE,
-                fetched_at TIMESTAMP,
-                PRIMARY KEY (symbol, trade_date)
-            )
-            """
+    db.run(
+        """
+        CREATE TABLE IF NOT EXISTS benchmark_prices (
+            symbol VARCHAR NOT NULL,
+            trade_date DATE NOT NULL,
+            close DOUBLE,
+            fetched_at TIMESTAMP,
+            PRIMARY KEY (symbol, trade_date)
         )
+        """
+    )
 
 
 def _last_cached(symbol: str) -> tuple[date | None, date | None]:
     _ensure_table()
-    with prices._DB_LOCK:
-        row = prices._db().execute(
-            "SELECT MIN(trade_date), MAX(trade_date) FROM benchmark_prices WHERE symbol = ?",
-            [symbol],
-        ).fetchone()
+    row = db.execute_one(
+        "SELECT MIN(trade_date), MAX(trade_date) FROM benchmark_prices WHERE symbol = ?",
+        [symbol],
+    )
     earliest = row[0] if row and row[0] else None
     latest = row[1] if row and row[1] else None
     return earliest, latest
@@ -85,22 +83,20 @@ def _fetch_yfinance(symbol: str, start: date, end: date) -> int:
             continue
         rows.append((symbol, d, close, now))
 
-    with prices._DB_LOCK:
-        prices._db().executemany(
-            "INSERT OR REPLACE INTO benchmark_prices VALUES (?, ?, ?, ?)",
-            rows,
-        )
+    db.executemany(
+        "INSERT OR REPLACE INTO benchmark_prices VALUES (?, ?, ?, ?)",
+        rows,
+    )
     return len(rows)
 
 
 def _read_window(symbol: str, start: date) -> list[tuple[date, float]]:
     _ensure_table()
-    with prices._DB_LOCK:
-        rows = prices._db().execute(
-            "SELECT trade_date, close FROM benchmark_prices "
-            "WHERE symbol = ? AND trade_date >= ? ORDER BY trade_date",
-            [symbol, start],
-        ).fetchall()
+    rows = db.execute(
+        "SELECT trade_date, close FROM benchmark_prices "
+        "WHERE symbol = ? AND trade_date >= ? ORDER BY trade_date",
+        [symbol, start],
+    )
     return [(r[0], float(r[1])) for r in rows]
 
 
@@ -143,12 +139,11 @@ def _holding_close_series(code: str, start: date) -> dict[date, float]:
     today = date.today()
     days = (today - start).days + 1
     prices.get_history(code, days=days)
-    with prices._DB_LOCK:
-        rows = prices._db().execute(
-            "SELECT date, close FROM daily_prices "
-            "WHERE code = ? AND date >= ? ORDER BY date",
-            [code, start],
-        ).fetchall()
+    rows = db.execute(
+        "SELECT date, close FROM daily_prices "
+        "WHERE code = ? AND date >= ? ORDER BY date",
+        [code, start],
+    )
     return {r[0]: float(r[1]) for r in rows if r[1] is not None}
 
 

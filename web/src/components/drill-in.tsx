@@ -1,8 +1,7 @@
 "use client";
 
 import { fetchAnomalies, fetchPrices } from "@/lib/api";
-import type { AnomalyItem, PricePoint } from "@/lib/api";
-import { useEffect, useState } from "react";
+import { useFetch } from "@/lib/use-fetch";
 import { AnomalyBlock } from "./anomaly-block";
 import { NotesBlock } from "./notes-block";
 import { PriceChart } from "./price-chart";
@@ -23,44 +22,8 @@ interface Props {
 export function DrillIn({ code, direction }: Props) {
   const t = useT();
   const { locale } = useLocale();
-  const [points, setPoints] = useState<PricePoint[] | null>(null);
-  const [pricesError, setPricesError] = useState<string | null>(null);
-  const [anomalyItems, setAnomalyItems] = useState<AnomalyItem[]>([]);
-  const [anomalyWindow, setAnomalyWindow] = useState(30);
-  const [anomaliesLoading, setAnomaliesLoading] = useState(true);
-  const [anomaliesError, setAnomaliesError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const data = await fetchPrices(code, 90);
-        if (!cancelled) setPoints(data.points);
-      } catch (e) {
-        if (!cancelled) setPricesError(String(e));
-      }
-    })();
-    setAnomaliesLoading(true);
-    setAnomaliesError(null);
-    (async () => {
-      try {
-        const data = await fetchAnomalies(code, locale);
-        if (!cancelled) {
-          setAnomalyItems(data.items);
-          setAnomalyWindow(data.time_range);
-          setAnomaliesLoading(false);
-        }
-      } catch (e) {
-        if (!cancelled) {
-          setAnomaliesError(String(e));
-          setAnomaliesLoading(false);
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [code, locale]);
+  const prices = useFetch(() => fetchPrices(code, 90), [code]);
+  const anomalies = useFetch(() => fetchAnomalies(code, locale), [code, locale]);
 
   return (
     <div className="px-6 py-6 bg-surface-expanded border-t border-rule">
@@ -69,16 +32,16 @@ export function DrillIn({ code, direction }: Props) {
           <div className="text-xs uppercase tracking-[0.06em] text-quiet mb-2">
             {t("drillin.heading")}
           </div>
-          {pricesError ? (
+          {prices.error ? (
             <div className="text-sm text-loss">
-              {t("drillin.price_load_failed", { detail: pricesError })}
+              {t("drillin.price_load_failed", { detail: prices.error })}
             </div>
-          ) : points === null ? (
+          ) : prices.data === null ? (
             <div className="text-sm text-quiet italic h-[220px] flex items-center">
               {t("drillin.loading_chart")}
             </div>
           ) : (
-            <PriceChart points={points} direction={direction} />
+            <PriceChart points={prices.data.points} direction={direction} />
           )}
         </div>
 
@@ -87,10 +50,10 @@ export function DrillIn({ code, direction }: Props) {
           <SentimentBlock code={code} />
           <div>
             <AnomalyBlock
-              items={anomalyItems}
-              timeRange={anomalyWindow}
-              loading={anomaliesLoading}
-              error={anomaliesError}
+              items={anomalies.data?.items ?? []}
+              timeRange={anomalies.data?.time_range ?? 30}
+              loading={anomalies.loading}
+              error={anomalies.error}
             />
           </div>
         </div>

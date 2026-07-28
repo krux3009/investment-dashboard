@@ -1,4 +1,5 @@
 import type { PricePoint } from "@/lib/api";
+import { useT } from "@/lib/i18n/use-t";
 
 interface Props {
   points: PricePoint[];
@@ -24,6 +25,7 @@ export function Sparkline({
   width = 96,
   height = 28,
 }: Props) {
+  const t = useT();
   if (!points || points.length < 2) {
     return (
       <div
@@ -60,7 +62,7 @@ export function Sparkline({
       height={height}
       viewBox={`0 0 ${width} ${height}`}
       role="img"
-      aria-label={`30-day price trend, ${direction}`}
+      aria-label={t("chart.sparkline_aria", { direction: t(`chart.direction.${direction}`) })}
     >
       <path
         d={d}
